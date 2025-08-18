@@ -1,63 +1,32 @@
-import { FlatList, Text, View } from "react-native";
-import { useResponsive } from "@/hooks/useResponsive";
-
-import "../global.css"
-import { useContainerLayout } from "@/components/layout/ContainerSizer";
+// app/index.tsx
 import PageScaffold from "@/components/templates/PageScaffold";
+import { View } from "react-native";
+import { Title, Body } from "@/components/atoms/Typography";
+import Button from "@/components/atoms/Button";
+import Input from "@/components/atoms/Input";
+import Badge from "@/components/atoms/Badge";
+import "../global.css"
 
-const categories = [
-  { id: "1", title: "Bitácora de campo", formulated: 5, completed: 5 },
-  { id: "2", title: "Calidad de corte", formulated: 5, completed: 5 },
-  { id: "3", title: "Supervisión de labores", formulated: 5, completed: 5 },
-  { id: "4", title: "Riesgos y drenajes", formulated: 5, completed: 5 },
-];
-
-function CardsGrid() {
-  const box = useContainerLayout();          
-  const { columns, gutter, rem } = useResponsive();
-
-  const cardW = Math.round((box!.width - gutter * (columns - 1)) / columns);
-
+export default function Home() {
   return (
-    <FlatList
-      data={categories}
-      key={columns}
-      keyExtractor={(i) => i.id}
-      numColumns={columns}
-      // sin columnWrapperStyle gap
-      contentContainerStyle={{ paddingBottom: gutter }}
-      renderItem={({ item, index }) => {
-        const isLastInRow = (index % columns) === columns - 1;
-        return (
-          <View
-            className="bg-white rounded-2xl border border-border"
-            style={{
-              width: cardW,
-              padding: 12,
-              marginRight: isLastInRow ? 0 : gutter,   
-              marginBottom: gutter,                    
-              overflow: "hidden",
-            }}
-          >
-            <Text className="text-text-primary" style={{ fontFamily: "Inter_600SemiBold", fontSize: rem }}>
-              {item.title}
-            </Text>
-            <Text className="text-text-secondary mt-1">Formulados: {item.formulated}</Text>
-            <Text className="text-text-secondary">Completados: {item.completed}</Text>
-            <View className="bg-primary-600 mt-3 rounded-2xl items-center py-3">
-              <Text className="text-white" style={{ fontFamily: "Inter_600SemiBold" }}>INGRESAR</Text>
-            </View>
-          </View>
-        );
-      }}
-    />
-  );
-}
+    <PageScaffold title="Calidad de corte manual">
+      <View style={{ gap: 12 }}>
+        {/* <Title>Formulario de prueba</Title> */}
+        <Body color="secondary">Probando tipografías, botones e inputs.</Body>
+        <Badge text="Demo UI foundations" />
 
-export default function FormsHome() {
-  return (
-    <PageScaffold title="Mis formularios">
-      <CardsGrid />
+        <Input label="Nombre" placeholder="Ingrese su nombre" />
+        <Input label="Correo" placeholder="correo@dominio.com" keyboardType="email-address" />
+        <Input label="Campo con error" placeholder="..." error="Este campo es obligatorio" />
+
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <Button title="PRIMARIO" />
+          <Button title="GHOST" variant="ghost" />
+          <Button title="PELIGRO" variant="danger" />
+        </View>
+
+        <Button title="GUARDAR" size="lg" />
+      </View>
     </PageScaffold>
   );
 }
