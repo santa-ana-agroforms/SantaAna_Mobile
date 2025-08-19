@@ -5,6 +5,7 @@ import PaginationDots from "@/components/atoms/PaginationDots";
 import StatusDot from "@/components/atoms/StatusDot";
 import TimestampText from "@/components/atoms/TimestampText";
 import { useResponsive } from "@/hooks/useResponsive";
+import { colors } from "@/theme/tokens";
 
 type Props = {
   title: string;

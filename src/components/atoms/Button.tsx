@@ -19,7 +19,7 @@ export default function Button({
   const { scale, rem } = useResponsive();
 
   const height = size === "sm" ? scale(36) : size === "lg" ? scale(52) : scale(44);
-  const radius = 16;
+  const radius = 8;
 
   let bg = colors.primary600, fg = "#FFFFFF", borderColor = "transparent", borderWidth = 0, opacity = disabled ? 0.6 : 1;
 

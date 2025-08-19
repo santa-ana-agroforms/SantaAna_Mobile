@@ -1,19 +1,18 @@
 import { useResponsive } from "@/hooks/useResponsive";
 import { colors } from "@/theme/tokens";
-import { Image, ImageSourcePropType, Pressable, StyleProp, ViewStyle } from "react-native";
-import { Caption } from "./Typography";
+import { Image, ImageSourcePropType, Pressable, StyleSheet, View, ViewStyle } from "react-native";
+import { Shadow } from "react-native-shadow-2";
 
 type Props = {
-  icon?: React.ReactElement;           
-  iconSource?: ImageSourcePropType;    
+  icon?: React.ReactElement;
+  iconSource?: ImageSourcePropType;
   onPress?: () => void;
   size?: number;
   bgColor?: string;
   disabled?: boolean;
-  style?: StyleProp<ViewStyle>;
+  style?: ViewStyle;
   accessibilityLabel?: string;
 };
-
 
 export default function IconButton({
   icon,
@@ -26,46 +25,58 @@ export default function IconButton({
   accessibilityLabel,
 }: Props) {
   const { rem } = useResponsive();
+  const radius = size * 0.2;
 
-const renderIcon = () => {
-    return iconSource ? (
-        <Image
-            source={iconSource}
-            style={{ width: rem * 3.5, height: rem * 3.5, resizeMode: "contain" }}
-        />
+  const renderIcon = () =>
+    iconSource ? (
+      <Image source={iconSource} style={{ width: rem * 3.5, height: rem * 3.5, resizeMode: "contain" }} />
     ) : (
-        icon
+      icon
     );
-};
 
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      android_ripple={{ color: "rgba(0,0,0,0.1)", borderless: true }}
+    <View
       style={[
         {
           width: size,
           height: size,
-          borderRadius: size * 0.2,
-          backgroundColor: bgColor,
-          alignItems: "center",
-          justifyContent: "center",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.2,
-          shadowRadius: 3,
-          elevation: 4,
-          opacity: disabled ? 0.6 : 1,
+          position: "relative",
+          opacity: disabled ? 0.6 : 1
         },
         style,
       ]}
     >
-        {
-            !icon && !iconSource ? (
-                <Caption weight="semibold" color="primary">{accessibilityLabel}</Caption>
-            ) : renderIcon()
-        }
-    </Pressable>
+      <Shadow
+        distance={3}
+        offset={[0, 6]}
+        startColor="#00000029"
+        endColor="#00000000"
+        style={{ borderRadius: radius }}
+      >
+        <View style={{ width: size, height: size * 0.9, borderRadius: radius, backgroundColor: "transparent" }} />
+      </Shadow>
+
+      {/* CONTENEDOR del botón (clip del ripple), encima */}
+      <View style={[StyleSheet.absoluteFillObject, { borderRadius: radius, overflow: "hidden" }]}>
+        <Pressable
+          onPress={onPress}
+          disabled={disabled}
+          android_ripple={{ color: "rgba(0,0,0,0.08)" }}
+          style={[
+            StyleSheet.absoluteFillObject,
+            {
+              borderRadius: radius,
+              backgroundColor: bgColor,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: disabled ? 0.6 : 1,
+            },
+          ]}
+          accessibilityLabel={accessibilityLabel}
+        >
+          {renderIcon()}
+        </Pressable>
+      </View>
+    </View>
   );
 }

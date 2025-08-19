@@ -12,14 +12,6 @@ export default function Home() {
   return (
     <PageScaffold title="Calidad de corte manual">
       <View style={{ gap: 12 }}>
-        <FormHeader
-          title="Calidad de corte manual"
-          page={1}
-          totalPages={3}
-          connected
-          onBack={() => {}}
-          onRefresh={() => {}}
-        />
         <Body color="secondary">Probando tipografías, botones e inputs.</Body>
         <Badge text="Demo UI foundations" />
 
