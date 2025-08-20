@@ -18,7 +18,7 @@ export function Title(props: TProps) {
   const colorMap = { primary: "#1C1C1C", secondary: "#777777", tertiary: "#5A3E1B", inverse: "#FFFFFF" };
   return (
     <Text {...rest}
-      style={[{ fontSize: rem * 1.25, color: colorMap[color], fontFamily: font(weight) }, style]}
+      style={[{ fontSize: rem * 2, color: colorMap[color], fontFamily: font(weight) }, style]}
     />
   );
 }

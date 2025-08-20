@@ -2,6 +2,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { View, Text } from "react-native";
 import { useResponsive } from "@/hooks/useResponsive";
 import ContainerSizer from "@/components/layout/ContainerSizer";
+import FormHeader from "../molecules/FormHeader";
 
 export default function PageScaffold({
   title, right, children,
@@ -10,20 +11,18 @@ export default function PageScaffold({
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: "#F9F6EE" }}>
-      {/* Header */}
-      <View className="flex-row items-center justify-between"
-            style={{ paddingHorizontal: gutter * 2, paddingVertical: gutter / 1 }}>
-        <Text
-          className="text-text-primary"
-          style={{ fontSize: rem * 2.25, fontFamily: "Inter_700Bold" }}
-        >
-          {title}
-        </Text>
-        {right ?? null}
-      </View>
+      <View style={{ flex: 1, paddingHorizontal: gutter * 2, paddingTop: gutter * 2 }}>
+        {/* Header */}
+        <FormHeader
+          title="Calidad de corte manual"
+          page={1}
+          totalPages={3}
+          connected
+          onBack={() => {}}
+          onRefresh={() => {}}
+        />
 
-      {/* Body: padding en wrapper, ContainerSizer sin padding (para medir área útil) */}
-      <View style={{ flex: 1, paddingHorizontal: gutter * 2 }}>
+        {/* Body: padding en wrapper, ContainerSizer sin padding (para medir área útil) */}
         <ContainerSizer style={{ flex: 1 }}>
           {children}
         </ContainerSizer>
