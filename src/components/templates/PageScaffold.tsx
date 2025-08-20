@@ -1,4 +1,3 @@
-// src/components/templates/PageScaffold.tsx
 import { SafeAreaView } from "react-native-safe-area-context";
 import { View, Text } from "react-native";
 import { useResponsive } from "@/hooks/useResponsive";
@@ -10,18 +9,21 @@ export default function PageScaffold({
   const { gutter, rem } = useResponsive();
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
-      {/* Header con padding */}
+    <SafeAreaView className="flex-1" style={{ backgroundColor: "#F9F6EE" }}>
+      {/* Header */}
       <View className="flex-row items-center justify-between"
-            style={{ paddingHorizontal: gutter, paddingVertical: gutter/1.2 }}>
-        <Text className="text-text-primary" style={{ fontSize: rem*1.25, fontFamily: "Inter_700Bold" }}>
+            style={{ paddingHorizontal: gutter * 2, paddingVertical: gutter / 1 }}>
+        <Text
+          className="text-text-primary"
+          style={{ fontSize: rem * 2.25, fontFamily: "Inter_700Bold" }}
+        >
           {title}
         </Text>
         {right ?? null}
       </View>
 
-      {/* Body: wrapper con padding → ContainerSizer sin padding */}
-      <View style={{ flex: 1, paddingHorizontal: gutter }}>
+      {/* Body: padding en wrapper, ContainerSizer sin padding (para medir área útil) */}
+      <View style={{ flex: 1, paddingHorizontal: gutter * 2 }}>
         <ContainerSizer style={{ flex: 1 }}>
           {children}
         </ContainerSizer>
