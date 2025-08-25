@@ -2,7 +2,14 @@
 import ContainerSizer from "@/components/layout/ContainerSizer";
 import FormHeader from "@/components/molecules/FormHeader";
 import { useResponsive } from "@/hooks/useResponsive";
-import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  LayoutChangeEvent,
+  Platform,
+  ScrollView,
+  View,
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function PageScaffold({
@@ -15,37 +22,56 @@ export default function PageScaffold({
   const { gutter } = useResponsive();
   const insets = useSafeAreaInsets();
 
+  // 1) medimos la altura real del header para el offset del teclado
+  const [headerH, setHeaderH] = useState(0);
+  const onHeaderLayout = useCallback((e: LayoutChangeEvent) => {
+    setHeaderH(e.nativeEvent.layout.height);
+  }, []);
+
+  // 2) offset total = insets.top + headerH
+  const keyboardOffset = useMemo(() => insets.top + headerH, [insets.top, headerH]);
+
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: "#F9F6EE" }}>
-      {/* Layout vertical: header fijo + body scrollable */}
-      <View style={{ flex: 1, paddingHorizontal: gutter * 2, paddingTop: gutter * 2 }}>
-        {/* HEADER (estático) */}
-        <FormHeader
-          title={title}
-          page={1}
-          totalPages={3}
-          connected
-          onBack={() => {}}
-          onRefresh={() => {}}
-        />
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F9F6EE" }}>
+      <View style={{ flex: 1 }}>
+        {/* HEADER (estático, medido) */}
+        <View onLayout={onHeaderLayout} style={{ paddingTop: gutter * 2 }}>
+          <View style={{ paddingHorizontal: gutter * 2 }}>
+            <FormHeader
+              title={title}
+              page={1}
+              totalPages={3}
+              connected
+              onBack={() => {}}
+              onRefresh={() => {}}
+            />
+          </View>
+          {/* separador visual del header con el body */}
+          <View style={{ height: gutter * 1 }} />
+        </View>
 
         {/* BODY (scrollable) */}
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={insets.top} // evita que el teclado tape inputs bajo el header
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={keyboardOffset}
         >
           <ContainerSizer style={{ flex: 1 }}>
             <ScrollView
               showsVerticalScrollIndicator
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+              contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "always" : "automatic"}
               contentContainerStyle={{
-                paddingTop: gutter,         // respiro bajo el header
-                paddingBottom: insets.bottom + gutter * 2, // espacio para último control
-                rowGap: gutter,             // si usas Views apiladas
+                // 3) padding dentro del Scroll para que también sea scrolleable
+                paddingHorizontal: gutter * 2,
+                paddingBottom: (insets.bottom || 0) + gutter * 2,
               }}
             >
+              {/* 4) reemplazo de gap por separadores seguros */}
+              <View style={{ marginBottom: gutter }}>{/* spacer bajo el header */}</View>
               {children}
+              <View style={{ height: gutter * 2 }} />
             </ScrollView>
           </ContainerSizer>
         </KeyboardAvoidingView>
