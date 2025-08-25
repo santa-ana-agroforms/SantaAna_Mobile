@@ -1,11 +1,11 @@
 // app/index.tsx
-import Badge from "@/components/atoms/Badge";
 import Button from "@/components/atoms/Button";
-import Input from "@/components/atoms/Input";
-import { Body } from "@/components/atoms/Typography";
 import PageScaffold from "@/components/templates/PageScaffold";
 import { View } from "react-native";
 import "../global.css";
+import Input from "@/components/atoms/Input";
+import Badge from "@/components/atoms/Badge";
+import { Body } from "@/components/atoms/Typography";
 
 export default function Home() {
   return (
