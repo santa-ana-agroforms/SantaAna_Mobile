@@ -1,20 +1,27 @@
-import { SafeAreaView } from "react-native-safe-area-context";
-import { View, Text } from "react-native";
-import { useResponsive } from "@/hooks/useResponsive";
+// src/components/templates/PageScaffold.tsx
 import ContainerSizer from "@/components/layout/ContainerSizer";
-import FormHeader from "../molecules/FormHeader";
+import FormHeader from "@/components/molecules/FormHeader";
+import { useResponsive } from "@/hooks/useResponsive";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function PageScaffold({
-  title, right, children,
-}: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
-  const { gutter, rem } = useResponsive();
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  const { gutter } = useResponsive();
+  const insets = useSafeAreaInsets();
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: "#F9F6EE" }}>
+      {/* Layout vertical: header fijo + body scrollable */}
       <View style={{ flex: 1, paddingHorizontal: gutter * 2, paddingTop: gutter * 2 }}>
-        {/* Header */}
+        {/* HEADER (estático) */}
         <FormHeader
-          title="Calidad de corte manual"
+          title={title}
           page={1}
           totalPages={3}
           connected
@@ -22,10 +29,26 @@ export default function PageScaffold({
           onRefresh={() => {}}
         />
 
-        {/* Body: padding en wrapper, ContainerSizer sin padding (para medir área útil) */}
-        <ContainerSizer style={{ flex: 1 }}>
-          {children}
-        </ContainerSizer>
+        {/* BODY (scrollable) */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={insets.top} // evita que el teclado tape inputs bajo el header
+        >
+          <ContainerSizer style={{ flex: 1 }}>
+            <ScrollView
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{
+                paddingTop: gutter,         // respiro bajo el header
+                paddingBottom: insets.bottom + gutter * 2, // espacio para último control
+                rowGap: gutter,             // si usas Views apiladas
+              }}
+            >
+              {children}
+            </ScrollView>
+          </ContainerSizer>
+        </KeyboardAvoidingView>
       </View>
     </SafeAreaView>
   );

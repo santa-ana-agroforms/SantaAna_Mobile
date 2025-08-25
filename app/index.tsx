@@ -25,13 +25,11 @@ export default function Home() {
           placeholder="..."
           error="Este campo es obligatorio"
         />
-
         <View style={{ flexDirection: "row", gap: 12 }}>
           <Button title="PRIMARIO" />
           <Button title="GHOST" variant="ghost" />
           <Button title="PELIGRO" variant="danger" />
         </View>
-
         <Button title="GUARDAR" size="lg" />
       </View>
     </PageScaffold>
