@@ -15,9 +15,11 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 export default function PageScaffold({
   title,
   children,
+  variant = "form",
 }: {
   title: string;
   children: React.ReactNode;
+  variant: "categories" | "groups" | "form";
 }) {
   const { gutter } = useResponsive();
   const insets = useSafeAreaInsets();
@@ -44,6 +46,7 @@ export default function PageScaffold({
               connected
               onBack={() => {}}
               onRefresh={() => {}}
+              variant={variant}
             />
           </View>
           {/* separador visual del header con el body */}

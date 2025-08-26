@@ -78,6 +78,7 @@ export default function QrLoginOnboarding({
       if (!accessToken) throw new Error("No se recibió accessToken del servidor.");
 
       await setTokens(accessToken, refreshToken);
+
       let u: AuthUser | null = user ?? null;
       if (!u) {
         setStatusText("Cargando perfil…");
@@ -86,20 +87,32 @@ export default function QrLoginOnboarding({
       }
       setMe(u);
 
+      // 🔒 No bloquees el login por la sync
       if (autoSync && u) {
         setStatusText("Sincronizando formularios…");
-        await DB.ensureMigrated();
-        await pullUserAndForms(u);
+        try {
+          await DB.ensureMigrated();
+          await pullUserAndForms(u);
+        } catch (syncErr: any) {
+          console.warn("[SYNC] fallo en pullUserAndForms:", syncErr);
+          Alert.alert(
+            "Advertencia",
+            "El inicio de sesión fue correcto, pero falló la sincronización inicial. Podrás sincronizar más tarde desde el Home."
+          );
+        }
       }
+
       setStatusText("¡Listo!");
-      onSuccess?.(u!);
+      onSuccess?.(u!);               // ➜ aquí navegas al Home sí o sí
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || "No se pudo completar el login por QR.";
       Alert.alert("Error de login", msg);
+      console.error("[LOGIN] error:", e);
     } finally {
       setTimeout(() => setStatusText(null), 1200);
     }
   }, [apiUrlInput, baseUrl, endpoint, autoSync, onSuccess]);
+
 
   const saveApiUrl = useCallback(async () => {
     if (!apiUrlInput?.trim()) {
