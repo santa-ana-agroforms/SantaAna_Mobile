@@ -1,46 +1,37 @@
 // app/index.tsx
-import { fetchAndSaveForms } from "@/api/forms";
-import type { FormCategoryGroup } from "@/api/forms/types";
 import Button from "@/components/atoms/Button";
 import PageScaffold from "@/components/templates/PageScaffold";
-import { selectFormsGroupedByCategory } from "@/db/sqlite";
-import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import "../global.css";
+import Input from "@/components/atoms/Input";
+import Badge from "@/components/atoms/Badge";
+import { Body } from "@/components/atoms/Typography";
 
 export default function Home() {
-  const [loading, setLoading] = useState(false);
-  const [forms, setForms] = useState<FormCategoryGroup[]>([]);
-  useEffect(() => {
-    if (!loading) {
-      (async () => {
-        const f = await selectFormsGroupedByCategory();
-        setForms(f);
-      })();
-    }
-  }, [loading]);
-
   return (
     <PageScaffold title="Calidad de corte manual">
-      <Button
-        title="Iniciar escaneo QR"
-        onPress={() => {
-          const controller = new AbortController();
-          fetchAndSaveForms(setLoading, controller.signal);
-        }}
-      ></Button>
-      {loading && (
-        <View>
-          <Text>Cargando formularios...</Text>
+      <View style={{ gap: 12 }}>
+        <Body color="secondary">Probando tipografías, botones e inputs.</Body>
+        <Badge text="Demo UI foundations" />
+
+        <Input label="Nombre" placeholder="Ingrese su nombre" />
+        <Input
+          label="Correo"
+          placeholder="correo@dominio.com"
+          keyboardType="email-address"
+        />
+        <Input
+          label="Campo con error"
+          placeholder="..."
+          error="Este campo es obligatorio"
+        />
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <Button title="PRIMARIO" />
+          <Button title="GHOST" variant="ghost" />
+          <Button title="PELIGRO" variant="danger" />
         </View>
-      )}
-      {forms.map((category) => (
-        <View key={category.nombre_categoria}>
-          <Text>{category.nombre_categoria}</Text>
-          <Text>{category.descripcion}</Text>
-          <Text>{category.formularios.length}</Text>
-        </View>
-      ))}
+        <Button title="GUARDAR" size="lg" />
+      </View>
     </PageScaffold>
   );
 }
