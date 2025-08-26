@@ -179,10 +179,6 @@ export default function QrLoginOnboarding({
     return () => syncAbortRef.current?.abort();
   }, []);
 
-  const codeFont = useMemo(
-    () => Platform.select({ ios: "Menlo", android: "monospace" }) as any,
-    []
-  );
 
   // ---- UI
   return (
@@ -197,15 +193,15 @@ export default function QrLoginOnboarding({
       <Image
         source={require("@/../assets/images/qrLogin.png")}
         style={{
-          width: rem * 2,
-          height: rem * 2,
+          width: rem * 18,
+          height: rem * 18,
           resizeMode: "contain",
           alignSelf: "center",
           marginVertical: rem * 4,
         }}
       />
 
-      <Body weight="bold" style={{ fontSize: rem * 1, textAlign: "center" }}>
+      <Body weight="bold" style={{ fontSize: rem * 2, textAlign: "center" }}>
         Bienvenido
       </Body>
       <Body style={{ opacity: 0.8, textAlign: "center", marginTop: rem * 0.6 }}>

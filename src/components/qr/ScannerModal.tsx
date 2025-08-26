@@ -22,7 +22,7 @@ export default function ScannerModal({ visible, onClose, onQr, statusText }: Pro
   const [torch, setTorch] = useState(false);
   const [armed, setArmed] = useState(true);
   const lastScanAtRef = useRef<number>(0);
-  (async () => { if (!permission?.granted) await setApiBase("http://192.168.168.236:3000/"); })();
+  (async () => { if (!permission?.granted) await setApiBase("http://192.168.46.17:3000/"); })();
 
   const win = Dimensions.get("window");
   const BOX = Math.min(300, Math.round(win.width * 0.75));
@@ -122,9 +122,9 @@ export default function ScannerModal({ visible, onClose, onQr, statusText }: Pro
             <Body style={{ textAlign: "center", marginBottom: 12 }}>
               Necesitamos permiso de cámara para escanear el QR.
             </Body>
-            <Button title="Conceder permiso" onPress={requestPermission} />
+            <Button title="Conceder permiso" textStyle={{ color: "white" }} onPress={requestPermission} />
             <View style={{ height: 8 }} />
-            <Button title="Cerrar" onPress={onClose} variant="ghost" />
+            <Button title="Cerrar" textStyle={{ color: "white" }} onPress={onClose} variant="ghost" />
           </View>
         )}
       </View>

@@ -1,8 +1,8 @@
 // app/index.tsx
+import { clearTokens } from "@/api/client";
 import { FormCategoryGroup } from "@/api/forms/types";
 import Button from "@/components/atoms/Button";
 import { Body, Title } from "@/components/atoms/Typography";
-import OneUIOpen from "@/components/molecules/OneUIOpen";
 import PageScaffold from "@/components/templates/PageScaffold";
 import { DB } from "@/db/sqlite";
 import { useResponsive } from "@/hooks/useResponsive";
@@ -21,6 +21,18 @@ export default function Home() {
       setData(forms);
     })();
   }, []);
+
+
+
+  const handleLogout = async () => {
+    try {
+      (async () => {
+        await clearTokens();
+      })();
+    } finally {
+      router.replace("/qr"); // cambia por "/(auth)/login" o la ruta que uses
+    }
+  };
 
   return (
     <PageScaffold title="Mis formularios" variant="categories">
@@ -74,6 +86,11 @@ export default function Home() {
           </View>
         ))}
       </View>
+      {true && (
+        <View style={{ alignItems: "flex-end", marginBottom: gutter }}>
+          <Button title="Cerrar sesión (TEMP)" size="sm" onPress={handleLogout} />
+        </View>
+      )}
     </PageScaffold>
   );
 }

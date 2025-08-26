@@ -1,7 +1,5 @@
 // app/_layout.tsx
-import { useEffect, useState } from "react";
-import { Platform } from "react-native";
-import { getAccessToken, setApiBase } from "@/api/client";
+import { clearTokens, getAccessToken, setApiBase } from "@/api/client";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -9,9 +7,11 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
-import { Stack, Redirect } from "expo-router";
+import { Redirect, Stack } from "expo-router";
+import { useEffect, useState } from "react";
+import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { enableScreens, enableFreeze } from "react-native-screens";
+import { enableFreeze, enableScreens } from "react-native-screens";
 
 // 👉 activa optimizaciones nativas (hacerlo fuera del componente)
 enableScreens(true);
@@ -32,7 +32,7 @@ export default function RootLayout() {
     let mounted = true;
     (async () => {
       try {
-        await setApiBase("http://192.168.129.165:3000/");
+        await setApiBase("http://192.168.46.17:3000/");
         const token = await getAccessToken();
         if (mounted) setHasToken(!!token);
       } catch (e) {
