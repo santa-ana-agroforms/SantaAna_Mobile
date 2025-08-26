@@ -29,7 +29,7 @@ export function Body(props: TProps) {
   const colorMap = { primary: "#1C1C1C", secondary: "#777777", tertiary: "#5A3E1B", inverse: "#FFFFFF" };
   return (
     <Text {...rest}
-      style={[{ fontSize: rem, color: colorMap[color], fontFamily: font(weight) }, style]}
+      style={[{ fontSize: rem * 1.2, color: colorMap[color], fontFamily: font(weight) }, style]}
     />
   );
 }

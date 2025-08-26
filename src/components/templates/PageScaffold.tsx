@@ -2,6 +2,7 @@
 import ContainerSizer from "@/components/layout/ContainerSizer";
 import FormHeader from "@/components/molecules/FormHeader";
 import { useResponsive } from "@/hooks/useResponsive";
+import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -16,10 +17,12 @@ export default function PageScaffold({
   title,
   children,
   variant = "form",
+  onBack,    
 }: {
   title: string;
   children: React.ReactNode;
   variant: "categories" | "groups" | "form";
+  onBack?: () => void;
 }) {
   const { gutter } = useResponsive();
   const insets = useSafeAreaInsets();
@@ -33,6 +36,15 @@ export default function PageScaffold({
   // 2) offset total = insets.top + headerH
   const keyboardOffset = useMemo(() => insets.top + headerH, [insets.top, headerH]);
 
+
+  const router = useRouter();
+    // back por defecto (si no te pasan uno)
+  const handleBack = useCallback(() => {
+    if (onBack) return onBack();              // usa el que manden
+    if (router.canGoBack()) router.back();    // pop normal
+    else router.replace("/");                 // fallback (home)
+  }, [onBack, router]);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F9F6EE" }}>
       <View style={{ flex: 1 }}>
@@ -44,7 +56,7 @@ export default function PageScaffold({
               page={1}
               totalPages={3}
               connected
-              onBack={() => {}}
+              onBack={handleBack}
               onRefresh={() => {}}
               variant={variant}
             />

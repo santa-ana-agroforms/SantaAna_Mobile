@@ -25,7 +25,7 @@ export default function FormHeader({
   onRefresh,
   variant,
 }: Props) {
-  const { gutter } = useResponsive();
+  const { gutter, rem } = useResponsive();
 
   return (
     <View style={{ gap: gutter * 0.75 }}>
@@ -36,7 +36,7 @@ export default function FormHeader({
             <IconButton accessibilityLabel="Atrás" onPress={onBack} iconSource={require("../../../assets/images/return.png")} />
           )
         }
-        <Title style={{ flex: 1 }}>{title}</Title>
+        <Title style={{ flex: 1, fontSize: variant === "categories" ? rem * 3 : rem * 2 }}>{title}</Title>
       </View>
 
       

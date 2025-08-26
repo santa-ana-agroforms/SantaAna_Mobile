@@ -2,47 +2,13 @@
 import { FormCategoryGroup } from "@/api/forms/types";
 import Button from "@/components/atoms/Button";
 import { Body, Title } from "@/components/atoms/Typography";
+import OneUIOpen from "@/components/molecules/OneUIOpen";
 import PageScaffold from "@/components/templates/PageScaffold";
 import { DB } from "@/db/sqlite";
 import { useResponsive } from "@/hooks/useResponsive";
+import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
-
-type Category = {
-  id: string;
-  nombre: string;
-  totalFormularios: number;
-  completados: number;
-};
-
-const demoData: Category[] = [
-  { id: "1", nombre: "Bitácora de campo", totalFormularios: 5, completados: 5 },
-  { id: "2", nombre: "Calidad de corte", totalFormularios: 5, completados: 5 },
-  {
-    id: "3",
-    nombre: "Supervisión de labores",
-    totalFormularios: 5,
-    completados: 5,
-  },
-  {
-    id: "4",
-    nombre: "Riesgos y drenajes",
-    totalFormularios: 5,
-    completados: 5,
-  },
-  {
-    id: "5",
-    nombre: "Supervisión de labores",
-    totalFormularios: 5,
-    completados: 5,
-  },
-  {
-    id: "6",
-    nombre: "Riesgos y drenajes",
-    totalFormularios: 5,
-    completados: 5,
-  },
-];
 
 export default function Home() {
   const { rem, gutter } = useResponsive();
@@ -51,6 +17,7 @@ export default function Home() {
   useEffect(() => {
     (async () => {
       const forms = await DB.selectFormsGroupedByCategory();
+      console.log("[DB] forms:", forms);
       setData(forms);
     })();
   }, []);
@@ -70,7 +37,7 @@ export default function Home() {
             key={item.nombre_categoria}
             style={[
               styles.card,
-              { padding: gutter, marginBottom: gutter, width: "48%" },
+              { padding: gutter, marginBottom: gutter, width: "48%", justifyContent: "space-between" },
             ]}
           >
             <Title
@@ -98,8 +65,10 @@ export default function Home() {
               title="INGRESAR"
               size="lg"
               onPress={() => {
-                // aquí navegas a la lista/grupo correspondiente
-                // p. ej.: router.push({ pathname: "/form", params: { categoryId: item.id } })
+                router.push({
+                  pathname: "/forms/[category]",
+                  params: { category: item.nombre_categoria },
+                });
               }}
             />
           </View>
