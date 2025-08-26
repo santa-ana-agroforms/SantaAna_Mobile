@@ -23,6 +23,7 @@ export async function fetchAndSaveForms(
     setLoading?.(true);
     const forms = await getFormsTree({ signal });
     console.log("Fetched forms:", forms);
+    console.log("Saving forms to local DB...", forms);
     await DB.upsertGroupedForms(forms);
   } finally {
     setLoading?.(false);

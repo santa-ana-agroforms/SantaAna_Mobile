@@ -22,7 +22,7 @@ export default function ScannerModal({ visible, onClose, onQr, statusText }: Pro
   const [torch, setTorch] = useState(false);
   const [armed, setArmed] = useState(true);
   const lastScanAtRef = useRef<number>(0);
-  (async () => { if (!permission?.granted) await setApiBase("http://192.168.129.165:3000/"); })();
+  (async () => { if (!permission?.granted) await setApiBase("http://192.168.168.236:3000/"); })();
 
   const win = Dimensions.get("window");
   const BOX = Math.min(300, Math.round(win.width * 0.75));
