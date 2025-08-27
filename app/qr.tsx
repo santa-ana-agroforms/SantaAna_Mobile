@@ -1,13 +1,18 @@
 // app/qr.tsx
-import QrLoginOnboarding from "@/pages/QrLoginOnBoarding";
-import { router } from "expo-router";
+import QrLoginOnBoarding from "@/pages/QrLoginOnBoarding";
+import { Redirect } from "expo-router";
+import { useState } from "react";
 
 export default function QrScreen() {
+  const [done, setDone] = useState(false);
+
+  if (done) return <Redirect href="/" />;  // ✅ navega sin efectos secundarios
+
   return (
-    <QrLoginOnboarding
+    <QrLoginOnBoarding
       endpoint="/auth/qr/login"
       autoSync
-      onSuccess={() => router.replace("/")} // vuelve al home cuando termine
+      onSuccess={() => setDone(true)}
     />
   );
 }
