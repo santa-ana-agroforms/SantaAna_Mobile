@@ -32,7 +32,7 @@ export default function RootLayout() {
     let mounted = true;
     (async () => {
       try {
-        await setApiBase("http://192.168.46.17:3000/");
+        await setApiBase("https://santaana-api-latest.onrender.com/");
         const token = await getAccessToken();
         if (mounted) setHasToken(!!token);
       } catch (e) {
