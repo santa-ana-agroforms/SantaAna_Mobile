@@ -22,7 +22,7 @@ type Formulario = {
 // "@/api/forms/types"
 export type FormCategoryGroup = {
   nombre_categoria: string;
-  descripcion: string | null; // 👈 antes era string | undefined
+  descripcion: string | null;
   formularios: {
     id_formulario: string;
     nombre: string;
@@ -87,8 +87,16 @@ export default function FormsByCategoryScreen() {
 
           return (
             <Pressable
-            key={f.id_formulario}
-            onPress={() => {/* ... */}}
+              key={f.id_formulario}
+              onPress={() =>
+                router.push({
+                  pathname: "/form/[formId]",
+                  params: {
+                    formId: f.id_formulario,
+                    versionId: f.version_vigente?.id_index_version ?? "",
+                  },
+                })
+              }
             style={[
                 styles.card,
                 {

@@ -1,4 +1,3 @@
-// src/components/templates/PageScaffold.tsx
 import ContainerSizer from "@/components/layout/ContainerSizer";
 import FormHeader from "@/components/molecules/FormHeader";
 import { useResponsive } from "@/hooks/useResponsive";
@@ -13,36 +12,47 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
+type Variant = "categories" | "groups" | "form";
+
+type PageScaffoldProps = {
+  title: string;
+  children: React.ReactNode;
+  variant?: Variant;
+  onBack?: () => void;
+  // sólo para variant="form"
+  page?: number;
+  totalPages?: number;
+  onPrevPage?: () => void;
+  onNextPage?: () => void;
+};
+
 export default function PageScaffold({
   title,
   children,
   variant = "form",
-  onBack,    
-}: {
-  title: string;
-  children: React.ReactNode;
-  variant: "categories" | "groups" | "form";
-  onBack?: () => void;
-}) {
+  onBack,
+  page = 1,
+  totalPages = 1,
+  onPrevPage,
+  onNextPage,
+}: PageScaffoldProps) {
   const { gutter } = useResponsive();
   const insets = useSafeAreaInsets();
 
-  // 1) medimos la altura real del header para el offset del teclado
   const [headerH, setHeaderH] = useState(0);
   const onHeaderLayout = useCallback((e: LayoutChangeEvent) => {
-    setHeaderH(e.nativeEvent.layout.height);
+    const h = e.nativeEvent.layout.height;
+    // evita loops de layout: solo set si cambió de verdad
+    setHeaderH((prev) => (Math.abs(prev - h) > 0.5 ? h : prev));
   }, []);
 
-  // 2) offset total = insets.top + headerH
   const keyboardOffset = useMemo(() => insets.top + headerH, [insets.top, headerH]);
 
-
   const router = useRouter();
-    // back por defecto (si no te pasan uno)
   const handleBack = useCallback(() => {
-    if (onBack) return onBack();              // usa el que manden
-    if (router.canGoBack()) router.back();    // pop normal
-    else router.replace("/");                 // fallback (home)
+    if (onBack) return onBack();
+    if (router.canGoBack()) router.back();
+    else router.replace("/");
   }, [onBack, router]);
 
   return (
@@ -53,42 +63,49 @@ export default function PageScaffold({
           <View style={{ paddingHorizontal: gutter * 2 }}>
             <FormHeader
               title={title}
-              page={1}
-              totalPages={3}
+              page={page}
+              totalPages={totalPages}
               connected
               onBack={handleBack}
               onRefresh={() => {}}
               variant={variant}
+              onPrevPage={variant === "form" ? onPrevPage : undefined}
+              onNextPage={variant === "form" ? onNextPage : undefined}
             />
           </View>
-          {/* separador visual del header con el body */}
           <View style={{ height: gutter * 1 }} />
         </View>
 
-        {/* BODY (scrollable) */}
+        {/* BODY */}
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={keyboardOffset}
         >
-          <ContainerSizer style={{ flex: 1 }}>
-            <ScrollView
-              showsVerticalScrollIndicator
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-              contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "always" : "automatic"}
-              contentContainerStyle={{
-                // 3) padding dentro del Scroll para que también sea scrolleable
-                paddingHorizontal: gutter * 2,
-                paddingBottom: (insets.bottom || 0) + gutter * 2,
-              }}
-            >
-              {/* 4) reemplazo de gap por separadores seguros */}
-              <View style={{ marginBottom: gutter }}>{/* spacer bajo el header */}</View>
-              {children}
-              <View style={{ height: gutter * 2 }} />
-            </ScrollView>
-          </ContainerSizer>
+          {variant === "form" ? (
+            // 👇 SIN ScrollView padre: deja que cada página maneje su propio scroll vertical
+            <ContainerSizer style={{ flex: 1 }}>
+              <View style={{ flex: 1 }}>{children}</View>
+            </ContainerSizer>
+          ) : (
+            // variantes categories/groups: un único ScrollView
+            <ContainerSizer style={{ flex: 1 }}>
+              <ScrollView
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+                contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "always" : "automatic"}
+                contentContainerStyle={{
+                  paddingHorizontal: gutter * 2,
+                  paddingBottom: (insets.bottom || 0) + gutter * 2,
+                }}
+              >
+                <View style={{ marginBottom: gutter }} />
+                {children}
+                <View style={{ height: gutter * 2 }} />
+              </ScrollView>
+            </ContainerSizer>
+          )}
         </KeyboardAvoidingView>
       </View>
     </SafeAreaView>

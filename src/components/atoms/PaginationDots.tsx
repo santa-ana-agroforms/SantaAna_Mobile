@@ -11,8 +11,8 @@ export default function PaginationDots({
   activeIndex: number; // 0-based
 }) {
   const { rem } = useResponsive();
-  const size = rem * 0.5;
-  const gap = rem * 0.5;
+  const size = rem * 1;
+  const gap = rem * 1;
 
   return (
     <View style={{ flexDirection: "row", gap }}>
