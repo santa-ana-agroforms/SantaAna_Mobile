@@ -27,7 +27,7 @@ export type SignaturePadHandle = {
   isEmpty: () => boolean;
   exportImage: (opts?: {
     format?: "png" | "jpg";
-    quality?: number; // 0..1 (JPG)
+    quality?: number;
     result?: "tmpfile" | "base64" | "data-uri";
     backgroundColor?: string;
     scale?: number;
@@ -80,7 +80,7 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(
       onChangeStrokes,
       disabled = false,
     },
-    ref,
+    ref
   ) => {
     const viewRef = useRef<View>(null);
     const [strokes, setStrokes] = useState<Stroke[]>([]);
@@ -121,7 +121,7 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(
           onPanResponderRelease: end,
           onPanResponderTerminate: end,
         }),
-      [disabled, end, move, start],
+      [disabled, end, move, start]
     );
 
     useImperativeHandle(ref, () => ({
@@ -197,7 +197,7 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(
         </Svg>
       </View>
     );
-  },
+  }
 );
 
 const styles = StyleSheet.create({
