@@ -4,11 +4,7 @@ import { Body } from "@/components/atoms/Typography";
 import { useResponsive } from "@/hooks/useResponsive";
 import { colors } from "@/theme/tokens";
 import NetInfo from "@react-native-community/netinfo";
-import {
-  CameraView,
-  useCameraPermissions,
-  type BarcodeScanningResult,
-} from "expo-camera";
+import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -107,10 +103,7 @@ const QrLoginScanner: React.FC<Props> = ({
     async (p: QrPayload) => {
       const net = await NetInfo.fetch();
       if (!net.isConnected) {
-        Alert.alert(
-          "Sin conexión",
-          "Se requiere internet para el primer login."
-        );
+        Alert.alert("Sin conexión", "Se requiere internet para el primer login.");
         return;
       }
       setLoading(true);
@@ -125,13 +118,8 @@ const QrLoginScanner: React.FC<Props> = ({
           nonce: p.nonce,
           sig: p.sig,
         });
-        const {
-          access_token: accessToken,
-          refreshToken,
-          user,
-        } = resp.data ?? {};
-        if (!accessToken)
-          throw new Error("No se recibió accessToken del servidor.");
+        const { access_token: accessToken, refreshToken, user } = resp.data ?? {};
+        if (!accessToken) throw new Error("No se recibió accessToken del servidor.");
 
         await setTokens(accessToken, refreshToken);
 
@@ -153,9 +141,7 @@ const QrLoginScanner: React.FC<Props> = ({
         onSuccess?.(u!);
       } catch (e: any) {
         const msg =
-          e?.response?.data?.message ||
-          e?.message ||
-          "No se pudo completar el login por QR.";
+          e?.response?.data?.message || e?.message || "No se pudo completar el login por QR.";
         Alert.alert("Error de login", msg);
         console.log(msg);
       } finally {
@@ -192,7 +178,7 @@ const QrLoginScanner: React.FC<Props> = ({
   );
 
   const prettyJson = useMemo(
-    () => (parsed ? JSON.stringify(parsed, null, 2) : raw ?? ""),
+    () => (parsed ? JSON.stringify(parsed, null, 2) : (raw ?? "")),
     [parsed, raw]
   );
 
@@ -216,9 +202,7 @@ const QrLoginScanner: React.FC<Props> = ({
       setForms(data ?? []);
     } catch (e: any) {
       const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "No se pudieron cargar los formularios.";
+        e?.response?.data?.message || e?.message || "No se pudieron cargar los formularios.";
       Alert.alert("Error", msg);
     } finally {
       setFormsLoading(false);
@@ -252,9 +236,7 @@ const QrLoginScanner: React.FC<Props> = ({
               {loading ? (
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <ActivityIndicator />
-                  <Body style={{ marginLeft: 8 }}>
-                    {statusMsg ?? "Procesando…"}
-                  </Body>
+                  <Body style={{ marginLeft: 8 }}>{statusMsg ?? "Procesando…"}</Body>
                 </View>
               ) : parsed ? (
                 <>
@@ -266,10 +248,7 @@ const QrLoginScanner: React.FC<Props> = ({
                 <View style={styles.codeBlock}>
                   <Text
                     selectable
-                    style={[
-                      styles.codeText,
-                      { fontSize: rem * 1.25, color: colors.textPrimary },
-                    ]}
+                    style={[styles.codeText, { fontSize: rem * 1.25, color: colors.textPrimary }]}
                   >
                     {prettyJson}
                   </Text>
@@ -301,9 +280,7 @@ const QrLoginScanner: React.FC<Props> = ({
           )}
 
           {/* MINI INPUT para configurar la base URL y cargar formularios */}
-          <View
-            style={[styles.card, { borderColor: colors.border, marginTop: 12 }]}
-          >
+          <View style={[styles.card, { borderColor: colors.border, marginTop: 12 }]}>
             <Body weight="bold" style={{ marginBottom: 8 }}>
               API base URL
             </Body>
@@ -369,9 +346,7 @@ const QrLoginScanner: React.FC<Props> = ({
             <View style={styles.overlayTop} />
             <View style={styles.overlayMiddle}>
               <View style={styles.overlaySide} />
-              <View
-                style={[styles.focusBox, { borderColor: colors.primary600 }]}
-              />
+              <View style={[styles.focusBox, { borderColor: colors.primary600 }]} />
               <View style={styles.overlaySide} />
             </View>
             <View style={styles.overlayBottom}>

@@ -1,5 +1,5 @@
 // app/_layout.tsx
-import { clearTokens, getAccessToken, setApiBase } from "@/api/client";
+import { getAccessToken, setApiBase } from "@/api/client";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -17,7 +17,7 @@ import { enableFreeze, enableScreens } from "react-native-screens";
 enableScreens(true);
 enableFreeze(true);
 
-export default function RootLayout() {
+const RootLayout = () => {
   const [loaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -42,7 +42,9 @@ export default function RootLayout() {
         if (mounted) setChecking(false);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   if (!loaded || checking) return null;
@@ -74,4 +76,6 @@ export default function RootLayout() {
       </Stack>
     </SafeAreaProvider>
   );
-}
+};
+
+export default RootLayout;

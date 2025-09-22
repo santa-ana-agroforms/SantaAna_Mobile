@@ -1,162 +1,254 @@
-import React, { useState } from "react";
-import { View, TextInput, Pressable } from "react-native";
-import { Title, Body } from "@/components/atoms/Typography";
-import { useResponsive } from "@/hooks/useResponsive";
+// src/components/forms/FieldRenderer.tsx
+import Boolean from "@/components/atoms/Boolean";
+import DatasetSelect from "@/components/atoms/DatasetSelect";
+import Input from "@/components/atoms/Input";
+import Label from "@/components/atoms/Label";
+import { Body } from "@/components/atoms/Typography";
+import DateTimeField from "@/components/molecules/DateTimeField";
 
-import Button from "@/components/atoms/Button"; // se asume existe, si no, reemplazar por Pressable
-import { Campo } from "./FormPage";
+import FieldSignature from "@/components/molecules/FieldSignature";
+import { colors } from "@/theme/tokens";
+import React, { useMemo, useState } from "react";
+import { View } from "react-native";
+import type { Campo } from "./FormPage";
 
-// import type { Campo } from "./FormPage";
+type Frame = { width: number; height: number };
 
-export default function FieldRenderer({ campo, formName }: { campo: Campo; formName?: string }) {
-  const { rem, gutter } = useResponsive();
+type Props = {
+  campo: Campo;
+  formName?: string;
+  /** Escala tipográfica/geométrica (lado menor) */
+  referenceFrame: Frame;
+  /** Ancho/alto útil dentro del body */
+  contentFrame: Frame;
+  /** (Opcional) callback para subir estado al store */
+  onChangeValue?: (name: string, value: unknown) => void;
+};
+
+const clamp = (v: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, v));
+
+const FieldRenderer: React.FC<Props> = ({
+  campo,
+  // formName,
+  referenceFrame,
+  contentFrame,
+  onChangeValue,
+}) => {
   const label = campo.etiqueta || campo.nombre_interno;
   const help = campo.ayuda;
 
-  // estado simple por campo (para demo). En proyecto real, elevar a un form store.
+  // Estado local demo. En producción, elevar a un form store y usar onChangeValue.
   const [value, setValue] = useState<any>(undefined);
+  const setAndEmit = (v: any) => {
+    setValue(v);
+    onChangeValue?.(campo.nombre_interno, v);
+  };
 
-  const LabelRow = (
-    <View style={{ marginBottom: gutter * 0.5 }}>
-      <Title style={{ fontSize: rem * 1.1 }}>{label}{campo.requerido ? " *" : ""}</Title>
-      {help ? <Body color="secondary">{help}</Body> : null}
-    </View>
+  const dims = useMemo(() => {
+    const minSide = Math.min(referenceFrame.width, referenceFrame.height);
+
+    // Base tipográfica derivada (≈16 en teléfonos medianos)
+    const baseRem = clamp(minSide * 0.042, 14, 18);
+
+    // Espaciados y medidas
+    const labelBottom = clamp(minSide * 0.008, 6, 12);
+    const helpTop = clamp(minSide * 0.004, 4, 8);
+    const fieldGap = clamp(minSide * 0.016, 10, 22);
+
+    const inputMinH = clamp(minSide * 0.06, 44, 62);
+    const inputPadH = clamp(minSide * 0.014, 12, 18);
+    const inputPadV = clamp(minSide * 0.01, 8, 14);
+    const inputRadius = clamp(minSide * 0.018, 8, 12);
+    const inputFont = clamp(baseRem * 1.05, 14, 20);
+
+    const segPadV = clamp(minSide * 0.012, 10, 16);
+
+    const chipGap = clamp(minSide * 0.01, 8, 14);
+    const chipPadH = clamp(minSide * 0.014, 12, 18);
+    const chipPadV = clamp(minSide * 0.01, 8, 14);
+    const chipRadius = clamp(minSide * 0.018, 8, 12);
+
+    const firmH = clamp(minSide * 0.22, 120, 180);
+
+    return {
+      baseRem,
+      labelBottom,
+      helpTop,
+      fieldGap,
+      inputMinH,
+      inputPadH,
+      inputPadV,
+      inputRadius,
+      inputFont,
+      segPadV,
+      chipGap,
+      chipPadH,
+      chipPadV,
+      chipRadius,
+      firmH,
+      minSide,
+    };
+  }, [referenceFrame]);
+
+  const LabelBlock = (
+    <Label
+      frame={referenceFrame}
+      text={label}
+      required={campo.requerido}
+      help={help}
+    />
   );
 
-  const Box = ({ children, height = 52, align = "center" as const }: { children: React.ReactNode; height?: number; align?: "center" }) => (
+  const Box: React.FC<
+    React.PropsWithChildren<{ minH?: number; center?: boolean }>
+  > = ({ children, minH = dims.inputMinH, center = true }) => (
     <View
       style={{
-        minHeight: height,
-        borderWidth: 1.5,
-        borderColor: "#C7C2B3",
-        borderRadius: 12,
-        backgroundColor: "#FFFFFF",
-        paddingHorizontal: 14,
-        alignItems: align,
-        justifyContent: "center",
+        minHeight: minH,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: dims.inputRadius,
+        backgroundColor: colors.neutral0,
+        paddingHorizontal: dims.inputPadH,
+        paddingVertical: dims.inputPadV,
+        alignItems: center ? "center" : undefined,
+        justifyContent: center ? "center" : undefined,
       }}
     >
       {children}
     </View>
   );
 
-  // --------- Render helpers ---------
   const renderText = () => (
-    <>
-      {LabelRow}
-      <Box>
-        <TextInput
-          value={value ?? ""}
-          onChangeText={setValue}
-          placeholder="Escribe aquí…"
-          style={{ fontSize: rem * 1.05, paddingVertical: 10 }}
-        />
-      </Box>
-    </>
+    <Input
+      frame={referenceFrame}
+      label={label}
+      required={campo.requerido}
+      value={value ?? ""}
+      onChangeText={setAndEmit}
+      placeholder={campo.ayuda ? campo.ayuda : "Escribe aquí…"}
+    />
   );
 
+  // Numérico
   const renderNumber = () => (
-    <>
-      {LabelRow}
-      <Box>
-        <TextInput
-          value={value?.toString() ?? ""}
-          onChangeText={(t) => setValue(t.replace(/[^0-9.,-]/g, ""))}
-          keyboardType="numeric"
-          placeholder="0"
-          style={{ fontSize: rem * 1.05, paddingVertical: 10 }}
-        />
-      </Box>
-    </>
+    <Input
+      frame={referenceFrame}
+      label={label}
+      required={campo.requerido}
+      value={value?.toString() ?? ""}
+      keyboardType="numeric"
+      onChangeText={(t) => setAndEmit(t.replace(/[^0-9.,-]/g, ""))}
+      placeholder={campo.ayuda ? campo.ayuda : "0"}
+    />
   );
 
   const renderBoolean = () => (
     <>
-      {LabelRow}
-      <View style={{ flexDirection: "row", borderWidth: 1.5, borderColor: "#C7C2B3", borderRadius: 12, overflow: "hidden" }}>
-        <Pressable
-          onPress={() => setValue(true)}
-          style={{ flex: 1, paddingVertical: 14, alignItems: "center", backgroundColor: value === true ? "#E5F1E5" : "#FFFFFF" }}
-        >
-          <Body style={{ fontSize: rem * 1.05 }}>Sí</Body>
-        </Pressable>
-        <Pressable
-          onPress={() => setValue(false)}
-          style={{ flex: 1, paddingVertical: 14, alignItems: "center", borderLeftWidth: 1.5, borderLeftColor: "#C7C2B3", backgroundColor: value === false ? "#F5E8E8" : "#FFFFFF" }}
-        >
-          <Body style={{ fontSize: rem * 1.05 }}>No</Body>
-        </Pressable>
-      </View>
+      {LabelBlock}
+      <Boolean
+        frame={referenceFrame}
+        value={value}
+        onChange={(v) => setAndEmit(v)}
+        // opcionales:
+        yesLabel="Sí"
+        noLabel="No"
+        // error={!!algunaValidacion}
+        showAccentBars
+      />
     </>
   );
 
+  // dentro de FieldRenderer.tsx
+
+  // ⬇️ Sustituye el renderList anterior por este:
   const renderList = (items: any[]) => (
     <>
-      {LabelRow}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {items?.map((it, i) => (
-          <Pressable
-            key={i}
-            onPress={() => setValue(it)}
-            style={{
-              paddingVertical: 10,
-              paddingHorizontal: 14,
-              borderWidth: 1.5,
-              borderColor: value === it ? "#5B8B5B" : "#C7C2B3",
-              borderRadius: 12,
-              backgroundColor: value === it ? "#E5F1E5" : "#FFFFFF",
-            }}
-          >
-            <Body>{String(it)}</Body>
-          </Pressable>
-        ))}
-      </View>
+      <Label
+        frame={referenceFrame}
+        text={label}
+        required={campo.requerido}
+        help={help}
+      />
+      <DatasetSelect
+        frame={referenceFrame}
+        items={items} // <- estáticos, no CSV
+        value={value}
+        onChange={(v) => setAndEmit(v)} // v: string | undefined
+        placeholder="Selecciona una opción…"
+        allowDeselect // tocar la opción activa limpia
+        showNoneOption // agrega “Ninguno” al inicio
+      />
     </>
   );
 
   const renderDataset = () => (
     <>
-      {LabelRow}
-      <Box height={64} align="center">
-        <Body>
-          Fuente externa (dataset)
-          {"\n"}archivo: {campo.config?.file || "—"}
-          {"\n"}columna: {campo.config?.column || "—"}
+      {LabelBlock}
+      <DatasetSelect
+        frame={referenceFrame}
+        value={value}
+        onChange={(v) => setAndEmit(v)}
+        // Opcional: si quieres pasar opciones estáticas desde config:
+        // items={campo.config?.items}
+        placeholder="Selecciona un valor…"
+        showNoneOption={false}
+      />
+      {/* Info de la “fuente” (mock) */}
+      <Body
+        frame={referenceFrame}
+        color="secondary"
+        size="xs"
+        style={{ marginTop: 6 }}
+      >
+        Fuente externa (CSV)
+        {"\n"}archivo: {campo.config?.file || "—"}
+        {"\n"}columna: {campo.config?.column || "—"}
+      </Body>
+    </>
+  );
+
+  const renderDate = (mode: "date" | "hour") => (
+    <DateTimeField
+      mode={mode === "date" ? "date" : "time"}
+      value={value ?? null}
+      onChange={(d) => setAndEmit(d)}
+      label={label}
+      required={campo.requerido}
+      placeholder={mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"}
+      frame={referenceFrame}
+    />
+  );
+
+  const renderCalc = () => (
+    <>
+      {LabelBlock}
+      <Box>
+        <Body frame={referenceFrame} color="secondary" size="sm">
+          Campo calculado: {campo.config?.operation || "—"}
         </Body>
       </Box>
     </>
   );
 
-  const renderDate = (mode: "date" | "hour") => (
-    <>
-      {LabelRow}
-      <Box>
-        <Body color="secondary">{mode === "date" ? "Seleccionar fecha (placeholder)" : "Seleccionar hora (placeholder)"}</Body>
-      </Box>
-    </>
-  );
-
-  const renderCalc = () => (
-    <>
-      {LabelRow}
-      <Box>
-        <Body color="secondary">Campo calculado: {campo.config?.operation || "—"}</Body>
-      </Box>
-    </>
-  );
-
+  // dentro de FieldRenderer
   const renderFirm = () => (
     <>
-      {LabelRow}
-      <Box height={140} align="center">
-        <Body color="secondary">Área de firma (placeholder)</Body>
-        <View style={{ height: gutter * 0.75 }} />
-        <Button title="LIMPIAR" onPress={() => setValue(undefined)} />
-      </Box>
+      {LabelBlock}
+      <FieldSignature
+        referenceFrame={referenceFrame}
+        contentFrame={contentFrame}
+        onChange={(payload: any) => {
+          // payload: { strokes: any[]; image?: string }
+          // guarda la imagen (uri) si existe; si no, guarda los strokes
+          setAndEmit(payload.image ?? payload.strokes);
+        }}
+      />
     </>
   );
 
-  // --------- Switch de tipos/clases ---------
+  // ---------- Switch por tipo/clase ----------
   if (campo.tipo === "booleano") return renderBoolean();
 
   if (campo.tipo === "numerico") {
@@ -182,18 +274,24 @@ export default function FieldRenderer({ campo, formName }: { campo: Campo; formN
       default:
         return (
           <>
-            {LabelRow}
-            <Body color="secondary">(placeholder) tipo: {campo.tipo} / clase: {campo.clase}</Body>
+            {LabelBlock}
+            <Body frame={referenceFrame} color="secondary" size="sm">
+              (placeholder) tipo: {campo.tipo} / clase: {campo.clase}
+            </Body>
           </>
         );
     }
   }
 
-  // fallback genérico
+  // Fallback genérico
   return (
     <>
-      {LabelRow}
-      <Body color="secondary">(placeholder) tipo: {campo.tipo} / clase: {campo.clase}</Body>
+      {LabelBlock}
+      <Body frame={referenceFrame} color="secondary" size="sm">
+        (placeholder) tipo: {campo.tipo} / clase: {campo.clase}
+      </Body>
     </>
   );
-}
+};
+
+export default FieldRenderer;

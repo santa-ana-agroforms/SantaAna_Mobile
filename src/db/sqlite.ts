@@ -30,9 +30,7 @@ export async function ensureMigrated() {
 
   await db.withTransactionAsync(async () => {
     // Leer versión actual
-    const uvRows = await db.getAllAsync<{ user_version: number }>(
-      "PRAGMA user_version;"
-    );
+    const uvRows = await db.getAllAsync<{ user_version: number }>("PRAGMA user_version;");
     let ver = (uvRows?.[0]?.user_version ?? 0) | 0;
 
     // v1: esquema original
@@ -97,16 +95,12 @@ export async function ensureMigrated() {
         );
       `);
       // Agregar columna si no existe
-      const cols = await db.getAllAsync<{ name: string }>(
-        "PRAGMA table_info(form);"
-      );
+      const cols = await db.getAllAsync<{ name: string }>("PRAGMA table_info(form);");
       const hasCategoria = cols.some((c) => c.name === "categoria_id");
       if (!hasCategoria) {
         await db.execAsync(`ALTER TABLE form ADD COLUMN categoria_id TEXT;`);
       }
-      await db.execAsync(
-        `CREATE INDEX IF NOT EXISTS idx_form_categoria_id ON form(categoria_id);`
-      );
+      await db.execAsync(`CREATE INDEX IF NOT EXISTS idx_form_categoria_id ON form(categoria_id);`);
       await db.execAsync("PRAGMA user_version = 2;");
       ver = 2;
     }
@@ -358,9 +352,7 @@ export async function upsertGroupedForms(groups: ServerCategoryGroup[]) {
           `DELETE FROM field WHERE page_version_id IN (SELECT version_id FROM page WHERE form_id = ?);`,
           [form.id_formulario]
         );
-        await db.runAsync(`DELETE FROM page WHERE form_id = ?;`, [
-          form.id_formulario,
-        ]);
+        await db.runAsync(`DELETE FROM page WHERE form_id = ?;`, [form.id_formulario]);
 
         // Upsert form con categoría
         await db.runAsync(
@@ -417,9 +409,7 @@ export async function upsertGroupedForms(groups: ServerCategoryGroup[]) {
 }
 
 // Lee desde SQLite con el MISMO shape agrupado por categoría que entrega el backend
-export async function selectFormsGroupedByCategory(): Promise<
-  ServerCategoryGroup[]
-> {
+export async function selectFormsGroupedByCategory(): Promise<ServerCategoryGroup[]> {
   await ensureMigrated();
   const db = await getDb();
 
@@ -526,15 +516,10 @@ export async function selectFormsGroupedByCategory(): Promise<
     cg.formularios.sort((a, b) => a.nombre.localeCompare(b.nombre));
     for (const f of cg.formularios) {
       f.paginas.sort(
-        (a, b) =>
-          (a.secuencia ?? 0) - (b.secuencia ?? 0) ||
-          a.id_pagina.localeCompare(b.id_pagina)
+        (a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0) || a.id_pagina.localeCompare(b.id_pagina)
       );
       for (const p of f.paginas) {
-        p.campos.sort(
-          (a, b) =>
-            a.sequence - b.sequence || a.id_campo.localeCompare(b.id_campo)
-        );
+        p.campos.sort((a, b) => a.sequence - b.sequence || a.id_campo.localeCompare(b.id_campo));
       }
     }
   }

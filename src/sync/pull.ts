@@ -9,13 +9,11 @@ export async function pullUserAndForms(user: AuthUser) {
 
   // Guardar usuario/roles
   await DB.run(`DELETE FROM user`);
-  await DB.run(`DELETE FROM user_role WHERE nombre_de_usuario = ?`, [
+  await DB.run(`DELETE FROM user_role WHERE nombre_de_usuario = ?`, [user.nombre_de_usuario]);
+  await DB.run(`INSERT OR REPLACE INTO user (nombre, nombre_de_usuario) VALUES (?, ?)`, [
+    user.nombre,
     user.nombre_de_usuario,
   ]);
-  await DB.run(
-    `INSERT OR REPLACE INTO user (nombre, nombre_de_usuario) VALUES (?, ?)`,
-    [user.nombre, user.nombre_de_usuario]
-  );
   for (const r of user.roles) {
     await DB.run(
       `INSERT OR REPLACE INTO user_role (nombre_de_usuario, rol_id, rol_nombre) VALUES (?, ?, ?)`,
@@ -73,11 +71,7 @@ export async function pullUserAndForms(user: AuthUser) {
               f.etiqueta ?? null,
               f.ayuda ?? null,
               f.config ? JSON.stringify(f.config) : null,
-              typeof f.requerido === "boolean"
-                ? f.requerido
-                  ? 1
-                  : 0
-                : f.requerido ?? 0,
+              typeof f.requerido === "boolean" ? (f.requerido ? 1 : 0) : (f.requerido ?? 0),
             ]
           );
         }
