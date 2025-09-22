@@ -1,6 +1,6 @@
 import ContainerSizer from "@/components/layout/ContainerSizer";
 import FormHeader from "@/components/molecules/FormHeader";
-import { useResponsive } from "@/hooks/useResponsive";
+import { colors } from "@/theme/tokens";
 import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   View,
+  useWindowDimensions,
 } from "react-native";
 import {
   SafeAreaView,
@@ -17,9 +18,15 @@ import {
 
 type Variant = "categories" | "groups" | "form";
 
+export interface ScaffoldDimensions {
+  layoutFrame: { width: number; height: number };
+  contentFrame: { width: number; height: number };
+  referenceFrame: { width: number; height: number };
+}
+
 type PageScaffoldProps = {
   title: string;
-  children: React.ReactNode;
+  children: React.ReactNode | ((dims: ScaffoldDimensions) => React.ReactNode);
   variant?: Variant;
   onBack?: () => void;
   page?: number;
@@ -27,6 +34,9 @@ type PageScaffoldProps = {
   onPrevPage?: () => void;
   onNextPage?: () => void;
 };
+
+const clamp = (v: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, v));
 
 const PageScaffold: React.FC<PageScaffoldProps> = ({
   title,
@@ -38,13 +48,25 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
   onPrevPage,
   onNextPage,
 }) => {
-  const { gutter } = useResponsive();
+  const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+
+  // Espaciados proporcionales (reemplazan 16, 12, 32)
+  // - padX: padding horizontal en header/scroll
+  // - padTopHeader: separación superior del header
+  // - gapBelowHeader: “respiro” bajo el header
+  // - padBottomScroll: padding inferior del scroll (insets + padX)
+  const padX = useMemo(() => clamp(width * 0.04, 12, 24), [width]); // ≈4% del ancho
+  const padTopHeader = useMemo(() => clamp(height * 0.01, 8, 24), [height]); // ≈2% del alto
+  const gapBelowHeader = useMemo(() => clamp(height * 0.012, 8, 16), [height]);
+  const padBottomScroll = useMemo(
+    () => (insets.bottom || 0) + padX,
+    [insets.bottom, padX],
+  );
 
   const [headerH, setHeaderH] = useState(0);
   const onHeaderLayout = useCallback((e: LayoutChangeEvent) => {
     const h = e.nativeEvent.layout.height;
-    // evita loops de layout: solo set si cambió de verdad
     setHeaderH((prev) => (Math.abs(prev - h) > 0.5 ? h : prev));
   }, []);
 
@@ -60,15 +82,37 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
     else router.replace("/");
   }, [onBack, router]);
 
+  // 🔹 Frames escalables
+  const layoutHeight = height - insets.top - insets.bottom - headerH;
+  const layoutFrame = { width, height: layoutHeight };
+
+  const innerWidth = layoutFrame.width - 2 * padX;
+
+  const contentFrame = {
+    width: innerWidth,
+    height: layoutFrame.height /* - opcional gapBelowHeader */,
+  };
+
+  const referenceFrame = { ...layoutFrame };
+
+  const scaffoldDimensions: ScaffoldDimensions = {
+    layoutFrame,
+    contentFrame,
+    referenceFrame,
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F9F6EE" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={{ flex: 1 }}>
         {/* HEADER (estático, medido) */}
-        <View onLayout={onHeaderLayout} style={{ paddingTop: gutter * 2 }}>
-          <View style={{ paddingHorizontal: gutter * 2 }}>
+        <View onLayout={onHeaderLayout}>
+          <View
+            style={{ paddingTop: padTopHeader, paddingBottom: gapBelowHeader }}
+          >
             <FormHeader
               title={title}
               page={page}
+              frame={referenceFrame}
               totalPages={totalPages}
               connected
               onBack={handleBack}
@@ -78,7 +122,6 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
               onNextPage={variant === "form" ? onNextPage : undefined}
             />
           </View>
-          <View style={{ height: gutter * 1 }} />
         </View>
 
         {/* BODY */}
@@ -88,12 +131,14 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
           keyboardVerticalOffset={keyboardOffset}
         >
           {variant === "form" ? (
-            // 👇 SIN ScrollView padre: deja que cada página maneje su propio scroll vertical
             <ContainerSizer style={{ flex: 1 }}>
-              <View style={{ flex: 1 }}>{children}</View>
+              <View style={{ flex: 1 }}>
+                {typeof children === "function"
+                  ? children(scaffoldDimensions)
+                  : children}
+              </View>
             </ContainerSizer>
           ) : (
-            // variantes categories/groups: un único ScrollView
             <ContainerSizer style={{ flex: 1 }}>
               <ScrollView
                 showsVerticalScrollIndicator
@@ -105,13 +150,15 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
                   Platform.OS === "ios" ? "always" : "automatic"
                 }
                 contentContainerStyle={{
-                  paddingHorizontal: gutter * 2,
-                  paddingBottom: (insets.bottom || 0) + gutter * 2,
+                  paddingHorizontal: padX,
+                  paddingBottom: padBottomScroll,
                 }}
               >
-                <View style={{ marginBottom: gutter }} />
-                {children}
-                <View style={{ height: gutter * 2 }} />
+                <View style={{ marginBottom: gapBelowHeader }} />
+                {typeof children === "function"
+                  ? children(scaffoldDimensions)
+                  : children}
+                <View style={{ height: padX * 2 }} />
               </ScrollView>
             </ContainerSizer>
           )}

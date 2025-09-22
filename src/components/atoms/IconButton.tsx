@@ -1,77 +1,129 @@
-import { useResponsive } from "@/hooks/useResponsive";
+// src/components/atoms/IconButton.tsx
 import { colors } from "@/theme/tokens";
-import { Image, ImageSourcePropType, Pressable, StyleSheet, View, ViewStyle } from "react-native";
+import React, { useMemo } from "react";
+import {
+  Image,
+  ImageSourcePropType,
+  Pressable,
+  StyleSheet,
+  View,
+  ViewStyle,
+  useWindowDimensions,
+} from "react-native";
 import { Shadow } from "react-native-shadow-2";
+
+type Frame = { width: number; height: number };
 
 type Props = {
   icon?: React.ReactElement;
   iconSource?: ImageSourcePropType;
   onPress?: () => void;
+  /** Tamaño externo del botón (px). Si no se pasa, se calcula desde referenceFrame. */
   size?: number;
+  /** Tamaño del ícono interno (px). Si no se pasa, se calcula desde el size final. */
+  iconSize?: number;
   bgColor?: string;
   disabled?: boolean;
   style?: ViewStyle;
   accessibilityLabel?: string;
+  /** Recomendado: pásale referenceFrame del PageScaffold / FormHeader */
+  frame?: Frame;
+  showShadow?: boolean;
 };
 
-export default function IconButton({
+const clamp = (v: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, v));
+
+const IconButton: React.FC<Props> = ({
   icon,
   iconSource,
   onPress,
-  size = 44,
+  size,
+  iconSize,
   bgColor = colors.primary600,
   disabled = false,
   style,
   accessibilityLabel,
-}: Props) {
-  const { rem } = useResponsive();
-  const radius = size * 0.2;
+  frame,
+  showShadow = true,
+}) => {
+  // Fallback si no se recibe frame
+  const { width: ww, height: hh } = useWindowDimensions();
+  const baseFrame = frame ?? { width: ww, height: hh };
+
+  const { finalSize, radius, innerIconSize } = useMemo(() => {
+    const minSide = Math.min(baseFrame.width, baseFrame.height);
+
+    // Tamaño automático del botón (36–56) escalado al lado menor
+    const autoSize = clamp(minSide * 0.11, 36, 56);
+    const _size = size ?? autoSize;
+
+    // Radio y tamaño del ícono derivados del size final
+    const _radius = clamp(_size * 0.22, 8, 14);
+    const autoIcon = clamp(_size * 1, 18, 36);
+    const _iconSize = iconSize ?? autoIcon;
+
+    return { finalSize: _size, radius: _radius, innerIconSize: _iconSize };
+  }, [baseFrame.height, baseFrame.width, size, iconSize]);
 
   const renderIcon = () =>
     iconSource ? (
       <Image
         source={iconSource}
-        style={{ width: rem * 3.5, height: rem * 3.5, resizeMode: "contain" }}
+        style={{
+          width: innerIconSize,
+          height: innerIconSize,
+          resizeMode: "contain",
+        }}
       />
     ) : (
-      icon
+      (icon ?? null)
     );
 
   return (
     <View
       style={[
         {
-          width: size,
-          height: size,
+          width: finalSize,
+          height: finalSize,
           position: "relative",
-          opacity: disabled ? 0.6 : 1,
         },
         style,
       ]}
     >
-      <Shadow
-        distance={3}
-        offset={[0, 6]}
-        startColor="#00000029"
-        endColor="#00000000"
-        style={{ borderRadius: radius }}
-      >
-        <View
-          style={{
-            width: size,
-            height: size * 0.9,
-            borderRadius: radius,
-            backgroundColor: "transparent",
-          }}
-        />
-      </Shadow>
+      {/* Sombra inferior */}
+      {showShadow === true && (
+        <Shadow
+          distance={3}
+          offset={[0, 6]}
+          startColor="#00000029"
+          endColor="#00000000"
+          style={{ borderRadius: radius }}
+        >
+          <View
+            style={{
+              width: finalSize,
+              height: finalSize * 0.9,
+              borderRadius: radius,
+              backgroundColor: "transparent",
+            }}
+          />
+        </Shadow>
+      )}
 
-      {/* CONTENEDOR del botón (clip del ripple), encima */}
-      <View style={[StyleSheet.absoluteFillObject, { borderRadius: radius, overflow: "hidden" }]}>
+      {/* Botón con ripple y borde redondeado */}
+      <View
+        style={[
+          StyleSheet.absoluteFillObject,
+          { borderRadius: radius, overflow: "hidden" },
+        ]}
+      >
         <Pressable
           onPress={onPress}
           disabled={disabled}
           android_ripple={{ color: "rgba(0,0,0,0.08)" }}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
           style={[
             StyleSheet.absoluteFillObject,
             {
@@ -79,14 +131,14 @@ export default function IconButton({
               backgroundColor: bgColor,
               alignItems: "center",
               justifyContent: "center",
-              opacity: disabled ? 0.6 : 1,
             },
           ]}
-          accessibilityLabel={accessibilityLabel}
         >
           {renderIcon()}
         </Pressable>
       </View>
     </View>
   );
-}
+};
+
+export default IconButton;

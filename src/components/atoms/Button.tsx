@@ -1,19 +1,36 @@
-import { Pressable, ViewStyle, TextStyle, GestureResponderEvent } from "react-native";
+// src/components/atoms/Button.tsx
+import { ButtonSize, ButtonVariant, colors } from "@/theme/tokens";
+import React, { useMemo } from "react";
+import {
+  GestureResponderEvent,
+  Pressable,
+  TextStyle,
+  ViewStyle,
+  useWindowDimensions,
+} from "react-native";
 import { Body } from "./Typography";
-import { colors, ButtonSize, ButtonVariant } from "@/theme/tokens";
-import { useResponsive } from "@/hooks/useResponsive";
+
+type Frame = { width: number; height: number };
 
 type Props = {
   title: string;
   onPress?: (e: GestureResponderEvent) => void;
-  variant?: ButtonVariant;
-  size?: ButtonSize;
+  variant?: ButtonVariant; // "primary" | "ghost" | "danger" (según tus tokens)
+  size?: ButtonSize; // "sm" | "md" | "lg" (según tus tokens)
   disabled?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  /**
+   * Frame base para escalar internamente (recomendado: referenceFrame).
+   * Si no se pasa, el botón usa useWindowDimensions() como fallback.
+   */
+  frame?: Frame;
 };
 
-export default function Button({
+const clamp = (v: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, v));
+
+const Button: React.FC<Props> = ({
   title,
   onPress,
   variant = "primary",
@@ -21,27 +38,47 @@ export default function Button({
   disabled,
   style,
   textStyle,
-}: Props) {
-  const { scale, rem } = useResponsive();
+  frame,
+}) => {
+  const { width: ww, height: hh } = useWindowDimensions();
+  const baseFrame = frame ?? { width: ww, height: hh };
 
-  const height = size === "sm" ? scale(36) : size === "lg" ? scale(52) : scale(44);
-  const radius = 8;
+  // Todas las métricas internas se derivan del lado menor del referenceFrame
+  const { heightPx, radius, padH, fontSize } = useMemo(() => {
+    const minSide = Math.min(baseFrame.width, baseFrame.height);
 
-  let bg = colors.primary600,
-    fg = "#FFFFFF",
-    borderColor = "transparent",
-    borderWidth = 0,
-    opacity = disabled ? 0.6 : 1;
+    // Alturas por tamaño (accesibles y proporcionales)
+    const hSm = clamp(minSide * 0.06, 40, 44);
+    const hMd = clamp(minSide * 0.068, 44, 52);
+    const hLg = clamp(minSide * 0.08, 52, 60);
+    const _height = size === "sm" ? hSm : size === "lg" ? hLg : hMd;
+
+    // Radio y padding proporcionales a la altura (con límites)
+    const _radius = clamp(_height * 0.22, 8, 14);
+    const _padH = clamp(_height * 0.6, 12, 24);
+
+    // Tipografía basada en la altura del botón (legible y consistente)
+    const _fontSize = clamp(_height * 0.42, 14, 20);
+
+    return {
+      heightPx: _height,
+      radius: _radius,
+      padH: _padH,
+      fontSize: _fontSize,
+    };
+  }, [baseFrame.height, baseFrame.width, size]);
+
+  let bg = colors.primary600;
+  let borderColor: string | undefined = "transparent";
+  let borderWidth = 0;
+  const opacity = disabled ? 0.6 : 1;
 
   if (variant === "ghost") {
     bg = "transparent";
-    fg = colors.textPrimary;
     borderColor = colors.border;
     borderWidth = 1;
-  }
-  if (variant === "danger") {
+  } else if (variant === "danger") {
     bg = colors.danger600;
-    fg = "#FFFFFF";
   }
 
   return (
@@ -52,7 +89,7 @@ export default function Button({
       android_ripple={{ color: "rgba(0,0,0,0.08)" }}
       style={[
         {
-          height,
+          height: heightPx,
           borderRadius: radius,
           backgroundColor: bg,
           alignItems: "center",
@@ -60,7 +97,7 @@ export default function Button({
           opacity,
           borderColor,
           borderWidth,
-          paddingHorizontal: 16,
+          paddingHorizontal: padH,
         },
         style,
       ]}
@@ -68,10 +105,12 @@ export default function Button({
       <Body
         weight="bold"
         color={variant === "ghost" ? "primary" : "inverse"}
-        style={[{ fontSize: rem * 1.5 }, textStyle]}
+        style={[{ fontSize }, textStyle]}
       >
         {title}
       </Body>
     </Pressable>
   );
-}
+};
+
+export default Button;
