@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import Label from "../atoms/Label";
 
 type Frame = { width: number; height: number };
 
@@ -21,6 +22,7 @@ type Props = {
   value?: Date | null;
   onChange?: (d: Date | null) => void;
   label?: string;
+  required?: boolean;
   placeholder?: string;
   minDate?: Date;
   maxDate?: Date;
@@ -45,6 +47,7 @@ const DateTimeField: React.FC<Props> = ({
   value,
   onChange,
   label,
+  required,
   placeholder,
   minDate,
   maxDate,
@@ -139,15 +142,7 @@ const DateTimeField: React.FC<Props> = ({
 
   return (
     <View style={{ width: "100%" }}>
-      {label ? (
-        <Body
-          weight="semibold"
-          size="sm"
-          style={{ marginBottom: dims.labelMb, color: colors.textTertiary }}
-        >
-          {label}
-        </Body>
-      ) : null}
+      <Label frame={frame} text={label} required={required} />
 
       {/* Caja presionable (estilo Input) */}
       <Pressable

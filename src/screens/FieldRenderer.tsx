@@ -6,11 +6,11 @@ import Label from "@/components/atoms/Label";
 import { Body } from "@/components/atoms/Typography";
 import DateTimeField from "@/components/molecules/DateTimeField";
 
+import FieldSignature from "@/components/molecules/FieldSignature";
 import { colors } from "@/theme/tokens";
 import React, { useMemo, useState } from "react";
 import { View } from "react-native";
 import type { Campo } from "./FormPage";
-import FieldSignature from "@/components/molecules/FieldSignature";
 
 type Frame = { width: number; height: number };
 
@@ -214,7 +214,8 @@ const FieldRenderer: React.FC<Props> = ({
       mode={mode === "date" ? "date" : "time"}
       value={value ?? null}
       onChange={(d) => setAndEmit(d)}
-      label={`${label}${campo.requerido ? " *" : ""}`}
+      label={label}
+      required={campo.requerido}
       placeholder={mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"}
       frame={referenceFrame}
     />

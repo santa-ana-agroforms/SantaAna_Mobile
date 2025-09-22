@@ -7,8 +7,8 @@ import { useResponsive } from "@/hooks/useResponsive";
 import { colors } from "@/theme/tokens";
 import type { AuthUser } from "@/types";
 import NetInfo from "@react-native-community/netinfo";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Image, Platform, StyleSheet, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Image, StyleSheet, View } from "react-native";
 import type { QrPayload } from "../auth/qrTypes";
 import { isQrPayload } from "../auth/qrTypes";
 

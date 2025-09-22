@@ -6,15 +6,11 @@ const LayoutCtx = createContext<Box | null>(null);
 
 export const useContainerLayout = (required = true) => {
   const v = useContext(LayoutCtx);
-  if (required && !v)
-    throw new Error("useContainerLayout must be used inside <ContainerSizer>");
+  if (required && !v) throw new Error("useContainerLayout must be used inside <ContainerSizer>");
   return v;
 };
 
-const ContainerSizer: React.FC<React.PropsWithChildren<ViewProps>> = ({
-  children,
-  ...rest
-}) => {
+const ContainerSizer: React.FC<React.PropsWithChildren<ViewProps>> = ({ children, ...rest }) => {
   const [box, setBox] = useState<Box>({ width: 0, height: 0 });
 
   const onLayout = (e: LayoutChangeEvent) => {
@@ -27,9 +23,7 @@ const ContainerSizer: React.FC<React.PropsWithChildren<ViewProps>> = ({
 
   return (
     <View {...rest} onLayout={onLayout}>
-      <LayoutCtx.Provider value={value}>
-        {box.width ? children : null}
-      </LayoutCtx.Provider>
+      <LayoutCtx.Provider value={value}>{box.width ? children : null}</LayoutCtx.Provider>
     </View>
   );
 };

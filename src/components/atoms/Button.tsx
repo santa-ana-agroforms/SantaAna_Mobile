@@ -27,8 +27,7 @@ type Props = {
   frame?: Frame;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const Button: React.FC<Props> = ({
   title,

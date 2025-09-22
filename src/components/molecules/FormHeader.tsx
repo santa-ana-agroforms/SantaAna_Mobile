@@ -29,8 +29,7 @@ type Props = {
   frame?: Frame;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const FormHeader: React.FC<Props> = ({
   title,
@@ -90,10 +89,7 @@ const FormHeader: React.FC<Props> = ({
     };
   }, [baseFrame.height, baseFrame.width]);
 
-  const Arrow: React.FC<{ label: string; onPress?: () => void }> = ({
-    label,
-    onPress,
-  }) => (
+  const Arrow: React.FC<{ label: string; onPress?: () => void }> = ({ label, onPress }) => (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
@@ -125,9 +121,7 @@ const FormHeader: React.FC<Props> = ({
     <View style={{ paddingHorizontal: padX, paddingTop: padTop }}>
       <View style={{ gap: rowGap * 0.5 }}>
         {/* fila superior */}
-        <View
-          style={{ flexDirection: "row", alignItems: "center", gap: rowGap }}
-        >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: rowGap }}>
           {variant !== "categories" && (
             <IconButton
               accessibilityLabel="Atrás"
@@ -138,8 +132,7 @@ const FormHeader: React.FC<Props> = ({
           <Title
             style={{
               flex: 1,
-              fontSize:
-                variant === "categories" ? titleSizeCategories : titleSize,
+              fontSize: variant === "categories" ? titleSizeCategories : titleSize,
             }}
           >
             {title}
@@ -188,9 +181,7 @@ const FormHeader: React.FC<Props> = ({
         ) : null}
 
         {/* estado */}
-        <View
-          style={{ flexDirection: "row", alignItems: "center", gap: dotsGap }}
-        >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: dotsGap }}>
           <View style={{ flex: 1 }}>
             <TimestampText date={new Date()} />
             <View
