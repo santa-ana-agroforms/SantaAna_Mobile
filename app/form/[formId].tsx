@@ -16,38 +16,40 @@ export default function FormRoute() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Formulario | null>(null);
 
-  
-
   useEffect(() => {
     (async () => {
       try {
         const serverForm = await DB.selectFormFromGroupedById(formId as string);
-        setForm(serverForm ? {
-        id_formulario: serverForm.id_formulario,
-        nombre: serverForm.nombre,
-        paginas: serverForm.paginas.map(p => ({
-            id_pagina: p.id_pagina,
-            nombre: p.nombre,
-            descripcion: p.descripcion ?? undefined,
-            secuencia: p.secuencia ?? 0,
-            campos: p.campos.map(c => ({
-            id_campo: c.id_campo,
-            sequence: c.sequence,
-            tipo: mapTipo(c.tipo),
-            clase: mapClase(c.clase),
-            nombre_interno: c.nombre_interno,
-            etiqueta: c.etiqueta ?? "",
-            ayuda: c.ayuda ?? undefined,
-            config: c.config ?? undefined,
-            requerido: !!c.requerido,
-            })),
-        })),
-        } : null);
-            } finally {
-                setLoading(false);
-            }
-            })();
-        }, [formId, versionId]);
+        setForm(
+          serverForm
+            ? {
+                id_formulario: serverForm.id_formulario,
+                nombre: serverForm.nombre,
+                paginas: serverForm.paginas.map((p) => ({
+                  id_pagina: p.id_pagina,
+                  nombre: p.nombre,
+                  descripcion: p.descripcion ?? undefined,
+                  secuencia: p.secuencia ?? 0,
+                  campos: p.campos.map((c) => ({
+                    id_campo: c.id_campo,
+                    sequence: c.sequence,
+                    tipo: mapTipo(c.tipo),
+                    clase: mapClase(c.clase),
+                    nombre_interno: c.nombre_interno,
+                    etiqueta: c.etiqueta ?? "",
+                    ayuda: c.ayuda ?? undefined,
+                    config: c.config ?? undefined,
+                    requerido: !!c.requerido,
+                  })),
+                })),
+              }
+            : null
+        );
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [formId, versionId]);
 
   if (loading) {
     return (
@@ -76,9 +78,19 @@ function mapTipo(t: any): "texto" | "booleano" | "numerico" | "imagen" {
   if (["img", "image", "imagen", "firma", "firm"].includes(s)) return "imagen";
   return "texto";
 }
-function mapClase(c: any):
-  | "string" | "text" | "list" | "dataset" | "hour" | "date"
-  | "boolean" | "number" | "calc" | "firm" {
+function mapClase(
+  c: any
+):
+  | "string"
+  | "text"
+  | "list"
+  | "dataset"
+  | "hour"
+  | "date"
+  | "boolean"
+  | "number"
+  | "calc"
+  | "firm" {
   const s = String(c || "").toLowerCase();
   if (["lista", "list"].includes(s)) return "list";
   if (["dataset", "fuente"].includes(s)) return "dataset";

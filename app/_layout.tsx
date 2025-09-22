@@ -42,7 +42,9 @@ export default function RootLayout() {
         if (mounted) setChecking(false);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   if (!loaded || checking) return null;

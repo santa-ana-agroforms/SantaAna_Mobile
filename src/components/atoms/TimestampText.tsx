@@ -11,9 +11,5 @@ function formatTime(date: Date) {
 }
 
 export default function TimestampText({ date }: { date: Date }) {
-  return (
-    <Body color="secondary" >
-      Última actualización: {formatTime(date)}
-    </Body>
-  );
+  return <Body color="secondary">Última actualización: {formatTime(date)}</Body>;
 }

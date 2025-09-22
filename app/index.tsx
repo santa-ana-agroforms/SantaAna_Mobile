@@ -47,7 +47,12 @@ export default function Home() {
             key={item.nombre_categoria}
             style={[
               styles.card,
-              { padding: gutter, marginBottom: gutter, width: "48%", justifyContent: "space-between" },
+              {
+                padding: gutter,
+                marginBottom: gutter,
+                width: "48%",
+                justifyContent: "space-between",
+              },
             ]}
           >
             <Title
@@ -62,12 +67,8 @@ export default function Home() {
 
             <View style={{ height: 8 }} />
 
-            <Body color="secondary">
-              Formularios: {item.formularios.length}
-            </Body>
-            <Body color="secondary">
-              Completados: {item.formularios.filter((f) => f).length}
-            </Body>
+            <Body color="secondary">Formularios: {item.formularios.length}</Body>
+            <Body color="secondary">Completados: {item.formularios.filter((f) => f).length}</Body>
 
             <View style={{ height: 12 }} />
 

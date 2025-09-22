@@ -23,9 +23,7 @@ export default function ContainerSizer({ children, ...rest }: React.PropsWithChi
 
   return (
     <View {...rest} onLayout={onLayout}>
-      <LayoutCtx.Provider value={value}>
-        {box.width ? children : null}
-      </LayoutCtx.Provider>
+      <LayoutCtx.Provider value={value}>{box.width ? children : null}</LayoutCtx.Provider>
     </View>
   );
 }

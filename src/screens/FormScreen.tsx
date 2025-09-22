@@ -13,7 +13,9 @@ import {
 } from "react-native";
 import FormPageView, { Formulario, Pagina } from "./FormPage";
 
-interface Props { form: Formulario; }
+interface Props {
+  form: Formulario;
+}
 
 export default function FormScreen({ form }: Props) {
   const formId = form?.id_formulario;
@@ -24,12 +26,10 @@ export default function FormScreen({ form }: Props) {
   const [pagesVersion, setPagesVersion] = useState(0); // fuerza 1 re-render cuando cambia formId
 
   useEffect(() => {
-    const sorted = rawPages.slice().sort(
-      (a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0)
-    );
+    const sorted = rawPages.slice().sort((a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0));
     pagesRef.current = sorted;
-    setPagesVersion(v => v + 1); // un render para tomar el nuevo data
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setPagesVersion((v) => v + 1); // un render para tomar el nuevo data
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formId]);
 
   const pages = pagesRef.current;
@@ -106,7 +106,12 @@ export default function FormScreen({ form }: Props) {
 
   const isAndroid = Platform.OS === "android";
   const listPagingProps = isAndroid
-    ? { snapToInterval: W, snapToAlignment: "start" as const, pagingEnabled: false, decelerationRate: "fast" as const }
+    ? {
+        snapToInterval: W,
+        snapToAlignment: "start" as const,
+        pagingEnabled: false,
+        decelerationRate: "fast" as const,
+      }
     : { pagingEnabled: true, decelerationRate: "fast" as const };
 
   return (
@@ -120,7 +125,7 @@ export default function FormScreen({ form }: Props) {
     >
       <FlatList
         ref={listRef}
-        data={pages}                         // <- data NO cambia identidad en cada render
+        data={pages} // <- data NO cambia identidad en cada render
         keyExtractor={(p) => p.id_pagina}
         renderItem={renderItem}
         horizontal

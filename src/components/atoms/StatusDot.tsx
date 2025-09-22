@@ -9,7 +9,11 @@ export default function StatusDot({ status = "online", size }: { status?: Status
   const { rem } = useResponsive();
   const S = size ?? rem * 0.6;
   const color =
-    status === "online" ? colors.primary600 : status === "syncing" ? colors.warningBg : colors.danger600;
+    status === "online"
+      ? colors.primary600
+      : status === "syncing"
+        ? colors.warningBg
+        : colors.danger600;
 
   return (
     <View

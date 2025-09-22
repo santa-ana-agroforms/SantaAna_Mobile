@@ -6,13 +6,7 @@ import { useState } from "react";
 export default function QrScreen() {
   const [done, setDone] = useState(false);
 
-  if (done) return <Redirect href="/" />;  // ✅ navega sin efectos secundarios
+  if (done) return <Redirect href="/" />; // ✅ navega sin efectos secundarios
 
-  return (
-    <QrLoginOnBoarding
-      endpoint="/auth/qr/login"
-      autoSync
-      onSuccess={() => setDone(true)}
-    />
-  );
+  return <QrLoginOnBoarding endpoint="/auth/qr/login" autoSync onSuccess={() => setDone(true)} />;
 }

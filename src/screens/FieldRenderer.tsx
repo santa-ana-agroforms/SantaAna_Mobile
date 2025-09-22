@@ -18,12 +18,23 @@ export default function FieldRenderer({ campo, formName }: { campo: Campo; formN
 
   const LabelRow = (
     <View style={{ marginBottom: gutter * 0.5 }}>
-      <Title style={{ fontSize: rem * 1.1 }}>{label}{campo.requerido ? " *" : ""}</Title>
+      <Title style={{ fontSize: rem * 1.1 }}>
+        {label}
+        {campo.requerido ? " *" : ""}
+      </Title>
       {help ? <Body color="secondary">{help}</Body> : null}
     </View>
   );
 
-  const Box = ({ children, height = 52, align = "center" as const }: { children: React.ReactNode; height?: number; align?: "center" }) => (
+  const Box = ({
+    children,
+    height = 52,
+    align = "center" as const,
+  }: {
+    children: React.ReactNode;
+    height?: number;
+    align?: "center";
+  }) => (
     <View
       style={{
         minHeight: height,
@@ -73,16 +84,36 @@ export default function FieldRenderer({ campo, formName }: { campo: Campo; formN
   const renderBoolean = () => (
     <>
       {LabelRow}
-      <View style={{ flexDirection: "row", borderWidth: 1.5, borderColor: "#C7C2B3", borderRadius: 12, overflow: "hidden" }}>
+      <View
+        style={{
+          flexDirection: "row",
+          borderWidth: 1.5,
+          borderColor: "#C7C2B3",
+          borderRadius: 12,
+          overflow: "hidden",
+        }}
+      >
         <Pressable
           onPress={() => setValue(true)}
-          style={{ flex: 1, paddingVertical: 14, alignItems: "center", backgroundColor: value === true ? "#E5F1E5" : "#FFFFFF" }}
+          style={{
+            flex: 1,
+            paddingVertical: 14,
+            alignItems: "center",
+            backgroundColor: value === true ? "#E5F1E5" : "#FFFFFF",
+          }}
         >
           <Body style={{ fontSize: rem * 1.05 }}>Sí</Body>
         </Pressable>
         <Pressable
           onPress={() => setValue(false)}
-          style={{ flex: 1, paddingVertical: 14, alignItems: "center", borderLeftWidth: 1.5, borderLeftColor: "#C7C2B3", backgroundColor: value === false ? "#F5E8E8" : "#FFFFFF" }}
+          style={{
+            flex: 1,
+            paddingVertical: 14,
+            alignItems: "center",
+            borderLeftWidth: 1.5,
+            borderLeftColor: "#C7C2B3",
+            backgroundColor: value === false ? "#F5E8E8" : "#FFFFFF",
+          }}
         >
           <Body style={{ fontSize: rem * 1.05 }}>No</Body>
         </Pressable>
@@ -131,7 +162,9 @@ export default function FieldRenderer({ campo, formName }: { campo: Campo; formN
     <>
       {LabelRow}
       <Box>
-        <Body color="secondary">{mode === "date" ? "Seleccionar fecha (placeholder)" : "Seleccionar hora (placeholder)"}</Body>
+        <Body color="secondary">
+          {mode === "date" ? "Seleccionar fecha (placeholder)" : "Seleccionar hora (placeholder)"}
+        </Body>
       </Box>
     </>
   );
@@ -183,7 +216,9 @@ export default function FieldRenderer({ campo, formName }: { campo: Campo; formN
         return (
           <>
             {LabelRow}
-            <Body color="secondary">(placeholder) tipo: {campo.tipo} / clase: {campo.clase}</Body>
+            <Body color="secondary">
+              (placeholder) tipo: {campo.tipo} / clase: {campo.clase}
+            </Body>
           </>
         );
     }
@@ -193,7 +228,9 @@ export default function FieldRenderer({ campo, formName }: { campo: Campo; formN
   return (
     <>
       {LabelRow}
-      <Body color="secondary">(placeholder) tipo: {campo.tipo} / clase: {campo.clase}</Body>
+      <Body color="secondary">
+        (placeholder) tipo: {campo.tipo} / clase: {campo.clase}
+      </Body>
     </>
   );
 }

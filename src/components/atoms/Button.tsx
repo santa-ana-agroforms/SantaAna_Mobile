@@ -14,17 +14,35 @@ type Props = {
 };
 
 export default function Button({
-  title, onPress, variant = "primary", size = "md", disabled, style, textStyle,
+  title,
+  onPress,
+  variant = "primary",
+  size = "md",
+  disabled,
+  style,
+  textStyle,
 }: Props) {
   const { scale, rem } = useResponsive();
 
   const height = size === "sm" ? scale(36) : size === "lg" ? scale(52) : scale(44);
   const radius = 8;
 
-  let bg = colors.primary600, fg = "#FFFFFF", borderColor = "transparent", borderWidth = 0, opacity = disabled ? 0.6 : 1;
+  let bg = colors.primary600,
+    fg = "#FFFFFF",
+    borderColor = "transparent",
+    borderWidth = 0,
+    opacity = disabled ? 0.6 : 1;
 
-  if (variant === "ghost") { bg = "transparent"; fg = colors.textPrimary; borderColor = colors.border; borderWidth = 1; }
-  if (variant === "danger") { bg = colors.danger600; fg = "#FFFFFF"; }
+  if (variant === "ghost") {
+    bg = "transparent";
+    fg = colors.textPrimary;
+    borderColor = colors.border;
+    borderWidth = 1;
+  }
+  if (variant === "danger") {
+    bg = colors.danger600;
+    fg = "#FFFFFF";
+  }
 
   return (
     <Pressable
@@ -32,10 +50,26 @@ export default function Button({
       onPress={onPress}
       accessibilityRole="button"
       android_ripple={{ color: "rgba(0,0,0,0.08)" }}
-      style={[{ height, borderRadius: radius, backgroundColor: bg, alignItems: "center", justifyContent: "center", opacity, borderColor, borderWidth, paddingHorizontal: 16 }, style]}
+      style={[
+        {
+          height,
+          borderRadius: radius,
+          backgroundColor: bg,
+          alignItems: "center",
+          justifyContent: "center",
+          opacity,
+          borderColor,
+          borderWidth,
+          paddingHorizontal: 16,
+        },
+        style,
+      ]}
     >
-      <Body weight="bold" color={variant === "ghost" ? "primary" : "inverse"}
-            style={[{ fontSize: rem * 1.5 }, textStyle]}>
+      <Body
+        weight="bold"
+        color={variant === "ghost" ? "primary" : "inverse"}
+        style={[{ fontSize: rem * 1.5 }, textStyle]}
+      >
         {title}
       </Body>
     </Pressable>

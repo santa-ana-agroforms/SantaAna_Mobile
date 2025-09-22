@@ -53,7 +53,16 @@ export default function FormHeader({
         opacity: onPress ? 1 : 0.6,
       }}
     >
-      <Body style={{ fontSize: rem * 1.5, color: "white", lineHeight: rem * 1.5, marginTop: -rem * 0.1 }}>{label}</Body>
+      <Body
+        style={{
+          fontSize: rem * 1.5,
+          color: "white",
+          lineHeight: rem * 1.5,
+          marginTop: -rem * 0.1,
+        }}
+      >
+        {label}
+      </Body>
     </Pressable>
   );
 
@@ -78,10 +87,15 @@ export default function FormHeader({
         <View style={{ alignItems: "center", gap: 8, marginTop: rem * -1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Arrow label="‹" onPress={onPrevPage} />
-            <PaginationDots total={totalPages} activeIndex={Math.max(0, Math.min(totalPages - 1, page - 1))} />
+            <PaginationDots
+              total={totalPages}
+              activeIndex={Math.max(0, Math.min(totalPages - 1, page - 1))}
+            />
             <Arrow label="›" onPress={onNextPage} />
           </View>
-          <Body color="secondary">Página {page} de {totalPages}</Body>
+          <Body color="secondary">
+            Página {page} de {totalPages}
+          </Body>
         </View>
       ) : null}
 

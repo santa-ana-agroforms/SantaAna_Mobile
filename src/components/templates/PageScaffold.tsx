@@ -10,7 +10,10 @@ import {
   ScrollView,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 type Variant = "categories" | "groups" | "form";
 
@@ -19,14 +22,13 @@ type PageScaffoldProps = {
   children: React.ReactNode;
   variant?: Variant;
   onBack?: () => void;
-  // sólo para variant="form"
   page?: number;
   totalPages?: number;
   onPrevPage?: () => void;
   onNextPage?: () => void;
 };
 
-export default function PageScaffold({
+const PageScaffold: React.FC<PageScaffoldProps> = ({
   title,
   children,
   variant = "form",
@@ -35,7 +37,7 @@ export default function PageScaffold({
   totalPages = 1,
   onPrevPage,
   onNextPage,
-}: PageScaffoldProps) {
+}) => {
   const { gutter } = useResponsive();
   const insets = useSafeAreaInsets();
 
@@ -46,7 +48,10 @@ export default function PageScaffold({
     setHeaderH((prev) => (Math.abs(prev - h) > 0.5 ? h : prev));
   }, []);
 
-  const keyboardOffset = useMemo(() => insets.top + headerH, [insets.top, headerH]);
+  const keyboardOffset = useMemo(
+    () => insets.top + headerH,
+    [insets.top, headerH],
+  );
 
   const router = useRouter();
   const handleBack = useCallback(() => {
@@ -93,8 +98,12 @@ export default function PageScaffold({
               <ScrollView
                 showsVerticalScrollIndicator
                 keyboardShouldPersistTaps="handled"
-                keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-                contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "always" : "automatic"}
+                keyboardDismissMode={
+                  Platform.OS === "ios" ? "interactive" : "on-drag"
+                }
+                contentInsetAdjustmentBehavior={
+                  Platform.OS === "ios" ? "always" : "automatic"
+                }
                 contentContainerStyle={{
                   paddingHorizontal: gutter * 2,
                   paddingBottom: (insets.bottom || 0) + gutter * 2,
@@ -110,4 +119,6 @@ export default function PageScaffold({
       </View>
     </SafeAreaView>
   );
-}
+};
+
+export default PageScaffold;

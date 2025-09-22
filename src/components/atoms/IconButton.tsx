@@ -29,7 +29,10 @@ export default function IconButton({
 
   const renderIcon = () =>
     iconSource ? (
-      <Image source={iconSource} style={{ width: rem * 3.5, height: rem * 3.5, resizeMode: "contain" }} />
+      <Image
+        source={iconSource}
+        style={{ width: rem * 3.5, height: rem * 3.5, resizeMode: "contain" }}
+      />
     ) : (
       icon
     );
@@ -41,7 +44,7 @@ export default function IconButton({
           width: size,
           height: size,
           position: "relative",
-          opacity: disabled ? 0.6 : 1
+          opacity: disabled ? 0.6 : 1,
         },
         style,
       ]}
@@ -53,7 +56,14 @@ export default function IconButton({
         endColor="#00000000"
         style={{ borderRadius: radius }}
       >
-        <View style={{ width: size, height: size * 0.9, borderRadius: radius, backgroundColor: "transparent" }} />
+        <View
+          style={{
+            width: size,
+            height: size * 0.9,
+            borderRadius: radius,
+            backgroundColor: "transparent",
+          }}
+        />
       </Shadow>
 
       {/* CONTENEDOR del botón (clip del ripple), encima */}

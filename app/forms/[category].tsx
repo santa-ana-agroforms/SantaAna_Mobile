@@ -47,7 +47,7 @@ export default function FormsByCategoryScreen() {
     (async () => {
       try {
         const groups: FormCategoryGroup[] = await DB.selectFormsGroupedByCategory();
-        const found = groups.find(g => g.nombre_categoria === category);
+        const found = groups.find((g) => g.nombre_categoria === category);
         setGrupo(found ?? null);
         setLastSync(new Date()); // placeholder; cámbialo por tu valor real
       } finally {
@@ -97,81 +97,79 @@ export default function FormsByCategoryScreen() {
                   },
                 })
               }
-            style={[
+              style={[
                 styles.card,
                 {
-                padding: gutter,
-                borderRadius: 12,
-                // 👇 reserva espacio a la derecha del contenido = tamaño del botón + margen
-                paddingRight: gutter + ENTER_BTN_SIZE + gutter / 2,
-                minHeight: 88, // opcional, para que el botón tenga aire y se centre bonito
+                  padding: gutter,
+                  borderRadius: 12,
+                  // 👇 reserva espacio a la derecha del contenido = tamaño del botón + margen
+                  paddingRight: gutter + ENTER_BTN_SIZE + gutter / 2,
+                  minHeight: 88, // opcional, para que el botón tenga aire y se centre bonito
                 },
-            ]}
+              ]}
             >
-            {/* Título */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              {/* Título */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <Image
-                source={require("../../assets/images/form.png")}
-                style={{ width: 22, height: 22, marginTop: 2 }}
-                resizeMode="contain"
+                  source={require("../../assets/images/form.png")}
+                  style={{ width: 22, height: 22, marginTop: 2 }}
+                  resizeMode="contain"
                 />
                 <Title style={{ fontSize: rem * 1.4, color: "#5B4B24", flexShrink: 1 }}>
-                {f.nombre}
+                  {f.nombre}
                 </Title>
-            </View>
+              </View>
 
-            {/* Fila: estado + asignado (a la izquierda del botón) */}
-            <View
+              {/* Fila: estado + asignado (a la izquierda del botón) */}
+              <View
                 style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 2,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 2,
                 }}
-            >
+              >
                 <Body>
-                <Body style={{ fontWeight: "700" }}>{estado.texto}</Body>{" "}
-                <StatusDot color={estado.color} />
+                  <Body style={{ fontWeight: "700" }}>{estado.texto}</Body>{" "}
+                  <StatusDot color={estado.color} />
                 </Body>
 
-                {asignado && (
-                <Body>Asignado el {formatFechaCorta(asignado)}</Body>
-                )}
-            </View>
+                {asignado && <Body>Asignado el {formatFechaCorta(asignado)}</Body>}
+              </View>
 
-            {/* Disponible hasta */}
-            {disponibleHasta && (
+              {/* Disponible hasta */}
+              {disponibleHasta && (
                 <Body color="secondary">
-                Disponible hasta el {formatFechaCorta(disponibleHasta)} 🕒
+                  Disponible hasta el {formatFechaCorta(disponibleHasta)} 🕒
                 </Body>
-            )}
+              )}
 
-            {/* Botón de acceso (absoluto y centrado) */}
-            <View
+              {/* Botón de acceso (absoluto y centrado) */}
+              <View
                 style={{
-                position: "absolute",
-                right: gutter,
-                top: "50%",
-                marginTop: -(ENTER_BTN_SIZE / 8), // centra verticalmente
-                width: ENTER_BTN_SIZE,
-                height: ENTER_BTN_SIZE,
-                borderRadius: 10,
-                backgroundColor: colors.primary600,
-                alignItems: "center",
-                justifyContent: "center",
-                shadowColor: "#000",
-                shadowOpacity: 0.15,
-                shadowRadius: 4,
-                elevation: 2,
+                  position: "absolute",
+                  right: gutter,
+                  top: "50%",
+                  marginTop: -(ENTER_BTN_SIZE / 8), // centra verticalmente
+                  width: ENTER_BTN_SIZE,
+                  height: ENTER_BTN_SIZE,
+                  borderRadius: 10,
+                  backgroundColor: colors.primary600,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  shadowColor: "#000",
+                  shadowOpacity: 0.15,
+                  shadowRadius: 4,
+                  elevation: 2,
                 }}
                 pointerEvents="none"
-            >
+              >
                 <Image
-                source={require("../../assets/images/enter.png")}
-                style={{ width: 22, height: 22 }}
-                resizeMode="contain"
+                  source={require("../../assets/images/enter.png")}
+                  style={{ width: 22, height: 22 }}
+                  resizeMode="contain"
                 />
-            </View>
+              </View>
             </Pressable>
           );
         })}
@@ -197,9 +195,14 @@ function StatusDot({ color = "#888" }: { color?: string }) {
 }
 
 /* ------------ lógica placeholder (ajusta cuando tengas datos reales) ------------ */
-function getEstado(f: Formulario): { texto: "Pendiente" | "En progreso" | "Completado"; color: string } {
+function getEstado(f: Formulario): {
+  texto: "Pendiente" | "En progreso" | "Completado";
+  color: string;
+} {
   // Sin campo real, decidimos por fecha: recién creado -> Pendiente; >7 días -> En progreso; >20 días -> Completado
-  const created = f.version_vigente?.fecha_creacion ? new Date(f.version_vigente.fecha_creacion) : null;
+  const created = f.version_vigente?.fecha_creacion
+    ? new Date(f.version_vigente.fecha_creacion)
+    : null;
   if (!created) return { texto: "Pendiente", color: "#9CA3AF" };
 
   const diff = Date.now() - created.getTime();
@@ -217,7 +220,9 @@ function getFechaDisponibleHasta(asignado: Date | null): Date | null {
 }
 
 /* ------------ format helpers ------------ */
-function pad(n: number) { return n < 10 ? `0${n}` : `${n}`; }
+function pad(n: number) {
+  return n < 10 ? `0${n}` : `${n}`;
+}
 
 function formatHoraMin(d: Date | null) {
   if (!d) return "--:--";

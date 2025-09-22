@@ -67,12 +67,7 @@
                 "ayuda": "Ayuda: Uypci tplo bbefubrojrvc m wp",
                 "config": {
                   "id_list": "be14b4bee02c48d7847249c96f097db7",
-                  "items": [
-                    10,
-                    "Descripción 859",
-                    true,
-                    true
-                  ]
+                  "items": [10, "Descripción 859", true, true]
                 },
                 "requerido": false
               }
@@ -112,11 +107,7 @@
                 "etiqueta": "Comentario 847",
                 "ayuda": "Ayuda: Dsrdbeovwylwe haivyykjpqskcgdlzojrybrw",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": true
@@ -201,13 +192,7 @@
                 "ayuda": "Ayuda: Byzmidukj  cwuuzwtjawbtk",
                 "config": {
                   "id_list": "c1e3d9f899f64a88a925abe0b61d52d3",
-                  "items": [
-                    true,
-                    true,
-                    "Lote 680",
-                    "Lote 562",
-                    73
-                  ]
+                  "items": [true, true, "Lote 680", "Lote 562", 73]
                 },
                 "requerido": false
               },
@@ -245,9 +230,7 @@
                 "etiqueta": "Lote 485",
                 "ayuda": "Ayuda: Sdfcjubsbozdctzqbbojaypty",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "vars[0]"
                 },
                 "requerido": false
@@ -284,13 +267,7 @@
                 "ayuda": "Ayuda: Nrawoatxgwfxtavssnoegguudqtsyzhugpdhzmzmtpz socvbj",
                 "config": {
                   "id_list": "e4a9514409c24168ad973c111146711e",
-                  "items": [
-                    18,
-                    "Temperatura 962",
-                    "Código 314",
-                    true,
-                    "Comentario 648"
-                  ]
+                  "items": [18, "Temperatura 962", "Código 314", true, "Comentario 648"]
                 },
                 "requerido": false
               },
@@ -359,9 +336,7 @@
                 "etiqueta": "Variedad 493",
                 "ayuda": "Ayuda: Yekunl r dhroyrmkbawyajmhb jpetzm",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": true
@@ -526,11 +501,7 @@
                 "ayuda": "Ayuda: Bvkjsj jx  vyxrlpuyzwliphqpt fmupgyvxx",
                 "config": {
                   "id_list": "db2c72ba27124a0ba325c3ecc78b45c9",
-                  "items": [
-                    false,
-                    "Operario 278",
-                    true
-                  ]
+                  "items": [false, "Operario 278", true]
                 },
                 "requerido": false
               }
@@ -555,10 +526,7 @@
                 "etiqueta": "Descripción 815",
                 "ayuda": "Ayuda: Oanmlfg vszz  widkbbjcg",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": false
@@ -656,11 +624,7 @@
                 "etiqueta": "Comentario 267",
                 "ayuda": "Ayuda: Fvnspyjuoaq aoi p r f",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]+vars[1]"
                 },
                 "requerido": false
@@ -791,13 +755,7 @@
                 "ayuda": "Ayuda: Zvoaykwvctmu lbyvjicznzdltjglu",
                 "config": {
                   "id_list": "b2ff7f701d8b4a0981ea5dfe6ed1203a",
-                  "items": [
-                    true,
-                    false,
-                    "Humedad 274",
-                    "Comentario 653",
-                    true
-                  ]
+                  "items": [true, false, "Humedad 274", "Comentario 653", true]
                 },
                 "requerido": true
               },
@@ -849,12 +807,7 @@
                 "ayuda": "Ayuda: Wzzucldszznfmpbhmt ppjunttzmtwlincybmmjguqqsye",
                 "config": {
                   "id_list": "0c6898e882f34bc8a06155e5481b0d3c",
-                  "items": [
-                    "Altura 929",
-                    65,
-                    "Altura 126",
-                    75
-                  ]
+                  "items": ["Altura 929", 65, "Altura 126", 75]
                 },
                 "requerido": true
               },
@@ -907,12 +860,7 @@
                 "ayuda": "Ayuda: Xqttbxhblvefejnosvbcszhkvlkmrdkgroyhyllsnipl",
                 "config": {
                   "id_list": "cff606c2805d4d91995cb222ec19d244",
-                  "items": [
-                    "Rendimiento 134",
-                    true,
-                    true,
-                    false
-                  ]
+                  "items": ["Rendimiento 134", true, true, false]
                 },
                 "requerido": true
               },
@@ -982,10 +930,7 @@
                 "ayuda": "Ayuda: Asyhy jhqbakhp m suoc",
                 "config": {
                   "id_list": "23cbb477607c468ebae72278ee9f6abd",
-                  "items": [
-                    true,
-                    "Altura 232"
-                  ]
+                  "items": [true, "Altura 232"]
                 },
                 "requerido": true
               },
@@ -1022,12 +967,7 @@
                 "ayuda": "Ayuda: Igdb h d utxcsdsucirflzwhkxb u",
                 "config": {
                   "id_list": "116f18686b944689ab7d5f24e983600e",
-                  "items": [
-                    false,
-                    true,
-                    "Peso 449",
-                    "Rendimiento 494"
-                  ]
+                  "items": [false, true, "Peso 449", "Rendimiento 494"]
                 },
                 "requerido": false
               },
@@ -1117,11 +1057,7 @@
                 "etiqueta": "Rendimiento 148",
                 "ayuda": "Ayuda: Pjeeyqvnszpf v r iyuot wf icnepo",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": true
@@ -1287,11 +1223,7 @@
                 "ayuda": "Ayuda: Wsdrtqohumuhviwslmnverulwhmsg",
                 "config": {
                   "id_list": "c67ef49e35d94a6096a84281934c8a06",
-                  "items": [
-                    30,
-                    23,
-                    2
-                  ]
+                  "items": [30, 23, 2]
                 },
                 "requerido": true
               },
@@ -1305,10 +1237,7 @@
                 "ayuda": "Ayuda: Sio wfg akseecvldq eh ezfekor",
                 "config": {
                   "id_list": "8076f1452297415e93d26835d68eb0ad",
-                  "items": [
-                    "Humedad 831",
-                    true
-                  ]
+                  "items": ["Humedad 831", true]
                 },
                 "requerido": false
               },
@@ -1343,9 +1272,7 @@
                 "etiqueta": "Rendimiento 845",
                 "ayuda": "Ayuda: Schdstszrgifcfmc bvumqbfor  klbwr rkcw",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "vars[0]"
                 },
                 "requerido": true
@@ -1422,11 +1349,7 @@
                 "etiqueta": "Altura 544",
                 "ayuda": "Ayuda: Mxwwu p jpgjqmlmjwwpelxofdwkwlcr kpo",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": true
@@ -1533,11 +1456,7 @@
                 "etiqueta": "Peso 887",
                 "ayuda": "Ayuda: Vrhzxb zvcyvlfsfxzhrzfubfbm lisugfuqstcm",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]+vars[1]"
                 },
                 "requerido": false
@@ -1620,11 +1539,7 @@
                 "etiqueta": "Altura 544",
                 "ayuda": "Ayuda: Mxwwu p jpgjqmlmjwwpelxofdwkwlcr kpo",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": true
@@ -1731,11 +1646,7 @@
                 "etiqueta": "Peso 887",
                 "ayuda": "Ayuda: Vrhzxb zvcyvlfsfxzhrzfubfbm lisugfuqstcm",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]+vars[1]"
                 },
                 "requerido": false
@@ -1818,11 +1729,7 @@
                 "etiqueta": "Altura 544",
                 "ayuda": "Ayuda: Mxwwu p jpgjqmlmjwwpelxofdwkwlcr kpo",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": true
@@ -1929,11 +1836,7 @@
                 "etiqueta": "Peso 887",
                 "ayuda": "Ayuda: Vrhzxb zvcyvlfsfxzhrzfubfbm lisugfuqstcm",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]+vars[1]"
                 },
                 "requerido": false
@@ -2105,9 +2008,7 @@
                 "etiqueta": "Peso 272",
                 "ayuda": "Ayuda: Vnrahkapvcvzpq zrbzui fubwjmj",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "vars[0]"
                 },
                 "requerido": false
@@ -2147,10 +2048,7 @@
                 "etiqueta": "Variedad 689",
                 "ayuda": "Ayuda: Bfkraoouyvfhiny mhrzypa lklchw",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "vars[0]+vars[1]"
                 },
                 "requerido": false
@@ -2262,10 +2160,7 @@
                 "etiqueta": "Descripción 917",
                 "ayuda": "Ayuda: Qxgfrngaobxm jchucy vxlen tiy vik ui",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": false
@@ -2280,12 +2175,7 @@
                 "ayuda": "Ayuda: J ibi wvojmag fazedvpb zqfhqmsts",
                 "config": {
                   "id_list": "f82c50d8b0fc4bad8d4d930863ed0874",
-                  "items": [
-                    "Rendimiento 733",
-                    "Comentario 404",
-                    50,
-                    71
-                  ]
+                  "items": ["Rendimiento 733", "Comentario 404", 50, 71]
                 },
                 "requerido": false
               },
@@ -2298,10 +2188,7 @@
                 "etiqueta": "Lote 904",
                 "ayuda": "Ayuda: Xanue issnmrwigjpl ajgnmode v skrvh",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": false
@@ -2316,10 +2203,7 @@
                 "ayuda": "Ayuda: Nedb fpypqumcf andqrad jsf rjg upeo em  r",
                 "config": {
                   "id_list": "d2c1cfce5a9b4f07892a9f06bb8a729b",
-                  "items": [
-                    true,
-                    true
-                  ]
+                  "items": [true, true]
                 },
                 "requerido": false
               }
@@ -2355,9 +2239,7 @@
                 "etiqueta": "Temperatura 494",
                 "ayuda": "Ayuda: Zutvhtp ujzdnntb pnujtcnkdjdfmmpivhg",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": true
@@ -2552,10 +2434,7 @@
                 "etiqueta": "Código 23",
                 "ayuda": "Ayuda: Wynd ix hcqgxlxmdlwh",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "SUM(vars)"
                 },
                 "requerido": false
@@ -2785,10 +2664,7 @@
                 "etiqueta": "Descripción 178",
                 "ayuda": "Ayuda: Shicdtsgytmt xmwzqktkzt nkb iuqnoj",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "vars[0]+vars[1]"
                 },
                 "requerido": false
@@ -2845,9 +2721,7 @@
                 "etiqueta": "Peso 657",
                 "ayuda": "Ayuda: Mrkbb hhsxvf xcnxujio",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": false
@@ -2861,10 +2735,7 @@
                 "etiqueta": "Humedad 80",
                 "ayuda": "Ayuda: Juzpy ozknnlk cievqkc zqmzfoj",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": false
@@ -2961,12 +2832,7 @@
                 "ayuda": "Ayuda: Whkwjezfhdxsaitxjswtcbgwh",
                 "config": {
                   "id_list": "cd259e881ba34aaba3961735a680bc8e",
-                  "items": [
-                    "Altura 400",
-                    false,
-                    "Humedad 218",
-                    true
-                  ]
+                  "items": ["Altura 400", false, "Humedad 218", true]
                 },
                 "requerido": true
               },
@@ -3099,10 +2965,7 @@
                 "ayuda": "Ayuda: Ilhkzbwyqx joxavfxuphcza",
                 "config": {
                   "id_list": "a31354de613a4406b0c74f3d8734d194",
-                  "items": [
-                    "Rendimiento 177",
-                    6
-                  ]
+                  "items": ["Rendimiento 177", 6]
                 },
                 "requerido": false
               }
@@ -3127,10 +2990,7 @@
                 "etiqueta": "Variedad 431",
                 "ayuda": "Ayuda: Hyqtebfdnzscljd weye kpikxhbdncdbyfpuovmc",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": false
@@ -3256,11 +3116,7 @@
                 "etiqueta": "Finca 817",
                 "ayuda": "Ayuda: Touhdkmhizjrta q o hdxfvawyogf",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": false
@@ -3335,10 +3191,7 @@
                 "etiqueta": "Comentario 246",
                 "ayuda": "Ayuda: Dqhooodgavtegrxiajkap  eepm",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": false
@@ -3381,12 +3234,7 @@
                 "ayuda": "Ayuda: Wpt ccqw  fc hxzpnzvlsw tnobkniyn nzdkwi",
                 "config": {
                   "id_list": "2d9311700e00491e9971e2eca6a598fe",
-                  "items": [
-                    true,
-                    "Finca 721",
-                    38,
-                    false
-                  ]
+                  "items": [true, "Finca 721", 38, false]
                 },
                 "requerido": true
               },
@@ -3437,9 +3285,7 @@
                 "etiqueta": "Operario 141",
                 "ayuda": "Ayuda: X w iprjehkanpkcwunovjanrc nfgiw",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "vars[0]"
                 },
                 "requerido": false
@@ -3547,13 +3393,7 @@
                 "ayuda": "Ayuda: Jfmmyu yasayxfujpkhkrykirtrfjek",
                 "config": {
                   "id_list": "8190b47258d24b50be5003263f0ffeea",
-                  "items": [
-                    54,
-                    62,
-                    "Finca 258",
-                    "Rendimiento 641",
-                    77
-                  ]
+                  "items": [54, 62, "Finca 258", "Rendimiento 641", 77]
                 },
                 "requerido": true
               }
@@ -3590,11 +3430,7 @@
                 "ayuda": "Ayuda: Saicyxszimofgxpqqwkpnckprpzwvybgagqogvhjlskocxzd",
                 "config": {
                   "id_list": "64eef69761ec4c3abccd89f9d858e3ff",
-                  "items": [
-                    4,
-                    14,
-                    54
-                  ]
+                  "items": [4, 14, 54]
                 },
                 "requerido": true
               },
@@ -3618,11 +3454,7 @@
                 "etiqueta": "Descripción 437",
                 "ayuda": "Ayuda: Dozzolloqbzbvn mclbyatnnrwtzyekgz ilxumdhqq fhoumy",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]+vars[1]"
                 },
                 "requerido": true
@@ -3636,10 +3468,7 @@
                 "etiqueta": "Código 633",
                 "ayuda": "Ayuda: Rtztnlfriuhpthlxsjgyamik",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "vars[0]+vars[1]"
                 },
                 "requerido": false
@@ -3682,10 +3511,7 @@
                 "ayuda": "Ayuda: Mkijku hchrntlffgczddigadkdjdrztubzq",
                 "config": {
                   "id_list": "e9f1fd27a2ec4d51b6aee9869878514c",
-                  "items": [
-                    false,
-                    false
-                  ]
+                  "items": [false, false]
                 },
                 "requerido": false
               },
@@ -3867,10 +3693,7 @@
                 "etiqueta": "Operario 180",
                 "ayuda": "Ayuda: Cfdomobheavnmzivtlz  udbjltjxh h xe",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "vars[0]+vars[1]"
                 },
                 "requerido": true
@@ -3884,9 +3707,7 @@
                 "etiqueta": "Humedad 162",
                 "ayuda": "Ayuda: Byofpultjs nywoql lytussiluaskz xkclmuznook",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "vars[0]"
                 },
                 "requerido": false
@@ -3934,11 +3755,7 @@
                 "ayuda": "Ayuda: Rvj ovpjypgyyzsssqdyyayrujdavqmn x  c",
                 "config": {
                   "id_list": "2171ad26f99e470ab755d003be4ec4f4",
-                  "items": [
-                    true,
-                    true,
-                    97
-                  ]
+                  "items": [true, true, 97]
                 },
                 "requerido": true
               },
@@ -3952,10 +3769,7 @@
                 "ayuda": "Ayuda: Sclrellvghycbrjqikl qavdtj",
                 "config": {
                   "id_list": "34bcb8c38ea94f8b824f23c70060e503",
-                  "items": [
-                    "Finca 612",
-                    "Variedad 631"
-                  ]
+                  "items": ["Finca 612", "Variedad 631"]
                 },
                 "requerido": true
               },
@@ -4018,9 +3832,7 @@
                 "etiqueta": "Altura 88",
                 "ayuda": "Ayuda: Wziawlojd y hair ek petfz tcgkhzkrnjhwclk",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": false
@@ -4102,11 +3914,7 @@
                 "etiqueta": "Variedad 79",
                 "ayuda": "Ayuda: Eb gob llzxlncjqiiepxjxzoxlu sidggfzxgaqp z",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": true
@@ -4143,10 +3951,7 @@
                 "etiqueta": "Peso 256",
                 "ayuda": "Ayuda: Ddxtmrx dgzohrbpxfmcl",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": false
@@ -4160,9 +3965,7 @@
                 "etiqueta": "Rendimiento 93",
                 "ayuda": "Ayuda: Bydk kxn opornrpagb xxraeiplm",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": false
@@ -4177,10 +3980,7 @@
                 "ayuda": "Ayuda: By wdqndtrh nzlgagq  xjpmmst",
                 "config": {
                   "id_list": "bd8efb3436284f4eb5a8a95fb54ef55b",
-                  "items": [
-                    9,
-                    36
-                  ]
+                  "items": [9, 36]
                 },
                 "requerido": true
               },
@@ -4297,11 +4097,7 @@
                 "ayuda": "Ayuda: Wqrpyj  jndapkg e f kewfupvrdgojpyz",
                 "config": {
                   "id_list": "d75fb00028db4ecba2fd64e573cc4c15",
-                  "items": [
-                    "Código 455",
-                    false,
-                    "Código 458"
-                  ]
+                  "items": ["Código 455", false, "Código 458"]
                 },
                 "requerido": false
               },
@@ -4314,9 +4110,7 @@
                 "etiqueta": "Variedad 19",
                 "ayuda": "Ayuda: Zacjja fymnot gjnpqdvx",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": true
@@ -4429,10 +4223,7 @@
                 "ayuda": "Ayuda: Zusvsofkypuyr yzxhkmlilrx",
                 "config": {
                   "id_list": "33c92b4c4ed84a61bee6f3dd7885f7af",
-                  "items": [
-                    false,
-                    false
-                  ]
+                  "items": [false, false]
                 },
                 "requerido": false
               },
@@ -4582,10 +4373,7 @@
                 "ayuda": "Ayuda: Zusvsofkypuyr yzxhkmlilrx",
                 "config": {
                   "id_list": "0e34a146445142c78a284295e5987320",
-                  "items": [
-                    false,
-                    false
-                  ]
+                  "items": [false, false]
                 },
                 "requerido": false
               },
@@ -4726,11 +4514,7 @@
                 "ayuda": "Ayuda: Fgxpqqwkpnckprpzwvybgagqogvhjlskocxzdxrl",
                 "config": {
                   "id_list": "11d634c2dcda4979af167e5a79b1ff26",
-                  "items": [
-                    4,
-                    14,
-                    54
-                  ]
+                  "items": [4, 14, 54]
                 },
                 "requerido": true
               },
@@ -4754,11 +4538,7 @@
                 "etiqueta": "Descripción 437",
                 "ayuda": "Ayuda: Dozzolloqbzbvn mclbyatnnrwtzyekgz ilxumdhqq fhoumy",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]+vars[1]"
                 },
                 "requerido": true
@@ -4772,10 +4552,7 @@
                 "etiqueta": "Código 633",
                 "ayuda": "Ayuda: Rtztnlfriuhpthlxsjgyamik",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "vars[0]+vars[1]"
                 },
                 "requerido": false
@@ -4835,11 +4612,7 @@
                 "ayuda": "Ayuda: Fru svjkik fyvrwdcgoy dbh",
                 "config": {
                   "id_list": "70bdcfd49f90442680c4de5778df8d3f",
-                  "items": [
-                    59,
-                    "Lote 208",
-                    true
-                  ]
+                  "items": [59, "Lote 208", true]
                 },
                 "requerido": false
               },
@@ -4956,10 +4729,7 @@
                 "etiqueta": "Comentario 849",
                 "ayuda": "Ayuda: Y njnbjjjpcd nytwvvlxe  wrhilpiui",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": false
@@ -4985,11 +4755,7 @@
                 "ayuda": "Ayuda: Jk h  fhvwntlejzyzccvhvubihaabvppbbizdmqp eitzmp t",
                 "config": {
                   "id_list": "534f617eb66949408f70778a93cb9ecb",
-                  "items": [
-                    true,
-                    5,
-                    "Código 768"
-                  ]
+                  "items": [true, 5, "Código 768"]
                 },
                 "requerido": false
               },
@@ -5042,12 +4808,7 @@
                 "ayuda": "Ayuda: Zvee uyicfkrzgrruo mo m lg kndespdxjezbxx",
                 "config": {
                   "id_list": "18f581ee591241fbbaf19208625cf249",
-                  "items": [
-                    "Descripción 247",
-                    83,
-                    "Código 298",
-                    "Rendimiento 775"
-                  ]
+                  "items": ["Descripción 247", 83, "Código 298", "Rendimiento 775"]
                 },
                 "requerido": true
               },
@@ -5131,11 +4892,7 @@
                 "etiqueta": "Humedad 770",
                 "ayuda": "Ayuda: Xcdjtissgjozl jkiokjtddkzhqnqi",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": true
@@ -5150,13 +4907,7 @@
                 "ayuda": "Ayuda: Ubtjxznowxteyboxtsu ep vy",
                 "config": {
                   "id_list": "eb3d8857751e40b08814ceeba6f5bd4a",
-                  "items": [
-                    82,
-                    true,
-                    false,
-                    "Temperatura 638",
-                    "Variedad 978"
-                  ]
+                  "items": [82, true, false, "Temperatura 638", "Variedad 978"]
                 },
                 "requerido": false
               },
@@ -5240,10 +4991,7 @@
                 "ayuda": "Ayuda: Mbjqnutemtpwbbm  anquxbcyqmfqlbwpscdrenyhn mx  o o",
                 "config": {
                   "id_list": "142fe4246a8d4a29a782373c6d084e92",
-                  "items": [
-                    "Descripción 331",
-                    "Lote 913"
-                  ]
+                  "items": ["Descripción 331", "Lote 913"]
                 },
                 "requerido": false
               },
@@ -5342,11 +5090,7 @@
                 "etiqueta": "Finca 150",
                 "ayuda": "Ayuda: Vvduieosld kfepbmxsnlgrxorvxienbh fi i",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": false
@@ -5466,9 +5210,7 @@
                 "etiqueta": "Descripción 726",
                 "ayuda": "Ayuda: V qgseccujfdn deqmh hajbymbwvlc hrnyhxvrtojd afzs",
                 "config": {
-                  "vars": [
-                    "var_0"
-                  ],
+                  "vars": ["var_0"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": true
@@ -5543,10 +5285,7 @@
                 "etiqueta": "Lote 991",
                 "ayuda": "Ayuda: Eespmealp yxzvzzxcdu",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "SUM(vars)"
                 },
                 "requerido": false
@@ -5716,11 +5455,7 @@
                 "ayuda": "Ayuda: Wocadbqeuwzpli clw zd",
                 "config": {
                   "id_list": "ec0aeb8a14ba493c8735abc223c65790",
-                  "items": [
-                    false,
-                    27,
-                    99
-                  ]
+                  "items": [false, 27, 99]
                 },
                 "requerido": true
               },
@@ -5806,13 +5541,7 @@
                 "ayuda": "Ayuda: Tgeimwfqgjnm tgmwmuwscnwimx tykkkxoguj",
                 "config": {
                   "id_list": "d4270973564a4ba3bb259ea91f345345",
-                  "items": [
-                    36,
-                    78,
-                    22,
-                    true,
-                    true
-                  ]
+                  "items": [36, 78, 22, true, true]
                 },
                 "requerido": true
               },
@@ -5836,11 +5565,7 @@
                 "etiqueta": "Descripción 304",
                 "ayuda": "Ayuda: Arnit cmrz pqjmx thqqirpkds  zulyiikaorgvpqafpfz",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": false
@@ -5902,10 +5627,7 @@
                 "etiqueta": "Rendimiento 163",
                 "ayuda": "Ayuda: Mbrjaztpnckoh galefxtdisfrfpjzwaujp",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": false
@@ -6057,10 +5779,7 @@
                 "etiqueta": "Humedad 848",
                 "ayuda": "Ayuda: Ltnmllnaacgcwa dg gyqhhysafirx ag gshvn jw",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": true
@@ -6101,11 +5820,7 @@
                 "ayuda": "Ayuda: Detzldfpi vgnop eegqzpulrdnkxrwplymhek",
                 "config": {
                   "id_list": "9e622636933c48ed9bf84717bccf49a3",
-                  "items": [
-                    "Variedad 25",
-                    8,
-                    41
-                  ]
+                  "items": ["Variedad 25", 8, 41]
                 },
                 "requerido": true
               },
@@ -6381,11 +6096,7 @@
                 "ayuda": "Ayuda: Znzkfule eaphmskboubb ioflcwwsdvnmjycudsx",
                 "config": {
                   "id_list": "90cbb0c6ee3545c884ffc7a364691405",
-                  "items": [
-                    "Lote 504",
-                    "Peso 123",
-                    "Descripción 639"
-                  ]
+                  "items": ["Lote 504", "Peso 123", "Descripción 639"]
                 },
                 "requerido": false
               },
@@ -6520,13 +6231,7 @@
                 "ayuda": "Ayuda: Fcybfsozsptqlxejhwbvjvwsdrtqohumuhviwslmnv",
                 "config": {
                   "id_list": "9e73338ea9be4539863257c735ac274a",
-                  "items": [
-                    93,
-                    true,
-                    true,
-                    13,
-                    "Operario 233"
-                  ]
+                  "items": [93, true, true, 13, "Operario 233"]
                 },
                 "requerido": false
               },
@@ -6539,10 +6244,7 @@
                 "etiqueta": "Descripción 130",
                 "ayuda": "Ayuda: Cdjssio wfg akseecvldq eh ez",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "SUM(vars)"
                 },
                 "requerido": true
@@ -6557,10 +6259,7 @@
                 "ayuda": "Ayuda: Tfphjwammynoxhycct lbtkndnvgwnonqqfkpl",
                 "config": {
                   "id_list": "7f52a4b234174fbd92e3fe1cfad9da0f",
-                  "items": [
-                    "Peso 419",
-                    89
-                  ]
+                  "items": ["Peso 419", 89]
                 },
                 "requerido": true
               }
@@ -6719,10 +6418,7 @@
                 "etiqueta": "Finca 360",
                 "ayuda": "Ayuda: P jpgjqmlmjwwpelxofdwkwlcr kponu oujceecot",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "SUM(vars)"
                 },
                 "requerido": false
@@ -6747,11 +6443,7 @@
                 "etiqueta": "Descripción 155",
                 "ayuda": "Ayuda: Dcgz vtfgplcptcchhnkxxsyaxvrmdyopvevgjrysqu qm jvf",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": true
@@ -6854,11 +6546,7 @@
                 "ayuda": "Ayuda: Ccu wnbroydeqozxgzvrkbj mryccie",
                 "config": {
                   "id_list": "8fdb2539cc5247a3bb0f3d6d04a55dff",
-                  "items": [
-                    false,
-                    50,
-                    false
-                  ]
+                  "items": [false, 50, false]
                 },
                 "requerido": true
               }
@@ -6894,10 +6582,7 @@
                 "etiqueta": "Operario 926",
                 "ayuda": "Ayuda: Cuydswxbjphakrylklfn",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "AVG(vars)"
                 },
                 "requerido": false
@@ -6923,12 +6608,7 @@
                 "ayuda": "Ayuda: Qzrak rxvdmvf sxzom",
                 "config": {
                   "id_list": "ad6108ce44884bf0a54e45560e4cf0d6",
-                  "items": [
-                    "Variedad 195",
-                    false,
-                    true,
-                    true
-                  ]
+                  "items": ["Variedad 195", false, true, true]
                 },
                 "requerido": true
               },
@@ -6958,13 +6638,7 @@
                 "ayuda": "Ayuda: Qly oxgroebn junopeo dstpahicctfhgp iiydx",
                 "config": {
                   "id_list": "1249ebf400384fa39130e0c64918fad8",
-                  "items": [
-                    true,
-                    false,
-                    84,
-                    "Código 631",
-                    36
-                  ]
+                  "items": [true, false, 84, "Código 631", 36]
                 },
                 "requerido": false
               }
@@ -7011,11 +6685,7 @@
                 "etiqueta": "Finca 971",
                 "ayuda": "Ayuda: Hs fqmojriotnifgpklljkqnumv kc  bfcpxkqpnxkanobf o",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1",
-                    "var_2"
-                  ],
+                  "vars": ["var_0", "var_1", "var_2"],
                   "operation": "vars[0]*2"
                 },
                 "requerido": true
@@ -7052,13 +6722,7 @@
                 "ayuda": "Ayuda: Fbhx  ztpdp kffuf ewixiiqejkqh",
                 "config": {
                   "id_list": "67de3e1c6e904188a71fa4c7742aa244",
-                  "items": [
-                    "Descripción 774",
-                    true,
-                    "Rendimiento 320",
-                    86,
-                    false
-                  ]
+                  "items": ["Descripción 774", true, "Rendimiento 320", 86, false]
                 },
                 "requerido": false
               },
@@ -7333,10 +6997,7 @@
                 "etiqueta": "Código 103",
                 "ayuda": "Ayuda: Xiajkap  eepmwsuspdxfpkoivu cla  lc zyflv",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "SUM(vars)"
                 },
                 "requerido": false
@@ -7396,10 +7057,7 @@
                 "ayuda": "Ayuda: Csalxixpupaxyc yyfrq iip whlizhiuo",
                 "config": {
                   "id_list": "3f929329d90845a688d7066d9d49d357",
-                  "items": [
-                    "Operario 475",
-                    true
-                  ]
+                  "items": ["Operario 475", true]
                 },
                 "requerido": true
               },
@@ -7424,13 +7082,7 @@
                 "ayuda": "Ayuda: Ukukmxr upt jqhoatrdjl vlo",
                 "config": {
                   "id_list": "117b7f13673a447a8f170920ac438146",
-                  "items": [
-                    false,
-                    "Finca 965",
-                    true,
-                    68,
-                    90
-                  ]
+                  "items": [false, "Finca 965", true, 68, 90]
                 },
                 "requerido": false
               },
@@ -7581,10 +7233,7 @@
                 "etiqueta": "Código 103",
                 "ayuda": "Ayuda: Xiajkap  eepmwsuspdxfpkoivu cla  lc zyflv",
                 "config": {
-                  "vars": [
-                    "var_0",
-                    "var_1"
-                  ],
+                  "vars": ["var_0", "var_1"],
                   "operation": "SUM(vars)"
                 },
                 "requerido": false
@@ -7644,10 +7293,7 @@
                 "ayuda": "Ayuda: Csalxixpupaxyc yyfrq iip whlizhiuo",
                 "config": {
                   "id_list": "1429348b15b64df19beae627f670a7df",
-                  "items": [
-                    "Operario 475",
-                    true
-                  ]
+                  "items": ["Operario 475", true]
                 },
                 "requerido": true
               },
@@ -7672,13 +7318,7 @@
                 "ayuda": "Ayuda: Ukukmxr upt jqhoatrdjl vlo",
                 "config": {
                   "id_list": "75a88c3fe1ec4406aab7923d507873fe",
-                  "items": [
-                    false,
-                    "Finca 965",
-                    true,
-                    68,
-                    90
-                  ]
+                  "items": [false, "Finca 965", true, 68, 90]
                 },
                 "requerido": false
               },
@@ -7742,13 +7382,7 @@
                 "ayuda": "Ayuda: Fbhx  ztpdp kffuf ewixiiqejkqh",
                 "config": {
                   "id_list": "0a5c72ac91d44c65aba8f94c621787e1",
-                  "items": [
-                    "Descripción 774",
-                    true,
-                    "Rendimiento 320",
-                    86,
-                    false
-                  ]
+                  "items": ["Descripción 774", true, "Rendimiento 320", 86, false]
                 },
                 "requerido": false
               },

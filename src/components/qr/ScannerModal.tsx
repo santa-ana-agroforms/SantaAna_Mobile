@@ -7,7 +7,15 @@ import { colors } from "@/theme/tokens";
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Dimensions, Easing, Modal, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Easing,
+  Modal,
+  StyleSheet,
+  View,
+} from "react-native";
 
 type Props = {
   visible: boolean;
@@ -22,7 +30,9 @@ export default function ScannerModal({ visible, onClose, onQr, statusText }: Pro
   const [torch, setTorch] = useState(false);
   const [armed, setArmed] = useState(true);
   const lastScanAtRef = useRef<number>(0);
-  (async () => { if (!permission?.granted) await setApiBase("https://santaana-api-latest.onrender.com/"); })();
+  (async () => {
+    if (!permission?.granted) await setApiBase("https://santaana-api-latest.onrender.com/");
+  })();
 
   const win = Dimensions.get("window");
   const BOX = Math.min(300, Math.round(win.width * 0.75));
@@ -31,30 +41,53 @@ export default function ScannerModal({ visible, onClose, onQr, statusText }: Pro
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(sweep, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(sweep, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(sweep, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(sweep, {
+          toValue: 0,
+          duration: 1500,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
       ])
     ).start();
   }, [sweep]);
-  const scanY = sweep.interpolate({ inputRange: [0, 1], outputRange: [-(BOX / 2) + 8, (BOX / 2) - 8] });
+  const scanY = sweep.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-(BOX / 2) + 8, BOX / 2 - 8],
+  });
 
   useEffect(() => {
     if (!visible) return;
-    (async () => { if (!permission?.granted) await requestPermission(); })();
+    (async () => {
+      if (!permission?.granted) await requestPermission();
+    })();
   }, [visible, permission?.granted, requestPermission]);
 
-  const handleScan = useCallback((ev: BarcodeScanningResult) => {
-    if (!armed) return;
-    const now = Date.now();
-    if (now - lastScanAtRef.current < 1200) return;
-    lastScanAtRef.current = now;
-    setArmed(false);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).finally(() => onQr(ev.data ?? ""));
-    setTimeout(() => setArmed(true), 2000);
-  }, [armed, onQr]);
+  const handleScan = useCallback(
+    (ev: BarcodeScanningResult) => {
+      if (!armed) return;
+      const now = Date.now();
+      if (now - lastScanAtRef.current < 1200) return;
+      lastScanAtRef.current = now;
+      setArmed(false);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).finally(() => onQr(ev.data ?? ""));
+      setTimeout(() => setArmed(true), 2000);
+    },
+    [armed, onQr]
+  );
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={onClose}
+      presentationStyle="fullScreen"
+    >
       <View style={styles.wrap}>
         {permission?.granted ? (
           <>
@@ -73,8 +106,18 @@ export default function ScannerModal({ visible, onClose, onQr, statusText }: Pro
                 <View style={styles.maskTop} />
                 <View style={styles.maskMiddle}>
                   <View style={styles.maskSide} />
-                  <View style={[styles.focusBox, { width: BOX, height: BOX, borderColor: colors.primary600 }]}>
-                    <Animated.View style={[styles.scanLine, { width: BOX - 12, transform: [{ translateY: scanY }] }]} />
+                  <View
+                    style={[
+                      styles.focusBox,
+                      { width: BOX, height: BOX, borderColor: colors.primary600 },
+                    ]}
+                  >
+                    <Animated.View
+                      style={[
+                        styles.scanLine,
+                        { width: BOX - 12, transform: [{ translateY: scanY }] },
+                      ]}
+                    />
                   </View>
                   <View style={styles.maskSide} />
                 </View>
@@ -82,10 +125,20 @@ export default function ScannerModal({ visible, onClose, onQr, statusText }: Pro
               </View>
 
               {/* === 2) Elementos encima, nítidos === */}
-              <Body color="inverse" weight="bold" style={[styles.appTitle, {fontSize: rem * 2.5 }]}>SANTA ANA APP</Body>
+              <Body
+                color="inverse"
+                weight="bold"
+                style={[styles.appTitle, { fontSize: rem * 2.5 }]}
+              >
+                SANTA ANA APP
+              </Body>
 
               <View style={styles.tipBubble}>
-                <Body color="inverse" weight="bold" style={{ textAlign: "center", fontSize: rem * 1.25 }}>
+                <Body
+                  color="inverse"
+                  weight="bold"
+                  style={{ textAlign: "center", fontSize: rem * 1.25 }}
+                >
                   Alinea el QR dentro del recuadro
                 </Body>
               </View>
@@ -93,11 +146,15 @@ export default function ScannerModal({ visible, onClose, onQr, statusText }: Pro
               <View style={styles.bottomArea} pointerEvents="box-none">
                 <View style={styles.statusPill}>
                   {statusText ? (
-                    <Body color="inverse" weight="bold">{statusText}</Body>
+                    <Body color="inverse" weight="bold">
+                      {statusText}
+                    </Body>
                   ) : (
                     <>
                       <ActivityIndicator />
-                      <Body color="inverse" weight="bold" style={{ marginLeft: 8 }}>Escaneando…</Body>
+                      <Body color="inverse" weight="bold" style={{ marginLeft: 8 }}>
+                        Escaneando…
+                      </Body>
                     </>
                   )}
                 </View>
@@ -105,7 +162,7 @@ export default function ScannerModal({ visible, onClose, onQr, statusText }: Pro
                 <View style={styles.buttonsRow}>
                   <Button
                     title={torch ? "Apagar linterna" : "Encender linterna"}
-                    onPress={() => setTorch(t => !t)}
+                    onPress={() => setTorch((t) => !t)}
                     variant="ghost"
                   />
                   <Button title="Cerrar" onPress={onClose} variant="ghost" />
@@ -122,9 +179,18 @@ export default function ScannerModal({ visible, onClose, onQr, statusText }: Pro
             <Body style={{ textAlign: "center", marginBottom: 12 }}>
               Necesitamos permiso de cámara para escanear el QR.
             </Body>
-            <Button title="Conceder permiso" textStyle={{ color: "white" }} onPress={requestPermission} />
+            <Button
+              title="Conceder permiso"
+              textStyle={{ color: "white" }}
+              onPress={requestPermission}
+            />
             <View style={{ height: 8 }} />
-            <Button title="Cerrar" textStyle={{ color: "white" }} onPress={onClose} variant="ghost" />
+            <Button
+              title="Cerrar"
+              textStyle={{ color: "white" }}
+              onPress={onClose}
+              variant="ghost"
+            />
           </View>
         )}
       </View>
