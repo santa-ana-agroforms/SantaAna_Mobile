@@ -115,6 +115,179 @@ export async function ensureMigrated() {
   migrated = true;
 }
 
+// === Esquema local para GRUPOS ===
+async function ensureGroupsTables() {
+  await run(`
+    CREATE TABLE IF NOT EXISTS local_groups (
+      id_grupo   TEXT PRIMARY KEY,
+      nombre     TEXT NOT NULL
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS local_group_fields (
+      id_grupo           TEXT NOT NULL,
+      id_campo           TEXT NOT NULL,
+      sequence           INTEGER NOT NULL,
+      tipo               TEXT NOT NULL,
+      clase              TEXT NOT NULL,
+      nombre_interno     TEXT NOT NULL,
+      etiqueta           TEXT,
+      ayuda              TEXT,
+      config_json        TEXT,
+      requerido          INTEGER NOT NULL, -- 0/1
+
+      pagina_id          TEXT NOT NULL,
+      pagina_nombre      TEXT NOT NULL,
+      pagina_secuencia   INTEGER,
+
+      PRIMARY KEY (id_grupo, id_campo),
+      FOREIGN KEY (id_grupo) REFERENCES local_groups(id_grupo) ON DELETE CASCADE
+    )
+  `);
+
+  await run(
+    `CREATE INDEX IF NOT EXISTS idx_lgf_grupo_seq ON local_group_fields (id_grupo, pagina_secuencia, sequence)`
+  );
+  await run(
+    `CREATE INDEX IF NOT EXISTS idx_lgf_pagina ON local_group_fields (pagina_id)`
+  );
+}
+
+// Serialización de campos del grupo
+function serializeGroupField(f: any) {
+  return [
+    f.pagina?.id_pagina,
+    f.pagina?.nombre ?? "",
+    f.pagina?.secuencia ?? null,
+    f.id_campo,
+    f.sequence,
+    f.tipo,
+    f.clase,
+    f.nombre_interno,
+    f.etiqueta ?? null,
+    f.ayuda ?? null,
+    JSON.stringify(f.config ?? null),
+    f.requerido ? 1 : 0,
+  ];
+}
+
+function rowToGroupField(r: any) {
+  return {
+    id_campo: r.id_campo,
+    sequence: Number(r.sequence),
+    tipo: r.tipo,
+    clase: r.clase,
+    nombre_interno: r.nombre_interno,
+    etiqueta: r.etiqueta ?? null,
+    ayuda: r.ayuda ?? null,
+    config: r.config_json ? JSON.parse(r.config_json) : null,
+    requerido: Number(r.requerido) === 1,
+    pagina: {
+      id_pagina: r.pagina_id,
+      nombre: r.pagina_nombre,
+      secuencia:
+        r.pagina_secuencia === null || r.pagina_secuencia === undefined
+          ? null
+          : Number(r.pagina_secuencia),
+    },
+  };
+}
+
+// Inserta/actualiza UN grupo y reemplaza sus campos
+export async function upsertGroup(group: {
+  id_grupo: string;
+  nombre: string;
+  campos: any[];
+}) {
+  await ensureGroupsTables();
+
+  await run(
+    `INSERT INTO local_groups (id_grupo, nombre) VALUES (?, ?)
+     ON CONFLICT(id_grupo) DO UPDATE SET nombre = excluded.nombre`,
+    [group.id_grupo, group.nombre]
+  );
+
+  // Para simplificar: reemplazamos el set de campos completo
+  await run(`DELETE FROM local_group_fields WHERE id_grupo = ?`, [
+    group.id_grupo,
+  ]);
+
+  if (group.campos?.length) {
+    const sql = `
+      INSERT INTO local_group_fields (
+        pagina_id, pagina_nombre, pagina_secuencia,
+        id_campo, sequence, tipo, clase, nombre_interno,
+        etiqueta, ayuda, config_json, requerido,
+        id_grupo
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    for (const f of group.campos) {
+      const params = serializeGroupField(f);
+      await run(sql, [...params, group.id_grupo]);
+    }
+  }
+}
+
+// Inserta/actualiza VARIOS grupos
+export async function upsertGroups(
+  groups: { id_grupo: string; nombre: string; campos: any[] }[]
+) {
+  await ensureGroupsTables();
+  for (const g of groups) await upsertGroup(g);
+}
+
+// Selecciona todos los grupos (con sus campos)
+export async function selectGroups() {
+  await ensureGroupsTables();
+
+  const groups = await all<{ id_grupo: string; nombre: string }>(
+    `SELECT id_grupo, nombre FROM local_groups ORDER BY nombre ASC`
+  );
+
+  const out: any[] = [];
+  for (const g of groups) {
+    const rows = await all<any>(
+      `SELECT *
+         FROM local_group_fields
+        WHERE id_grupo = ?
+        ORDER BY COALESCE(pagina_secuencia, 0) ASC, sequence ASC, id_campo ASC`,
+      [g.id_grupo]
+    );
+    out.push({
+      id_grupo: g.id_grupo,
+      nombre: g.nombre,
+      campos: rows.map(rowToGroupField),
+    });
+  }
+  return out;
+}
+
+// Selecciona un grupo por id (con sus campos)
+export async function selectGroupById(id_grupo: string) {
+  await ensureGroupsTables();
+
+  const groups = await all<{ id_grupo: string; nombre: string }>(
+    `SELECT id_grupo, nombre FROM local_groups WHERE id_grupo = ? LIMIT 1`,
+    [id_grupo]
+  );
+  if (!groups.length) return null;
+
+  const rows = await all<any>(
+    `SELECT *
+       FROM local_group_fields
+      WHERE id_grupo = ?
+      ORDER BY COALESCE(pagina_secuencia, 0) ASC, sequence ASC, id_campo ASC`,
+    [id_grupo]
+  );
+
+  return {
+    id_grupo,
+    nombre: groups[0].nombre,
+    campos: rows.map(rowToGroupField),
+  };
+}
+
 // ---------------------------------------------
 // Opcional: utilidades de sincronización offline
 // ---------------------------------------------
@@ -371,7 +544,7 @@ export async function selectFormsGroupedByCategory(): Promise<
 export async function selectFormFromGroupedById(formId: string) {
   const groups = await selectFormsGroupedByCategory();
   for (const g of groups) {
-    const f = g.formularios.find(x => x.id_formulario === formId);
+    const f = g.formularios.find((x) => x.id_formulario === formId);
     if (f) return f; // trae paginas y campos listos
   }
   return null;
@@ -385,4 +558,9 @@ export const DB = {
   upsertGroupedForms,
   selectFormsGroupedByCategory,
   selectFormFromGroupedById,
+
+  upsertGroup,
+  upsertGroups,
+  selectGroups,
+  selectGroupById,
 };
