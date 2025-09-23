@@ -32,7 +32,8 @@ const RootLayout = () => {
     let mounted = true;
     (async () => {
       try {
-        await setApiBase("https://santaana-api-latest.onrender.com/");
+        console.log("[BOOT] setting API base URL...", process.env.EXPO_PUBLIC_BASE_URL);
+        await setApiBase(process.env.EXPO_PUBLIC_BASE_URL?.trim() || "");
         const token = await getAccessToken();
         if (mounted) setHasToken(!!token);
       } catch (e) {

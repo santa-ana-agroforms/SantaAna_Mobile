@@ -24,14 +24,14 @@ type Props = {
   statusText?: string | null;
 };
 
-export default function ScannerModal({ visible, onClose, onQr, statusText }: Props) {
+const ScannerModal = ({ visible, onClose, onQr, statusText }: Props) => {
   const { rem } = useResponsive();
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
   const [armed, setArmed] = useState(true);
   const lastScanAtRef = useRef<number>(0);
   (async () => {
-    if (!permission?.granted) await setApiBase("https://santaana-api-latest.onrender.com/");
+    if (!permission?.granted) await setApiBase(process.env.EXPO_PUBLIC_BASE_URL?.trim() || "");
   })();
 
   const win = Dimensions.get("window");
@@ -196,7 +196,9 @@ export default function ScannerModal({ visible, onClose, onQr, statusText }: Pro
       </View>
     </Modal>
   );
-}
+};
+
+export default ScannerModal;
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: "#000" },

@@ -20,7 +20,7 @@ module.exports = defineConfig([
     },
     rules: {
       // Prettier + fuerza LF
-      "prettier/prettier": ["error", { endOfLine: "lf" }],
+      "prettier/prettier": ["error", { endOfLine: "auto" }],
 
       // Arrow functions
       "func-style": ["error", "expression"],
