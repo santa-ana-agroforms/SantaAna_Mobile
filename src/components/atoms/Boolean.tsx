@@ -25,8 +25,7 @@ type Props = {
   showAccentBars?: boolean;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const Boolean: React.FC<Props> = ({
   value,
@@ -126,9 +125,7 @@ const Boolean: React.FC<Props> = ({
 
       {/* Barras de realce inferiores (opcional) */}
       {showAccentBars ? (
-        <View
-          style={{ flexDirection: "row", marginTop: dims.gap, gap: dims.gap }}
-        >
+        <View style={{ flexDirection: "row", marginTop: dims.gap, gap: dims.gap }}>
           <View
             style={{
               flex: 1,

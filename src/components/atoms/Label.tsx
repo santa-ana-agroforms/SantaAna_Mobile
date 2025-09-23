@@ -23,8 +23,7 @@ type Props = {
   marginBottom?: number;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const Label: React.FC<Props> = ({
   text,

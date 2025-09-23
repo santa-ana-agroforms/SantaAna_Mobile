@@ -1,12 +1,7 @@
 // src/components/atoms/Input.tsx
 import { colors } from "@/theme/tokens";
 import React, { useMemo, useState } from "react";
-import {
-  TextInput,
-  TextInputProps,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { TextInput, TextInputProps, View, useWindowDimensions } from "react-native";
 import Label from "./Label";
 import { Caption } from "./Typography";
 
@@ -22,8 +17,7 @@ type Props = TextInputProps & {
   focusedOverride?: boolean;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const Input: React.FC<Props> = ({
   label,

@@ -1,7 +1,7 @@
+import { useResponsive } from "@/hooks/useResponsive";
+import { colors } from "@/theme/tokens";
 import { View } from "react-native";
 import { Caption } from "./Typography";
-import { colors } from "@/theme/tokens";
-import { useResponsive } from "@/hooks/useResponsive";
 
 export default function Badge({ text }: { text: string }) {
   const { rem } = useResponsive();

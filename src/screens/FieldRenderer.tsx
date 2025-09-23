@@ -25,8 +25,7 @@ type Props = {
   onChangeValue?: (name: string, value: unknown) => void;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const FieldRenderer: React.FC<Props> = ({
   campo,
@@ -92,17 +91,14 @@ const FieldRenderer: React.FC<Props> = ({
   }, [referenceFrame]);
 
   const LabelBlock = (
-    <Label
-      frame={referenceFrame}
-      text={label}
-      required={campo.requerido}
-      help={help}
-    />
+    <Label frame={referenceFrame} text={label} required={campo.requerido} help={help} />
   );
 
-  const Box: React.FC<
-    React.PropsWithChildren<{ minH?: number; center?: boolean }>
-  > = ({ children, minH = dims.inputMinH, center = true }) => (
+  const Box: React.FC<React.PropsWithChildren<{ minH?: number; center?: boolean }>> = ({
+    children,
+    minH = dims.inputMinH,
+    center = true,
+  }) => (
     <View
       style={{
         minHeight: minH,
@@ -165,12 +161,7 @@ const FieldRenderer: React.FC<Props> = ({
   // ⬇️ Sustituye el renderList anterior por este:
   const renderList = (items: any[]) => (
     <>
-      <Label
-        frame={referenceFrame}
-        text={label}
-        required={campo.requerido}
-        help={help}
-      />
+      <Label frame={referenceFrame} text={label} required={campo.requerido} help={help} />
       <DatasetSelect
         frame={referenceFrame}
         items={items} // <- estáticos, no CSV
@@ -196,12 +187,7 @@ const FieldRenderer: React.FC<Props> = ({
         showNoneOption={false}
       />
       {/* Info de la “fuente” (mock) */}
-      <Body
-        frame={referenceFrame}
-        color="secondary"
-        size="xs"
-        style={{ marginTop: 6 }}
-      >
+      <Body frame={referenceFrame} color="secondary" size="xs" style={{ marginTop: 6 }}>
         Fuente externa (CSV)
         {"\n"}archivo: {campo.config?.file || "—"}
         {"\n"}columna: {campo.config?.column || "—"}
