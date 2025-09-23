@@ -22,8 +22,6 @@ export default function Home() {
     })();
   }, []);
 
-
-
   const handleLogout = async () => {
     try {
       (async () => {

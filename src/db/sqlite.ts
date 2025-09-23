@@ -368,6 +368,15 @@ export async function selectFormsGroupedByCategory(): Promise<
   return out;
 }
 
+export async function selectFormFromGroupedById(formId: string) {
+  const groups = await selectFormsGroupedByCategory();
+  for (const g of groups) {
+    const f = g.formularios.find(x => x.id_formulario === formId);
+    if (f) return f; // trae paginas y campos listos
+  }
+  return null;
+}
+
 // API pública mínima anterior (por compatibilidad)
 export const DB = {
   run,
@@ -375,4 +384,5 @@ export const DB = {
   ensureMigrated,
   upsertGroupedForms,
   selectFormsGroupedByCategory,
+  selectFormFromGroupedById,
 };
