@@ -1,3 +1,5 @@
+import { fetchAndSaveForms } from "@/api/forms";
+import { pullAndCacheGroups } from "@/api/groups";
 import ContainerSizer from "@/components/layout/ContainerSizer";
 import FormHeader from "@/components/molecules/FormHeader";
 import { colors } from "@/theme/tokens";
@@ -11,10 +13,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Variant = "categories" | "groups" | "form";
 
@@ -35,8 +34,7 @@ type PageScaffoldProps = {
   onNextPage?: () => void;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const PageScaffold: React.FC<PageScaffoldProps> = ({
   title,
@@ -59,10 +57,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
   const padX = useMemo(() => clamp(width * 0.04, 12, 24), [width]); // ≈4% del ancho
   const padTopHeader = useMemo(() => clamp(height * 0.01, 8, 24), [height]); // ≈2% del alto
   const gapBelowHeader = useMemo(() => clamp(height * 0.012, 8, 16), [height]);
-  const padBottomScroll = useMemo(
-    () => (insets.bottom || 0) + padX,
-    [insets.bottom, padX],
-  );
+  const padBottomScroll = useMemo(() => (insets.bottom || 0) + padX, [insets.bottom, padX]);
 
   const [headerH, setHeaderH] = useState(0);
   const onHeaderLayout = useCallback((e: LayoutChangeEvent) => {
@@ -70,10 +65,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
     setHeaderH((prev) => (Math.abs(prev - h) > 0.5 ? h : prev));
   }, []);
 
-  const keyboardOffset = useMemo(
-    () => insets.top + headerH,
-    [insets.top, headerH],
-  );
+  const keyboardOffset = useMemo(() => insets.top + headerH, [insets.top, headerH]);
 
   const router = useRouter();
   const handleBack = useCallback(() => {
@@ -106,9 +98,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
       <View style={{ flex: 1 }}>
         {/* HEADER (estático, medido) */}
         <View onLayout={onHeaderLayout}>
-          <View
-            style={{ paddingTop: padTopHeader, paddingBottom: gapBelowHeader }}
-          >
+          <View style={{ paddingTop: padTopHeader, paddingBottom: gapBelowHeader }}>
             <FormHeader
               title={title}
               page={page}
@@ -116,7 +106,10 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
               totalPages={totalPages}
               connected
               onBack={handleBack}
-              onRefresh={() => {}}
+              onRefresh={async () => {
+                await fetchAndSaveForms();
+                await pullAndCacheGroups();
+              }}
               variant={variant}
               onPrevPage={variant === "form" ? onPrevPage : undefined}
               onNextPage={variant === "form" ? onNextPage : undefined}
@@ -133,9 +126,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
           {variant === "form" ? (
             <ContainerSizer style={{ flex: 1 }}>
               <View style={{ flex: 1 }}>
-                {typeof children === "function"
-                  ? children(scaffoldDimensions)
-                  : children}
+                {typeof children === "function" ? children(scaffoldDimensions) : children}
               </View>
             </ContainerSizer>
           ) : (
@@ -143,21 +134,15 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
               <ScrollView
                 showsVerticalScrollIndicator
                 keyboardShouldPersistTaps="handled"
-                keyboardDismissMode={
-                  Platform.OS === "ios" ? "interactive" : "on-drag"
-                }
-                contentInsetAdjustmentBehavior={
-                  Platform.OS === "ios" ? "always" : "automatic"
-                }
+                keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+                contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "always" : "automatic"}
                 contentContainerStyle={{
                   paddingHorizontal: padX,
                   paddingBottom: padBottomScroll,
                 }}
               >
                 <View style={{ marginBottom: gapBelowHeader }} />
-                {typeof children === "function"
-                  ? children(scaffoldDimensions)
-                  : children}
+                {typeof children === "function" ? children(scaffoldDimensions) : children}
                 <View style={{ height: padX * 2 }} />
               </ScrollView>
             </ContainerSizer>

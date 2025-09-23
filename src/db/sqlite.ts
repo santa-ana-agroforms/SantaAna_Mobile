@@ -2,7 +2,7 @@
 import * as SQLite from "expo-sqlite";
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
-async function getDb() {
+const getDb = async () => {
   if (!dbPromise) {
     dbPromise = SQLite.openDatabaseAsync("forms.db");
     const db = await dbPromise;
@@ -10,21 +10,21 @@ async function getDb() {
     await db.execAsync("PRAGMA journal_mode = WAL;");
   }
   return dbPromise!;
-}
+};
 
 // Helpers base
-export async function run(sql: string, params: any[] = []) {
+export const run = async (sql: string, params: any[] = []) => {
   const db = await getDb();
   return db.runAsync(sql, params);
-}
-export async function all<T = any>(sql: string, params: any[] = []) {
+};
+export const all = async <T = any>(sql: string, params: any[] = []) => {
   const db = await getDb();
   return db.getAllAsync<T>(sql, params);
-}
+};
 
 // --- Migraciones persistentes con PRAGMA user_version ---
 let migrated = false;
-export async function ensureMigrated() {
+export const ensureMigrated = async () => {
   if (migrated) return;
   const db = await getDb();
 
@@ -107,7 +107,172 @@ export async function ensureMigrated() {
   });
 
   migrated = true;
-}
+};
+
+// === Esquema local para GRUPOS ===
+const ensureGroupsTables = async () => {
+  await run(`
+    CREATE TABLE IF NOT EXISTS local_groups (
+      id_grupo   TEXT PRIMARY KEY,
+      nombre     TEXT NOT NULL
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS local_group_fields (
+      id_grupo           TEXT NOT NULL,
+      id_campo           TEXT NOT NULL,
+      sequence           INTEGER NOT NULL,
+      tipo               TEXT NOT NULL,
+      clase              TEXT NOT NULL,
+      nombre_interno     TEXT NOT NULL,
+      etiqueta           TEXT,
+      ayuda              TEXT,
+      config_json        TEXT,
+      requerido          INTEGER NOT NULL, -- 0/1
+
+      pagina_id          TEXT NOT NULL,
+      pagina_nombre      TEXT NOT NULL,
+      pagina_secuencia   INTEGER,
+
+      PRIMARY KEY (id_grupo, id_campo),
+      FOREIGN KEY (id_grupo) REFERENCES local_groups(id_grupo) ON DELETE CASCADE
+    )
+  `);
+
+  await run(
+    `CREATE INDEX IF NOT EXISTS idx_lgf_grupo_seq ON local_group_fields (id_grupo, pagina_secuencia, sequence)`
+  );
+  await run(`CREATE INDEX IF NOT EXISTS idx_lgf_pagina ON local_group_fields (pagina_id)`);
+};
+
+// Serialización de campos del grupo
+const serializeGroupField = (f: any) => {
+  return [
+    f.pagina?.id_pagina,
+    f.pagina?.nombre ?? "",
+    f.pagina?.secuencia ?? null,
+    f.id_campo,
+    f.sequence,
+    f.tipo,
+    f.clase,
+    f.nombre_interno,
+    f.etiqueta ?? null,
+    f.ayuda ?? null,
+    JSON.stringify(f.config ?? null),
+    f.requerido ? 1 : 0,
+  ];
+};
+
+const rowToGroupField = (r: any) => {
+  return {
+    id_campo: r.id_campo,
+    sequence: Number(r.sequence),
+    tipo: r.tipo,
+    clase: r.clase,
+    nombre_interno: r.nombre_interno,
+    etiqueta: r.etiqueta ?? null,
+    ayuda: r.ayuda ?? null,
+    config: r.config_json ? JSON.parse(r.config_json) : null,
+    requerido: Number(r.requerido) === 1,
+    pagina: {
+      id_pagina: r.pagina_id,
+      nombre: r.pagina_nombre,
+      secuencia:
+        r.pagina_secuencia === null || r.pagina_secuencia === undefined
+          ? null
+          : Number(r.pagina_secuencia),
+    },
+  };
+};
+
+// Inserta/actualiza UN grupo y reemplaza sus campos
+export const upsertGroup = async (group: { id_grupo: string; nombre: string; campos: any[] }) => {
+  await ensureGroupsTables();
+
+  await run(
+    `INSERT INTO local_groups (id_grupo, nombre) VALUES (?, ?)
+     ON CONFLICT(id_grupo) DO UPDATE SET nombre = excluded.nombre`,
+    [group.id_grupo, group.nombre]
+  );
+
+  // Para simplificar: reemplazamos el set de campos completo
+  await run(`DELETE FROM local_group_fields WHERE id_grupo = ?`, [group.id_grupo]);
+
+  if (group.campos?.length) {
+    const sql = `
+      INSERT INTO local_group_fields (
+        pagina_id, pagina_nombre, pagina_secuencia,
+        id_campo, sequence, tipo, clase, nombre_interno,
+        etiqueta, ayuda, config_json, requerido,
+        id_grupo
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    for (const f of group.campos) {
+      const params = serializeGroupField(f);
+      await run(sql, [...params, group.id_grupo]);
+    }
+  }
+};
+
+// Inserta/actualiza VARIOS grupos
+export const upsertGroups = async (
+  groups: { id_grupo: string; nombre: string; campos: any[] }[]
+) => {
+  await ensureGroupsTables();
+  for (const g of groups) await upsertGroup(g);
+};
+
+// Selecciona todos los grupos (con sus campos)
+export const selectGroups = async () => {
+  await ensureGroupsTables();
+
+  const groups = await all<{ id_grupo: string; nombre: string }>(
+    `SELECT id_grupo, nombre FROM local_groups ORDER BY nombre ASC`
+  );
+
+  const out: any[] = [];
+  for (const g of groups) {
+    const rows = await all<any>(
+      `SELECT *
+         FROM local_group_fields
+        WHERE id_grupo = ?
+        ORDER BY COALESCE(pagina_secuencia, 0) ASC, sequence ASC, id_campo ASC`,
+      [g.id_grupo]
+    );
+    out.push({
+      id_grupo: g.id_grupo,
+      nombre: g.nombre,
+      campos: rows.map(rowToGroupField),
+    });
+  }
+  return out;
+};
+
+// Selecciona un grupo por id (con sus campos)
+export const selectGroupById = async (id_grupo: string) => {
+  await ensureGroupsTables();
+
+  const groups = await all<{ id_grupo: string; nombre: string }>(
+    `SELECT id_grupo, nombre FROM local_groups WHERE id_grupo = ? LIMIT 1`,
+    [id_grupo]
+  );
+  if (!groups.length) return null;
+
+  const rows = await all<any>(
+    `SELECT *
+       FROM local_group_fields
+      WHERE id_grupo = ?
+      ORDER BY COALESCE(pagina_secuencia, 0) ASC, sequence ASC, id_campo ASC`,
+    [id_grupo]
+  );
+
+  return {
+    id_grupo,
+    nombre: groups[0].nombre,
+    campos: rows.map(rowToGroupField),
+  };
+};
 
 // ---------------------------------------------
 // Opcional: utilidades de sincronización offline
@@ -115,7 +280,7 @@ export async function ensureMigrated() {
 
 // Crea un id estable a partir del nombre de categoría cuando la API no trae id.
 // Si tu backend empieza a enviar categoria_id, reemplaza el uso de esta función por el id real.
-function slugFromCategoryName(name?: string | null) {
+const slugFromCategoryName = (name?: string | null) => {
   if (!name || !name.trim()) return "__SIN_CATEGORIA__";
   return name
     .trim()
@@ -124,7 +289,7 @@ function slugFromCategoryName(name?: string | null) {
     .replace(/[\u0300-\u036f]/g, "") // quitar acentos
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
-}
+};
 
 type ServerField = {
   id_campo: string;
@@ -161,7 +326,7 @@ type ServerCategoryGroup = {
 };
 
 // Inserta/actualiza el payload agrupado por categoría tal como lo devuelve /forms/tree
-export async function upsertGroupedForms(groups: ServerCategoryGroup[]) {
+export const upsertGroupedForms = async (groups: ServerCategoryGroup[]) => {
   await ensureMigrated();
   const db = await getDb();
 
@@ -233,10 +398,10 @@ export async function upsertGroupedForms(groups: ServerCategoryGroup[]) {
       }
     }
   });
-}
+};
 
 // Lee desde SQLite con el MISMO shape agrupado por categoría que entrega el backend
-export async function selectFormsGroupedByCategory(): Promise<ServerCategoryGroup[]> {
+export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGroup[]> => {
   await ensureMigrated();
   const db = await getDb();
 
@@ -351,16 +516,16 @@ export async function selectFormsGroupedByCategory(): Promise<ServerCategoryGrou
     }
   }
   return out;
-}
+};
 
-export async function selectFormFromGroupedById(formId: string) {
+export const selectFormFromGroupedById = async (formId: string) => {
   const groups = await selectFormsGroupedByCategory();
   for (const g of groups) {
     const f = g.formularios.find((x) => x.id_formulario === formId);
     if (f) return f; // trae paginas y campos listos
   }
   return null;
-}
+};
 
 // API pública mínima anterior (por compatibilidad)
 export const DB = {
@@ -370,4 +535,9 @@ export const DB = {
   upsertGroupedForms,
   selectFormsGroupedByCategory,
   selectFormFromGroupedById,
+
+  upsertGroup,
+  upsertGroups,
+  selectGroups,
+  selectGroupById,
 };

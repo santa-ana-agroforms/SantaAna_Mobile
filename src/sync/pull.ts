@@ -2,7 +2,7 @@ import { makeClient } from "@/api/client";
 import { DB } from "@/db/sqlite";
 import type { AuthUser, FormTree } from "@/types";
 
-export async function pullUserAndForms(user: AuthUser) {
+const pullUserAndForms = async (user: AuthUser) => {
   await DB.ensureMigrated(); // <<< IMPORTANTE
 
   const api = await makeClient();
@@ -78,4 +78,6 @@ export async function pullUserAndForms(user: AuthUser) {
       }
     }
   });
-}
+};
+
+export { pullUserAndForms };

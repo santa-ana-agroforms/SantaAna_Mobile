@@ -22,12 +22,12 @@ type Props = {
   onSuccess?: (user: AuthUser) => void;
 };
 
-export default function QrLoginOnboarding({
+const QrLoginOnboarding = ({
   endpoint = "/auth/qr/login",
   baseUrl,
   autoSync = true,
   onSuccess,
-}: Props) {
+}: Props) => {
   const { rem, scale } = useResponsive();
   const [modalOpen, setModalOpen] = useState(false);
   const [apiUrlInput, setApiUrlInput] = useState<string>("");
@@ -251,7 +251,9 @@ export default function QrLoginOnboarding({
       />
     </View>
   );
-}
+};
+
+export default QrLoginOnboarding;
 
 const styles = StyleSheet.create({
   container: { flex: 1, width: "100%" },

@@ -1,18 +1,9 @@
 // src/components/atoms/DateTimeField.tsx
 import { Body } from "@/components/atoms/Typography";
 import { colors } from "@/theme/tokens";
-import DateTimePicker, {
-  type DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import React, { useMemo, useState } from "react";
-import {
-  Modal,
-  Platform,
-  Pressable,
-  Text,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { Modal, Platform, Pressable, Text, useWindowDimensions, View } from "react-native";
 import Label from "../atoms/Label";
 
 type Frame = { width: number; height: number };
@@ -33,13 +24,11 @@ type Props = {
   clearable?: boolean;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 
-const formatDate = (d: Date) =>
-  `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+const formatDate = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 const formatTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 const DateTimeField: React.FC<Props> = ({
@@ -58,10 +47,7 @@ const DateTimeField: React.FC<Props> = ({
 }) => {
   // Fallback si no pasan frame
   const { width: ww, height: hh } = useWindowDimensions();
-  const baseFrame = useMemo(
-    () => frame ?? { width: ww, height: hh },
-    [frame, ww, hh],
-  );
+  const baseFrame = useMemo(() => frame ?? { width: ww, height: hh }, [frame, ww, hh]);
   const isIOS = Platform.OS === "ios";
 
   const dims = useMemo(() => {
@@ -98,11 +84,7 @@ const DateTimeField: React.FC<Props> = ({
     };
   }, [baseFrame]);
 
-  const borderColor = disabled
-    ? colors.neutral200
-    : error
-      ? colors.danger600
-      : colors.border;
+  const borderColor = disabled ? colors.neutral200 : error ? colors.danger600 : colors.border;
 
   const [open, setOpen] = useState(false);
   const [temp, setTemp] = useState<Date>(value ?? new Date());
@@ -137,8 +119,7 @@ const DateTimeField: React.FC<Props> = ({
     ? mode === "date"
       ? formatDate(value)
       : formatTime(value)
-    : (placeholder ??
-      (mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"));
+    : (placeholder ?? (mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"));
 
   return (
     <View style={{ width: "100%" }}>
@@ -191,10 +172,7 @@ const DateTimeField: React.FC<Props> = ({
 
       {/* Error */}
       {error ? (
-        <Body
-          size="xs"
-          style={{ color: colors.danger600, marginTop: dims.errorMt }}
-        >
+        <Body size="xs" style={{ color: colors.danger600, marginTop: dims.errorMt }}>
           {error}
         </Body>
       ) : null}
@@ -213,12 +191,7 @@ const DateTimeField: React.FC<Props> = ({
 
       {/* iOS: modal con panel y botones */}
       {isIOS ? (
-        <Modal
-          visible={open}
-          transparent
-          animationType="fade"
-          onRequestClose={hide}
-        >
+        <Modal visible={open} transparent animationType="fade" onRequestClose={hide}>
           <View
             style={{
               flex: 1,
@@ -238,9 +211,7 @@ const DateTimeField: React.FC<Props> = ({
               }}
             >
               <Body weight="semibold">
-                {mode === "date"
-                  ? "Selecciona una fecha"
-                  : "Selecciona una hora"}
+                {mode === "date" ? "Selecciona una fecha" : "Selecciona una hora"}
               </Body>
 
               <View
