@@ -15,8 +15,7 @@ type Props = {
   style?: ViewStyle; // el contenedor (grid) define el width y posiciona
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const baseStyles = StyleSheet.create({
   card: {

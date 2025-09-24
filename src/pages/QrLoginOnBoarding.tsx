@@ -1,61 +1,69 @@
 // screens/QrLoginOnboarding.tsx
 import { getApiBase, makeClient, setApiBase, setTokens } from "@/api/client";
-import QrScannerButton from "@/components/atoms/QrScannerButton";
+import { fetchAndSaveForms } from "@/api/forms";
 import { Body } from "@/components/atoms/Typography";
-import ScannerModal from "@/components/qr/ScannerModal";
-import { useResponsive } from "@/hooks/useResponsive";
+import QrIntroSection from "@/components/molecules/QrIntroSection";
 import { colors } from "@/theme/tokens";
 import type { AuthUser } from "@/types";
 import NetInfo from "@react-native-community/netinfo";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Image, StyleSheet, View } from "react-native";
+import { Alert, Image, View, useWindowDimensions } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { QrPayload } from "../auth/qrTypes";
 import { isQrPayload } from "../auth/qrTypes";
 
-// ⬇️ Usa tus helpers nuevos (NO pullUserAndForms)
-import { fetchAndSaveForms } from "@/api/forms";
-
 type Props = {
-  endpoint?: string; // default /auth/qr/login
+  endpoint?: string;
   baseUrl?: string;
-  autoSync?: boolean; // default true
+  autoSync?: boolean;
   onSuccess?: (user: AuthUser) => void;
 };
 
-const QrLoginOnboarding = ({
+type Frame = { width: number; height: number };
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+const QrLoginOnboarding: React.FC<Props> = ({
   endpoint = "/auth/qr/login",
   baseUrl,
   autoSync = true,
   onSuccess,
-}: Props) => {
-  const { rem, scale } = useResponsive();
-  const [modalOpen, setModalOpen] = useState(false);
+}) => {
+  // Frames base (sin PageScaffold)
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const referenceFrame: Frame = { width, height: height - insets.top - insets.bottom };
+  // Escalas/tamaños derivados
+  const minSide = Math.min(referenceFrame.width, referenceFrame.height);
+  const baseRem = clamp(minSide * 0.042, 14, 18);
+
+  const pad = clamp(minSide * 0.02, 12, 20);
+  const titleSize = clamp(baseRem * 3.0, 22, 40);
+  const footSize = clamp(baseRem * 1.4, 12, 18);
+  const heroSize = clamp(minSide * 0.45, 180, 280);
+
+  // Estado
+  const [, setModalOpen] = useState(false);
   const [apiUrlInput, setApiUrlInput] = useState<string>("");
   const [statusText, setStatusText] = useState<string | null>(null);
   const [me, setMe] = useState<AuthUser | null>(null);
 
-  // ---- Guards / refs para evitar dobles disparos
-  const scanBusyRef = useRef(false); // evita doble parse del QR
-  const loginInFlightRef = useRef(false); // evita doble login
+  // Guards
+  const scanBusyRef = useRef(false);
+  const loginInFlightRef = useRef(false);
   const syncAbortRef = useRef<AbortController | null>(null);
 
-  // Cargar base URL guardada
   useEffect(() => {
     (async () => {
       try {
         const saved = await getApiBase();
         setApiUrlInput(saved || baseUrl || "");
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     })();
   }, [baseUrl]);
 
-  // ---- Parseo del QR y arranque de login (con guard)
   const parseAndLogin = useCallback(async (raw: string) => {
     if (scanBusyRef.current) return;
     scanBusyRef.current = true;
-
     setStatusText("Verificando QR…");
     try {
       const obj = JSON.parse(raw);
@@ -65,14 +73,11 @@ const QrLoginOnboarding = ({
       setStatusText(null);
       Alert.alert("QR inválido", e?.message ?? "El QR escaneado no es JSON.");
     } finally {
-      // Cerrar modal sólo cuando finaliza login/sync
       setModalOpen(false);
-      // liberar el guard del escáner
       scanBusyRef.current = false;
     }
   }, []);
 
-  // ---- Login + Sync (usando fetchAndSaveForms)
   const doLogin = useCallback(
     async (p: QrPayload) => {
       if (loginInFlightRef.current) return;
@@ -91,12 +96,7 @@ const QrLoginOnboarding = ({
         else if (baseUrl) await setApiBase(baseUrl);
 
         const api = await makeClient();
-        const resp = await api.post(endpoint, {
-          sid: p.sid,
-          nonce: p.nonce,
-          sig: p.sig,
-        });
-
+        const resp = await api.post(endpoint, { sid: p.sid, nonce: p.nonce, sig: p.sig });
         const { access_token: accessToken, refreshToken, user } = resp.data ?? {};
         if (!accessToken) throw new Error("No se recibió accessToken del servidor.");
 
@@ -110,26 +110,20 @@ const QrLoginOnboarding = ({
         }
         setMe(u);
 
-        // ---- SINCRONIZACIÓN de formularios (usa tus helpers)
         if (autoSync && u) {
           setStatusText("Sincronizando formularios…");
 
-          // Cancela sync previa si existía
           syncAbortRef.current?.abort();
           const controller = new AbortController();
           syncAbortRef.current = controller;
 
           try {
-            // fetchAndSaveForms llama a /forms/tree y guarda en SQLite
             await fetchAndSaveForms(
-              // opcional: puente a statusText como "loading"
               (v) => setStatusText(v ? "Sincronizando formularios…" : "¡Listo!"),
               controller.signal
             );
           } catch (syncErr: any) {
-            if (controller.signal.aborted) {
-              // cancelado al desmontar, salimos silencioso
-            } else {
+            if (!controller.signal.aborted) {
               console.warn("[SYNC] fallo en fetchAndSaveForms:", syncErr);
               Alert.alert(
                 "Advertencia",
@@ -140,133 +134,71 @@ const QrLoginOnboarding = ({
         }
 
         setStatusText("¡Listo!");
-        onSuccess?.(u!); // navegar al Home
+        onSuccess?.(u!);
       } catch (e: any) {
         const msg =
           e?.response?.data?.message || e?.message || "No se pudo completar el login por QR.";
         Alert.alert("Error de login", msg);
         console.error("[LOGIN] error:", e);
       } finally {
-        // liberar guard para permitir un nuevo intento si hace falta
         loginInFlightRef.current = false;
-        // limpiar status después de un ratito
         setTimeout(() => setStatusText(null), 1200);
       }
     },
     [apiUrlInput, baseUrl, endpoint, autoSync, onSuccess]
   );
 
-  // Cancelar sync si se desmonta
-  useEffect(() => {
-    return () => syncAbortRef.current?.abort();
-  }, []);
+  useEffect(() => () => syncAbortRef.current?.abort(), []);
 
-  // ---- UI
   return (
-    <View style={[styles.container, { padding: scale(16) }]}>
-      <Body weight="bold" style={{ fontSize: rem * 3, textAlign: "center", marginTop: rem * 3 }}>
-        SANTA ANA APP
-      </Body>
-
-      <Image
-        source={require("@/../assets/images/qrLogin.png")}
-        style={{
-          width: rem * 18,
-          height: rem * 18,
-          resizeMode: "contain",
-          alignSelf: "center",
-          marginVertical: rem * 4,
-        }}
-      />
-
-      <Body weight="bold" style={{ fontSize: rem * 2, textAlign: "center" }}>
-        Bienvenido
-      </Body>
-      <Body style={{ opacity: 0.8, textAlign: "center", marginTop: rem * 0.6 }}>
-        Escanea tu código QR
-      </Body>
-
-      <View style={{ height: 16 }} />
-
-      <View style={{ marginTop: rem * 2, alignItems: "center" }}>
-        <QrScannerButton size={rem * 20} onPress={() => setModalOpen(true)} />
-      </View>
-
-      {/* Estado usuario (si ya está) */}
-      {me && (
-        <View style={[styles.card, { borderColor: colors.border }]}>
-          <Body weight="bold" style={{ marginBottom: 6 }}>
-            Usuario
-          </Body>
-          <Body>
-            Nombre:{" "}
-            <Body selectable weight="bold">
-              {me.nombre}
-            </Body>
-          </Body>
-          <Body>
-            Usuario:{" "}
-            <Body selectable weight="bold">
-              {me.nombre_de_usuario}
-            </Body>
-          </Body>
-          {!!me.roles?.length && (
-            <>
-              <Body style={{ opacity: 0.7, marginTop: 6 }}>Roles</Body>
-              {me.roles.map((r) => (
-                <Body key={r.id}>
-                  • {r.nombre} (id: {r.id})
-                </Body>
-              ))}
-            </>
-          )}
-        </View>
-      )}
-
-      <View
-        style={{
-          marginBottom: rem * 2,
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          marginHorizontal: rem * 2.5,
-          alignItems: "center",
-        }}
-      >
-        <Body style={{ textAlign: "center", fontSize: rem * 1.6 }}>
-          © 2019 Compañía Agrícola Industrial Santa Ana, S. A. - All Rights Reserved
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
+      <View style={{ flex: 1, width: "100%", paddingHorizontal: pad }}>
+        {/* Título */}
+        <Body
+          frame={referenceFrame}
+          weight="bold"
+          style={{ fontSize: titleSize, textAlign: "center", marginTop: baseRem * 2 }}
+        >
+          SANTA ANA APP
         </Body>
-      </View>
 
-      {/* Modal del escáner (muestra statusText durante login/sync) */}
-      <ScannerModal
-        visible={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setStatusText(null);
-        }}
-        onQr={parseAndLogin}
-        statusText={statusText}
-      />
-    </View>
+        {/* Ilustración */}
+        <Image
+          source={require("@/../assets/images/qrLogin.png")}
+          style={{
+            width: heroSize,
+            height: heroSize,
+            resizeMode: "contain",
+            alignSelf: "center",
+            marginVertical: baseRem * 2,
+          }}
+        />
+
+        <QrIntroSection
+          referenceFrame={referenceFrame}
+          user={me}
+          statusText={statusText}
+          setStatusText={setStatusText}
+          onQr={parseAndLogin}
+        />
+
+        {/* Footer dentro de safe area */}
+        <View
+          style={{
+            position: "absolute",
+            bottom: insets.bottom ? insets.bottom : pad,
+            left: pad,
+            right: pad,
+            alignItems: "center",
+          }}
+        >
+          <Body frame={referenceFrame} style={{ textAlign: "center", fontSize: footSize }}>
+            © 2019 Compañía Agrícola Industrial Santa Ana, S. A. - All Rights Reserved
+          </Body>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 };
 
 export default QrLoginOnboarding;
-
-const styles = StyleSheet.create({
-  container: { flex: 1, width: "100%" },
-  card: {
-    marginTop: 16,
-    width: "100%",
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    backgroundColor: colors.surface,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-});
