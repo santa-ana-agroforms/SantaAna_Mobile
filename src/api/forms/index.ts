@@ -4,9 +4,7 @@ import { makeClient } from "../client";
 import { FormCategoryGroup, FormTree } from "./types";
 
 // GET /forms/tree → ahora devuelve grupos por categoría
-export async function getFormsTree(opts?: {
-  signal?: AbortSignal;
-}): Promise<FormCategoryGroup[]> {
+export async function getFormsTree(opts?: { signal?: AbortSignal }): Promise<FormCategoryGroup[]> {
   const api = await makeClient();
   const { data } = await api.get<FormCategoryGroup[]>("/forms/tree", {
     signal: opts?.signal,

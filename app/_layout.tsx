@@ -1,5 +1,5 @@
 // app/_layout.tsx
-import { clearTokens, getAccessToken, setApiBase } from "@/api/client";
+import { getAccessToken, setApiBase } from "@/api/client";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -17,7 +17,7 @@ import { enableFreeze, enableScreens } from "react-native-screens";
 enableScreens(true);
 enableFreeze(true);
 
-export default function RootLayout() {
+const RootLayout = () => {
   const [loaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -32,7 +32,8 @@ export default function RootLayout() {
     let mounted = true;
     (async () => {
       try {
-        await setApiBase("https://santaana-api-latest.onrender.com/");
+        console.log("[BOOT] setting API base URL...", process.env.EXPO_PUBLIC_BASE_URL);
+        await setApiBase(process.env.EXPO_PUBLIC_BASE_URL?.trim() || "");
         const token = await getAccessToken();
         if (mounted) setHasToken(!!token);
       } catch (e) {
@@ -42,7 +43,9 @@ export default function RootLayout() {
         if (mounted) setChecking(false);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   if (!loaded || checking) return null;
@@ -74,4 +77,6 @@ export default function RootLayout() {
       </Stack>
     </SafeAreaProvider>
   );
-}
+};
+
+export default RootLayout;

@@ -1,11 +1,10 @@
 // ============================================
 // src/components/forms/FormPage.tsx
-// Página verticalmente scrolleable que pinta cada campo con FieldRenderer
+// Página vertical scrolleable que pinta cada campo con FieldRenderer
 // ============================================
-import React from "react";
-import { ScrollView, View } from "react-native";
-import { useResponsive } from "@/hooks/useResponsive";
-import { Title, Body } from "@/components/atoms/Typography";
+import { Body } from "@/components/atoms/Typography";
+import React, { useMemo } from "react";
+import { Platform, ScrollView, View } from "react-native";
 import FieldRenderer from "./FieldRenderer";
 
 export type Campo = {
@@ -34,28 +33,78 @@ export type Formulario = {
   paginas: Pagina[];
 };
 
-export default function FormPageView({ page, formName }: { page: Pagina; formName?: string }) {
-  const { gutter } = useResponsive();
-  const fields = [...(page?.campos || [])].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+type Frame = { width: number; height: number };
+
+type Props = {
+  page: Pagina;
+  formName?: string;
+  referenceFrame: Frame; // escala tipográfica/geométrica
+  contentFrame: Frame; // ancho/alto útil del body
+};
+
+const clamp = (v: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, v));
+
+const FormPageView: React.FC<Props> = ({
+  page,
+  formName,
+  referenceFrame,
+  contentFrame,
+}) => {
+  // Ordena campos una sola vez
+  const fields = useMemo(
+    () =>
+      [...(page?.campos || [])].sort(
+        (a, b) => (a.sequence ?? 0) - (b.sequence ?? 0),
+      ),
+    [page?.campos],
+  );
+
+  const minSide = Math.min(referenceFrame.width, referenceFrame.height);
+  const padX = clamp(contentFrame.width * 0.04, 12, 24);
+  const padBottom = clamp(minSide * 0.02, 12, 24);
+  const headerGap = clamp(minSide * 0.012, 8, 16);
+  const fieldGap = clamp(minSide * 0.016, 10, 22);
 
   return (
     <ScrollView
       showsVerticalScrollIndicator
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ paddingHorizontal: gutter * 2, paddingBottom: gutter * 2 }}
+      keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+      contentInsetAdjustmentBehavior={
+        Platform.OS === "ios" ? "always" : "automatic"
+      }
+      contentContainerStyle={{
+        paddingHorizontal: padX,
+        paddingBottom: padBottom,
+      }}
     >
-      <View style={{ height: gutter * 0.75 }} />
-      <Title>{page?.nombre}</Title>
-      {page?.descripcion ? <Body color="secondary">{page.descripcion}</Body> : null}
-      <View style={{ height: gutter }} />
+      <Body weight="bold" size="xl">
+        {page?.nombre}
+      </Body>
+      {page?.descripcion ? (
+        <Body frame={referenceFrame} color="secondary" size="sm">
+          {page.descripcion}
+        </Body>
+      ) : null}
 
+      <View style={{ height: headerGap }} />
+
+      {/* Campos */}
       {fields.map((f) => (
-        <View key={f.id_campo} style={{ marginBottom: gutter * 1.25 }}>
-          <FieldRenderer campo={f} formName={formName} />
+        <View key={f.id_campo} style={{ marginBottom: fieldGap }}>
+          <FieldRenderer
+            campo={f}
+            formName={formName}
+            referenceFrame={referenceFrame}
+            contentFrame={contentFrame}
+          />
         </View>
       ))}
 
-      <View style={{ height: gutter * 2 }} />
+      <View style={{ height: padBottom }} />
     </ScrollView>
   );
-}
+};
+
+export default FormPageView;

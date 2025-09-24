@@ -1,20 +1,14 @@
 // src/components/atoms/QrScannerButton.tsx
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
-import {
-  Animated,
-  Easing,
-  Pressable,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Animated, Easing, Pressable, StyleSheet, View } from "react-native";
 
 type Props = {
   onPress: () => void;
-  size?: number;       // lado del recuadro central (px)
+  size?: number; // lado del recuadro central (px)
   disabled?: boolean;
   testID?: string;
-  offset?: number;     // separación de las esquinas (px)
+  offset?: number; // separación de las esquinas (px)
 };
 
 export default function QrScannerButton({
@@ -27,11 +21,11 @@ export default function QrScannerButton({
   const bw = Math.max(4, Math.round(size * 0.035));
   const corner = Math.round(size * 0.18);
   const radius = Math.round(size * 0.15);
-  const icon = Math.round(size * 0.60);
+  const icon = Math.round(size * 0.6);
 
   // --- Animated values
-  const sweep = useRef(new Animated.Value(0)).current;     // 0..1 para mover la línea
-  const breath = useRef(new Animated.Value(0)).current;    // 0..1 para scale
+  const sweep = useRef(new Animated.Value(0)).current; // 0..1 para mover la línea
+  const breath = useRef(new Animated.Value(0)).current; // 0..1 para scale
   const cornersPulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -93,7 +87,7 @@ export default function QrScannerButton({
   // Derivados
   const scanTranslateY = sweep.interpolate({
     inputRange: [0, 1],
-    outputRange: [-(size / 2) + 10, (size / 2) - 10], // recorre casi todo el alto
+    outputRange: [-(size / 2) + 10, size / 2 - 10], // recorre casi todo el alto
   });
 
   const plateScale = breath.interpolate({
@@ -123,34 +117,70 @@ export default function QrScannerButton({
       {/* Contenedor relativo con tamaño fijo */}
       <View style={{ position: "relative", width: size, height: size }}>
         {/* Corners con pulso */}
-        <Animated.View style={[styles.corner, {
-          opacity: cornerOpacity,
-          top: -bw / 2 - offset, left: -bw / 2 - offset,
-          width: corner, height: corner,
-          borderTopLeftRadius: radius,
-          borderRightWidth: 0, borderBottomWidth: 0, borderWidth: bw,
-        }]} />
-        <Animated.View style={[styles.corner, {
-          opacity: cornerOpacity,
-          top: -bw / 2 - offset, right: -bw / 2 - offset,
-          width: corner, height: corner,
-          borderTopRightRadius: radius,
-          borderLeftWidth: 0, borderBottomWidth: 0, borderWidth: bw,
-        }]} />
-        <Animated.View style={[styles.corner, {
-          opacity: cornerOpacity,
-          bottom: -bw / 2 - offset, left: -bw / 2 - offset,
-          width: corner, height: corner,
-          borderBottomLeftRadius: radius,
-          borderRightWidth: 0, borderTopWidth: 0, borderWidth: bw,
-        }]} />
-        <Animated.View style={[styles.corner, {
-          opacity: cornerOpacity,
-          bottom: -bw / 2 - offset, right: -bw / 2 - offset,
-          width: corner, height: corner,
-          borderBottomRightRadius: radius,
-          borderLeftWidth: 0, borderTopWidth: 0, borderWidth: bw,
-        }]} />
+        <Animated.View
+          style={[
+            styles.corner,
+            {
+              opacity: cornerOpacity,
+              top: -bw / 2 - offset,
+              left: -bw / 2 - offset,
+              width: corner,
+              height: corner,
+              borderTopLeftRadius: radius,
+              borderRightWidth: 0,
+              borderBottomWidth: 0,
+              borderWidth: bw,
+            },
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.corner,
+            {
+              opacity: cornerOpacity,
+              top: -bw / 2 - offset,
+              right: -bw / 2 - offset,
+              width: corner,
+              height: corner,
+              borderTopRightRadius: radius,
+              borderLeftWidth: 0,
+              borderBottomWidth: 0,
+              borderWidth: bw,
+            },
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.corner,
+            {
+              opacity: cornerOpacity,
+              bottom: -bw / 2 - offset,
+              left: -bw / 2 - offset,
+              width: corner,
+              height: corner,
+              borderBottomLeftRadius: radius,
+              borderRightWidth: 0,
+              borderTopWidth: 0,
+              borderWidth: bw,
+            },
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.corner,
+            {
+              opacity: cornerOpacity,
+              bottom: -bw / 2 - offset,
+              right: -bw / 2 - offset,
+              width: corner,
+              height: corner,
+              borderBottomRightRadius: radius,
+              borderLeftWidth: 0,
+              borderTopWidth: 0,
+              borderWidth: bw,
+            },
+          ]}
+        />
 
         {/* Placa con “breathing” */}
         <Animated.View

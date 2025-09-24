@@ -7,14 +7,8 @@ import { useResponsive } from "@/hooks/useResponsive";
 import { colors } from "@/theme/tokens";
 import type { AuthUser } from "@/types";
 import NetInfo from "@react-native-community/netinfo";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { Alert, Image, Platform, StyleSheet, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Image, StyleSheet, View } from "react-native";
 import type { QrPayload } from "../auth/qrTypes";
 import { isQrPayload } from "../auth/qrTypes";
 
@@ -28,12 +22,12 @@ type Props = {
   onSuccess?: (user: AuthUser) => void;
 };
 
-export default function QrLoginOnboarding({
+const QrLoginOnboarding = ({
   endpoint = "/auth/qr/login",
   baseUrl,
   autoSync = true,
   onSuccess,
-}: Props) {
+}: Props) => {
   const { rem, scale } = useResponsive();
   const [modalOpen, setModalOpen] = useState(false);
   const [apiUrlInput, setApiUrlInput] = useState<string>("");
@@ -65,8 +59,7 @@ export default function QrLoginOnboarding({
     setStatusText("Verificando QR…");
     try {
       const obj = JSON.parse(raw);
-      if (!isQrPayload(obj))
-        throw new Error("El QR no contiene {sid, nonce, sig}.");
+      if (!isQrPayload(obj)) throw new Error("El QR no contiene {sid, nonce, sig}.");
       await doLogin(obj);
     } catch (e: any) {
       setStatusText(null);
@@ -87,10 +80,7 @@ export default function QrLoginOnboarding({
 
       const net = await NetInfo.fetch();
       if (!net.isConnected) {
-        Alert.alert(
-          "Sin conexión",
-          "Se requiere internet para el primer login."
-        );
+        Alert.alert("Sin conexión", "Se requiere internet para el primer login.");
         setStatusText(null);
         loginInFlightRef.current = false;
         return;
@@ -107,13 +97,8 @@ export default function QrLoginOnboarding({
           sig: p.sig,
         });
 
-        const {
-          access_token: accessToken,
-          refreshToken,
-          user,
-        } = resp.data ?? {};
-        if (!accessToken)
-          throw new Error("No se recibió accessToken del servidor.");
+        const { access_token: accessToken, refreshToken, user } = resp.data ?? {};
+        if (!accessToken) throw new Error("No se recibió accessToken del servidor.");
 
         await setTokens(accessToken, refreshToken);
 
@@ -138,8 +123,7 @@ export default function QrLoginOnboarding({
             // fetchAndSaveForms llama a /forms/tree y guarda en SQLite
             await fetchAndSaveForms(
               // opcional: puente a statusText como "loading"
-              (v) =>
-                setStatusText(v ? "Sincronizando formularios…" : "¡Listo!"),
+              (v) => setStatusText(v ? "Sincronizando formularios…" : "¡Listo!"),
               controller.signal
             );
           } catch (syncErr: any) {
@@ -159,9 +143,7 @@ export default function QrLoginOnboarding({
         onSuccess?.(u!); // navegar al Home
       } catch (e: any) {
         const msg =
-          e?.response?.data?.message ||
-          e?.message ||
-          "No se pudo completar el login por QR.";
+          e?.response?.data?.message || e?.message || "No se pudo completar el login por QR.";
         Alert.alert("Error de login", msg);
         console.error("[LOGIN] error:", e);
       } finally {
@@ -179,14 +161,10 @@ export default function QrLoginOnboarding({
     return () => syncAbortRef.current?.abort();
   }, []);
 
-
   // ---- UI
   return (
     <View style={[styles.container, { padding: scale(16) }]}>
-      <Body
-        weight="bold"
-        style={{ fontSize: rem * 3, textAlign: "center", marginTop: rem * 3 }}
-      >
+      <Body weight="bold" style={{ fontSize: rem * 3, textAlign: "center", marginTop: rem * 3 }}>
         SANTA ANA APP
       </Body>
 
@@ -257,8 +235,7 @@ export default function QrLoginOnboarding({
         }}
       >
         <Body style={{ textAlign: "center", fontSize: rem * 1.6 }}>
-          © 2019 Compañía Agrícola Industrial Santa Ana, S. A. - All Rights
-          Reserved
+          © 2019 Compañía Agrícola Industrial Santa Ana, S. A. - All Rights Reserved
         </Body>
       </View>
 
@@ -274,7 +251,9 @@ export default function QrLoginOnboarding({
       />
     </View>
   );
-}
+};
+
+export default QrLoginOnboarding;
 
 const styles = StyleSheet.create({
   container: { flex: 1, width: "100%" },

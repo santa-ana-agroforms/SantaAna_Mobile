@@ -1,17 +1,16 @@
-// ============================================
 // src/components/molecules/FormHeader.tsx
-// (PATCH) — añade flechas prev/next alrededor de los dots cuando variant="form"
-// ============================================
-import React from "react";
-import { View, Pressable } from "react-native";
-import { Title, Body } from "@/components/atoms/Typography";
 import IconButton from "@/components/atoms/IconButton";
 import PaginationDots from "@/components/atoms/PaginationDots";
 import StatusDot from "@/components/atoms/StatusDot";
 import TimestampText from "@/components/atoms/TimestampText";
-import { useResponsive } from "@/hooks/useResponsive";
+import { Body, Title } from "@/components/atoms/Typography";
+import { colors } from "@/theme/tokens";
+import React, { memo, useMemo } from "react";
+import { Pressable, View, useWindowDimensions } from "react-native";
 
 type VariantH = "categories" | "groups" | "form";
+
+type Frame = { width: number; height: number };
 
 type Props = {
   title: string;
@@ -23,9 +22,16 @@ type Props = {
   variant: VariantH;
   onPrevPage?: () => void; // sólo form
   onNextPage?: () => void; // sólo form
+  /**
+   * Usa el referenceFrame que te da PageScaffold.
+   * Si no lo pasas, se usará useWindowDimensions() como respaldo.
+   */
+  frame?: Frame;
 };
 
-export default function FormHeader({
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+const FormHeader: React.FC<Props> = ({
   title,
   page,
   totalPages,
@@ -35,17 +41,62 @@ export default function FormHeader({
   variant,
   onPrevPage,
   onNextPage,
-}: Props) {
-  const { gutter, rem } = useResponsive();
+  frame,
+}) => {
+  // Fallback seguro si no recibimos frame
+  const { width: ww, height: hh } = useWindowDimensions();
+  const baseFrame = frame ?? { width: ww, height: hh };
 
-  const Arrow = ({ label, onPress }: { label: string; onPress?: () => void }) => (
+  // Escalas/espaciados derivados del frame (lado menor para tipografía/íconos)
+  const {
+    padX,
+    padTop,
+    // gapUnderHeader,
+    rowGap,
+    titleSize,
+    titleSizeCategories,
+    arrowSize,
+    arrowFontSize,
+    dotsGap,
+    dotsShiftUp,
+  } = useMemo(() => {
+    const minSide = Math.min(baseFrame.width, baseFrame.height);
+
+    const _padX = clamp(baseFrame.width * 0.04, 12, 24); // padding horizontal aprox 4% (12–24)
+    const _padTop = clamp(baseFrame.height * 0, 8, 24); // padding top aprox 2% (8–24)
+    const _gapUnderHeader = clamp(baseFrame.height * 0.012, 8, 16);
+
+    const _rowGap = clamp(baseFrame.width * 0.03, 8, 16); // gap fila superior (atrás/título)
+    const _titleSize = clamp(minSide * 0.07, 16, 28); // título normal
+    const _titleSizeCategories = clamp(minSide * 0.08, 18, 34); // título en "categories"
+
+    const _arrowSize = clamp(minSide * 0.06, 24, 40); // círculo flechas
+    const _arrowFontSize = clamp(_arrowSize * 0.8, 14, 32); // símbolo ‹ ›
+    const _dotsGap = clamp(minSide * 0.012, 6, 12); // separación entre flecha–dots–flecha
+    const _dotsShiftUp = -clamp(minSide * 0.02, 6, 16); // desplazar dots hacia arriba
+
+    return {
+      padX: _padX,
+      padTop: _padTop,
+      gapUnderHeader: _gapUnderHeader,
+      rowGap: _rowGap,
+      titleSize: _titleSize,
+      titleSizeCategories: _titleSizeCategories,
+      arrowSize: _arrowSize,
+      arrowFontSize: _arrowFontSize,
+      dotsGap: _dotsGap,
+      dotsShiftUp: _dotsShiftUp,
+    };
+  }, [baseFrame.height, baseFrame.width]);
+
+  const Arrow: React.FC<{ label: string; onPress?: () => void }> = ({ label, onPress }) => (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       disabled={!onPress}
       style={{
-        height: rem * 1.5,
-        width: rem * 1.5,
+        height: arrowSize,
+        width: arrowSize,
         borderRadius: 999,
         alignItems: "center",
         justifyContent: "center",
@@ -53,58 +104,109 @@ export default function FormHeader({
         opacity: onPress ? 1 : 0.6,
       }}
     >
-      <Body style={{ fontSize: rem * 1.5, color: "white", lineHeight: rem * 1.5, marginTop: -rem * 0.1 }}>{label}</Body>
+      <Body
+        style={{
+          fontSize: arrowFontSize,
+          color: "white",
+          lineHeight: arrowFontSize,
+          marginTop: -arrowFontSize * 0.08,
+        }}
+      >
+        {label}
+      </Body>
     </Pressable>
   );
 
   return (
-    <View style={{ gap: gutter * 0.75 }}>
-      {/* fila superior */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        {variant !== "categories" && (
-          <IconButton
-            accessibilityLabel="Atrás"
-            onPress={onBack}
-            iconSource={require("../../../assets/images/return.png")}
+    <View style={{ paddingHorizontal: padX, paddingTop: padTop }}>
+      <View style={{ gap: rowGap * 0.5 }}>
+        {/* fila superior */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: rowGap }}>
+          {variant !== "categories" && (
+            <IconButton
+              accessibilityLabel="Atrás"
+              onPress={onBack}
+              iconSource={require("../../../assets/images/return.png")}
+            />
+          )}
+          <Title
+            style={{
+              flex: 1,
+              fontSize: variant === "categories" ? titleSizeCategories : titleSize,
+            }}
+          >
+            {title}
+          </Title>
+        </View>
+
+        {/* dots + page (solo form) */}
+        {variant === "form" ? (
+          <View
+            style={{
+              alignItems: "center",
+              gap: dotsGap,
+              marginTop: dotsShiftUp,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: dotsGap,
+              }}
+            >
+              <Arrow label="‹" onPress={onPrevPage} />
+              <PaginationDots
+                total={totalPages}
+                activeIndex={Math.max(0, Math.min(totalPages - 1, page - 1))}
+              />
+              <Arrow label="›" onPress={onNextPage} />
+            </View>
+            <Body color="secondary" size="xs">
+              Página {page} de {totalPages}
+            </Body>
+          </View>
+        ) : null}
+
+        {/* separador (no categories) */}
+        {variant !== "categories" ? (
+          <View
+            style={{
+              height: hh * 0.001,
+              backgroundColor: colors.textPrimary,
+              opacity: 1,
+              marginVertical: rowGap * 0.5,
+            }}
           />
-        )}
-        <Title style={{ flex: 1, fontSize: variant === "categories" ? rem * 3 : rem * 2 }}>
-          {title}
-        </Title>
-      </View>
+        ) : null}
 
-      {/* dots + page */}
-      {variant === "form" ? (
-        <View style={{ alignItems: "center", gap: 8, marginTop: rem * -1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Arrow label="‹" onPress={onPrevPage} />
-            <PaginationDots total={totalPages} activeIndex={Math.max(0, Math.min(totalPages - 1, page - 1))} />
-            <Arrow label="›" onPress={onNextPage} />
+        {/* estado */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: dotsGap }}>
+          <View style={{ flex: 1 }}>
+            <TimestampText date={new Date()} />
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: dotsGap * 0.75,
+              }}
+            >
+              <Body color="secondary" size="sm">
+                {connected ? "Conectado" : "Sin conexión"}
+              </Body>
+              <StatusDot status={connected ? "online" : "offline"} />
+            </View>
           </View>
-          <Body color="secondary">Página {page} de {totalPages}</Body>
+          <IconButton
+            accessibilityLabel="Sincronizar"
+            onPress={onRefresh}
+            iconSource={require("../../../assets/images/sync.png")}
+            frame={frame}
+          />
         </View>
-      ) : null}
-
-      {/* separador */}
-      {variant !== "categories" && (
-        <View style={{ height: 2, backgroundColor: "#000000ff", opacity: 0.7 }} />
-      )}
-
-      {/* estado */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <View style={{ flex: 1 }}>
-          <TimestampText date={new Date()} />
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Body color="secondary">{connected ? "Conectado" : "Sin conexión"}</Body>
-            <StatusDot status={connected ? "online" : "offline"} />
-          </View>
-        </View>
-        <IconButton
-          accessibilityLabel="Sincronizar"
-          onPress={onRefresh}
-          iconSource={require("../../../assets/images/sync.png")}
-        />
       </View>
     </View>
   );
-}
+};
+
+export default memo(FormHeader);
