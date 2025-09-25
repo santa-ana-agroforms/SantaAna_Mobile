@@ -1,8 +1,6 @@
 // src/components/molecules/FieldSignature.tsx
 import Button from "@/components/atoms/Button";
-import SignaturePad, {
-  type SignaturePadHandle,
-} from "@/components/atoms/SignaturePad";
+import SignaturePad, { type SignaturePadHandle } from "@/components/atoms/SignaturePad";
 import { colors } from "@/theme/tokens";
 import React, { useRef, useState } from "react";
 import { Text, View } from "react-native";
@@ -13,18 +11,14 @@ type Props = {
   referenceFrame: Frame;
   contentFrame: Frame;
   onChange?: (data: { strokes: any[]; image?: string }) => void;
+  initialLocked?: boolean;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-const FieldSignature: React.FC<Props> = ({
-  referenceFrame,
-  contentFrame,
-  onChange,
-}) => {
+const FieldSignature: React.FC<Props> = ({ referenceFrame, onChange, initialLocked = true }) => {
   const ref = useRef<SignaturePadHandle>(null);
-  const [locked, setLocked] = useState(false);
+  const [locked, setLocked] = useState(initialLocked);
   const [toast, setToast] = useState<{
     text: string;
     kind: "ok" | "err";
@@ -56,12 +50,12 @@ const FieldSignature: React.FC<Props> = ({
   };
 
   return (
-    <View style={{ width: contentFrame.width }}>
+    <View style={{ width: "100%" }}>
       <View style={{ position: "relative" }}>
         {/* Lienzo */}
         <SignaturePad
           ref={ref}
-          width={contentFrame.width}
+          width={"100%"}
           height={height}
           strokeColor={colors.textPrimary}
           strokeWidth={2.5}
@@ -85,13 +79,8 @@ const FieldSignature: React.FC<Props> = ({
               style={{
                 alignSelf: "center",
                 backgroundColor:
-                  toast.kind === "ok"
-                    ? "rgba(0,128,0,0.12)"
-                    : "rgba(192,57,43,0.12)",
-                borderColor:
-                  toast.kind === "ok"
-                    ? "rgba(0,128,0,0.28)"
-                    : "rgba(192,57,43,0.28)",
+                  toast.kind === "ok" ? "rgba(0,128,0,0.12)" : "rgba(192,57,43,0.12)",
+                borderColor: toast.kind === "ok" ? "rgba(0,128,0,0.28)" : "rgba(192,57,43,0.28)",
                 borderWidth: 1,
                 paddingHorizontal: toastPadH,
                 paddingVertical: toastPadV,
@@ -101,8 +90,7 @@ const FieldSignature: React.FC<Props> = ({
             >
               <Text
                 style={{
-                  color:
-                    toast.kind === "ok" ? colors.textPrimary : colors.danger600,
+                  color: toast.kind === "ok" ? colors.textPrimary : colors.danger600,
                   fontSize: clamp(minSide * 0.038, 12, 16),
                 }}
               >
@@ -112,18 +100,11 @@ const FieldSignature: React.FC<Props> = ({
           ) : null}
 
           {/* Toolbar (derecha) */}
-          <View
-            style={{ alignSelf: "flex-end", flexDirection: "row", gap: tbGap }}
-          >
+          <View style={{ alignSelf: "flex-end", flexDirection: "row", gap: tbGap }}>
             {!locked ? (
               <Button title="Confirmar" size="sm" onPress={handleConfirm} />
             ) : (
-              <Button
-                title="Editar"
-                size="sm"
-                variant="ghost"
-                onPress={() => setLocked(false)}
-              />
+              <Button title="Editar" size="sm" variant="ghost" onPress={() => setLocked(false)} />
             )}
           </View>
         </View>
@@ -139,18 +120,8 @@ const FieldSignature: React.FC<Props> = ({
             marginTop: pad * 0.6,
           }}
         >
-          <Button
-            title="Limpiar"
-            size="sm"
-            variant="ghost"
-            onPress={() => ref.current?.clear()}
-          />
-          <Button
-            title="Deshacer"
-            size="sm"
-            variant="ghost"
-            onPress={() => ref.current?.undo()}
-          />
+          <Button title="Limpiar" size="sm" variant="ghost" onPress={() => ref.current?.clear()} />
+          <Button title="Deshacer" size="sm" variant="ghost" onPress={() => ref.current?.undo()} />
         </View>
       )}
     </View>

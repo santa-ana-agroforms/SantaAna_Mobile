@@ -35,7 +35,7 @@ export type SignaturePadHandle = {
 };
 
 type Props = {
-  width: number;
+  width: string | number;
   height: number;
   strokeColor?: string;
   strokeWidth?: number;
@@ -150,7 +150,7 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(
           result,
           // @ts-expect-error view-shot acepta undefined
           backgroundColor,
-          width: Math.round(width * scale),
+          width: Math.round(typeof width === "number" ? width : 1.5 * scale),
           height: Math.round(height * scale),
         });
         return uri;
@@ -164,7 +164,7 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(
         style={[
           styles.container,
           {
-            width,
+            width: "100%",
             height,
             backgroundColor: canvasBackground,
           },
