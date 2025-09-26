@@ -2,7 +2,7 @@
 import Button from "@/components/atoms/Button";
 import { Body } from "@/components/atoms/Typography";
 import { colors } from "@/theme/tokens";
-import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, Modal, StyleSheet, View } from "react-native";
@@ -14,7 +14,6 @@ type Props = {
   onClose: () => void;
   onQr: (data: string) => void;
   statusText?: string | null;
-  /** Base de escala (usa el lado menor y el alto/ancho para máscara y paddings) */
   referenceFrame: Frame;
 };
 
@@ -134,22 +133,50 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
     })();
   }, [visible, permission?.granted, requestPermission]);
 
-  // ===== Escaneo (debounce + háptica) =====
+  // ===== Escaneo (API nueva: codeScanner) =====
+  // const handleCodes = useCallback(
+  //   (codes: { value?: string }[]) => {
+  //     if (!armed) return;
+  //     const now = Date.now();
+  //     if (now - lastScanAtRef.current < 1200) return;
+  //     lastScanAtRef.current = now;
+
+  //     const value = codes?.[0]?.value ?? "";
+  //     if (!value) return;
+
+  //     setArmed(false);
+  //     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).finally(() => onQr(value));
+  //     setTimeout(() => setArmed(true), 1800);
+  //   },
+  //   [armed, onQr]
+  // );
+
+  // // const codeScanner = useMemo(
+  // //   () => ({
+  // //     codeTypes: ["qr"] as const,
+  // //     onCodeScanned: handleCodes,
+  // //   }),
+  // //   [handleCodes]
+  // // );
+
+  const maskColor = `rgba(0,0,0,${maskSideAlpha})`;
+
   const handleScan = useCallback(
-    (ev: BarcodeScanningResult) => {
+    (ev: { data?: string }) => {
       if (!armed) return;
       const now = Date.now();
       if (now - lastScanAtRef.current < 1200) return;
       lastScanAtRef.current = now;
+
+      const value = ev?.data ?? "";
+      if (!value) return;
+
       setArmed(false);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).finally(() => onQr(ev.data ?? ""));
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).finally(() => onQr(value));
       setTimeout(() => setArmed(true), 1800);
     },
     [armed, onQr]
   );
-
-  const maskColor = `rgba(0,0,0,${maskSideAlpha})`;
-
   return (
     <Modal
       visible={visible}
@@ -164,8 +191,8 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
               style={StyleSheet.absoluteFill}
               facing="back"
               enableTorch={torch}
-              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
               onBarcodeScanned={handleScan}
+              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
             />
 
             {/* Overlay absoluto */}
@@ -176,11 +203,9 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
               ]}
               pointerEvents="box-none"
             >
-              {/* === 1) MASK dinámico (usa referenceFrame) === */}
+              {/* MASK */}
               <View style={[StyleSheet.absoluteFill]} pointerEvents="none">
-                {/* TOP */}
                 <View style={{ height: topMaskH, backgroundColor: maskColor }} />
-                {/* MIDDLE con foco */}
                 <View style={{ height: midMaskH, flexDirection: "row" }}>
                   <View style={{ width: sideMaskW, backgroundColor: maskColor }} />
                   <View
@@ -210,11 +235,10 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
                   </View>
                   <View style={{ width: sideMaskW, backgroundColor: maskColor }} />
                 </View>
-                {/* BOTTOM */}
                 <View style={{ flex: 1, backgroundColor: maskColor }} />
               </View>
 
-              {/* === 2) Elementos nítidos por encima === */}
+              {/* UI superior */}
               <Body
                 color="inverse"
                 weight="bold"
@@ -247,7 +271,7 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
                 </Body>
               </View>
 
-              {/* Zona inferior */}
+              {/* UI inferior */}
               <View
                 style={[
                   StyleSheet.absoluteFill,
@@ -255,7 +279,6 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
                 ]}
                 pointerEvents="box-none"
               >
-                {/* Estado */}
                 <View
                   style={{
                     backgroundColor: "rgba(0,0,0,0.65)",
@@ -286,7 +309,6 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
                   )}
                 </View>
 
-                {/* Botones */}
                 <View
                   style={{
                     width: "100%",
@@ -315,7 +337,6 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
             </View>
           </>
         ) : (
-          // Sin permisos
           <View
             style={{
               flex: 1,

@@ -75,7 +75,7 @@ const FieldRenderer: React.FC<Props> = ({ campo, referenceFrame, contentFrame, o
           onChangeValue?.(campo.nombre_interno, v);
           return v;
         }
-        return prev; // no cambies estado si no cambia el valor
+        return prev;
       });
     },
     [onChangeValue, campo.nombre_interno]
@@ -288,7 +288,6 @@ const FieldRenderer: React.FC<Props> = ({ campo, referenceFrame, contentFrame, o
 
         {groupFields.length ? (
           <RepeatableGroup
-            // title={groupData?.name || groupData?.nombre || label}
             fieldsTemplate={groupFields}
             entries={entries}
             onChange={(next) => setAndEmit(next)}

@@ -4,7 +4,7 @@
 // ============================================
 import { Body } from "@/components/atoms/Typography";
 import React, { useMemo } from "react";
-import { Platform, ScrollView, View } from "react-native";
+import { View } from "react-native";
 import FieldRenderer from "./FieldRenderer";
 
 export type Campo = {
@@ -52,25 +52,17 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
   );
 
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
-  const padX = clamp(contentFrame.width * 0.04, 12, 24);
+  // const padX = clamp(contentFrame.width * 0.04, 12, 24);
   const padBottom = clamp(minSide * 0.02, 12, 24);
   const headerGap = clamp(minSide * 0.012, 8, 16);
   const fieldGap = clamp(minSide * 0.016, 10, 22);
-
+  console.log(page);
   return (
-    <ScrollView
-      showsVerticalScrollIndicator
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-      contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "always" : "automatic"}
-      contentContainerStyle={{
-        paddingHorizontal: padX,
-        paddingBottom: padBottom,
-      }}
-    >
+    <View style={{ paddingRight: 0, paddingBottom: padBottom * 0 }}>
       <Body weight="bold" size="xl">
         {page?.nombre}
       </Body>
+
       {page?.descripcion ? (
         <Body frame={referenceFrame} color="secondary" size="sm">
           {page.descripcion}
@@ -79,7 +71,6 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
 
       <View style={{ height: headerGap }} />
 
-      {/* Campos */}
       {fields.map((f) => (
         <View key={f.id_campo} style={{ marginBottom: fieldGap }}>
           <FieldRenderer
@@ -91,8 +82,8 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
         </View>
       ))}
 
-      <View style={{ height: padBottom }} />
-    </ScrollView>
+      <View style={{ height: padBottom * 0 }} />
+    </View>
   );
 };
 

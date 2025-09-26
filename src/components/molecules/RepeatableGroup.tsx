@@ -1,12 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { TouchableOpacity, View } from "react-native";
-import Animated, {
-  FadeIn,
-  FadeOut,
-  LinearTransition,
-  SlideInDown,
-  SlideOutUp,
-} from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
 import { Body } from "@/components/atoms/Typography";
 import { colors } from "@/theme/tokens";
@@ -34,7 +28,7 @@ type Props = {
   onChange: (next: GroupEntry[]) => void;
   referenceFrame: Frame;
   contentFrame: Frame;
-  //   getSummary?: (entry: GroupEntry, fields: CampoLite[]) => string;
+  // getSummary?: (entry: GroupEntry, fields: CampoLite[]) => string;
   children: (args: {
     campo: any;
     entry: GroupEntry;
@@ -67,7 +61,7 @@ const RepeatableGroup: React.FC<Props> = ({
   entries,
   onChange,
   referenceFrame,
-  //   getSummary,
+  // getSummary,
   children,
 }) => {
   const layoutAnim = LinearTransition.springify().damping(18);
@@ -83,17 +77,14 @@ const RepeatableGroup: React.FC<Props> = ({
   const addCardPadH = clamp(minSide * 0.02, 14, 22);
   const addCardRadius = clamp(minSide * 0.018, 8, 12);
   const addCardBorder = clamp(minSide * 0.004, 1, 2);
+
   const iconFrame = { width: referenceFrame.height * 0.55, height: referenceFrame.height * 0.55 };
+  const iconSize = clamp(minSide * 0.05, 20, 40);
 
-  const iconSize = clamp(minSide * 0.05, 20, 40); // tamaño de los icon buttons
-
-  // contador simple (sin uuid)
   const [counter, setCounter] = useState(0);
-
-  // colapsado por entrada
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  // 1) Si no hay entradas: crea 1 por defecto (expandida)
+  // Si no hay entradas, crea una
   useEffect(() => {
     if (entries.length === 0) {
       const first = { id: String(counter), values: {} };
@@ -104,7 +95,7 @@ const RepeatableGroup: React.FC<Props> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries.length]);
 
-  // Limpia colapsados cuando se eliminan entradas
+  // Limpia colapsados de entradas removidas
   useEffect(() => {
     setCollapsed((prev) => {
       const next: Record<string, boolean> = {};
@@ -161,49 +152,44 @@ const RepeatableGroup: React.FC<Props> = ({
     [fieldsTemplate]
   );
 
-  //   const defaultSummary = useCallback(
-  //     (entry: GroupEntry) => {
-  //       for (const c of templateSorted) {
-  //         const v = entry.values[c.nombre_interno];
-  //         if (v === null || v === undefined) continue;
-  //         if (typeof v === "string" && v.trim() === "") continue;
-  //         return String(v);
-  //       }
-  //       return entry.id;
-  //     },
-  //     [templateSorted]
-  //   );
+  // const defaultSummary = useCallback(
+  //   (entry: GroupEntry) => {
+  //     for (const c of templateSorted) {
+  //       const v = entry.values[c.nombre_interno];
+  //       if (v === null || v === undefined) continue;
+  //       if (typeof v === "string" && v.trim() === "") continue;
+  //       return String(v);
+  //     }
+  //     return `#${entry.id}`;
+  //   },
+  //   [templateSorted]
+  // );
 
-  //   const getSummaryText = useCallback(
-  //     (entry: GroupEntry) => (getSummary ? getSummary(entry, templateSorted) : defaultSummary(entry)),
-  //     [defaultSummary, getSummary, templateSorted]
-  //   );
-
-  // Tarjeta “Agregar otro” con animación sutil
   const AddCard = (
-    <Animated.View
-      entering={FadeIn.duration(150)}
-      layout={layoutAnim}
-      style={{
-        borderWidth: addCardBorder,
-        borderStyle: "dashed",
-        borderColor: colors.border,
-        borderRadius: addCardRadius,
-        paddingVertical: addCardPadV,
-        paddingHorizontal: addCardPadH,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "#FAFAFA",
-      }}
-    >
-      <TouchableOpacity onPress={addEntry} accessibilityRole="button">
-        <Body weight="bold" style={{ opacity: 0.9, alignSelf: "center" }}>
-          + Agregar otro
-        </Body>
-        <Body size="xs" color="secondary">
-          Añade una nueva instancia de este grupo
-        </Body>
-      </TouchableOpacity>
+    <Animated.View layout={layoutAnim} pointerEvents="box-none">
+      <Animated.View
+        entering={FadeIn.duration(150)}
+        style={{
+          borderWidth: addCardBorder,
+          borderStyle: "dashed",
+          borderColor: colors.border,
+          borderRadius: addCardRadius,
+          paddingVertical: addCardPadV,
+          paddingHorizontal: addCardPadH,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#FAFAFA",
+        }}
+      >
+        <TouchableOpacity onPress={addEntry} accessibilityRole="button">
+          <Body weight="bold" style={{ opacity: 0.9, alignSelf: "center" }}>
+            + Agregar otro
+          </Body>
+          <Body size="xs" color="secondary">
+            Añade una nueva instancia de este grupo
+          </Body>
+        </TouchableOpacity>
+      </Animated.View>
     </Animated.View>
   );
 
@@ -215,148 +201,110 @@ const RepeatableGroup: React.FC<Props> = ({
         </Body>
       ) : null}
 
-      {/* Entradas */}
       {entries.map((entry, idx) => {
         const collapsedNow = !!collapsed[entry.id];
         const canDelete = idx !== 0;
-        if (collapsedNow) {
-          //   const summary = getSummaryText(entry);
-          return (
+
+        return (
+          <Animated.View key={entry.id} layout={layoutAnim} pointerEvents="box-none">
             <Animated.View
-              key={entry.id}
-              entering={SlideInDown.springify().damping(18)}
-              exiting={SlideOutUp.springify().damping(18)}
               layout={layoutAnim}
+              entering={FadeIn.duration(120)}
+              exiting={FadeOut.duration(100)}
+              collapsable={false}
               style={{
                 borderWidth: 1,
                 borderColor: colors.border,
                 borderRadius: radius,
                 backgroundColor: colors.neutral0,
-                paddingHorizontal: boxPad,
-                paddingVertical: clamp(minSide * 0.012, 10, 16),
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
+                padding: boxPad,
+                marginTop: idx === 0 ? gap * 0.5 : 0,
               }}
             >
-              <TouchableOpacity
-                onPress={() => setEntryCollapsed(entry.id, false)}
-                style={{ flex: 1, paddingRight: smallGap }}
-                accessibilityRole="button"
+              {/* Header */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+                pointerEvents="box-none"
               >
-                <Body weight="bold">
-                  #{idx + 1} — {"versión"}
-                </Body>
-                <Body color="secondary" size="xs">
-                  (tocar para editar)
-                </Body>
-              </TouchableOpacity>
-
-              <View style={{ flexDirection: "row", gap: smallGap }}>
-                <IconButton
-                  accessibilityLabel="Editar"
-                  onPress={() => setEntryCollapsed(entry.id, false)}
-                  iconSource={require("../../../assets/images/lapiz.png")}
-                  frame={iconFrame}
-                  iconSize={iconSize}
-                  bgColor={colors.textTertiary}
-                  showShadow={false}
-                />
-                {canDelete ? (
+                <Body weight="bold">#{idx + 1} - versión</Body>
+                <View style={{ flexDirection: "row", gap: smallGap, alignItems: "center" }}>
+                  {canDelete ? (
+                    <IconButton
+                      accessibilityLabel="Eliminar"
+                      onPress={() => removeEntry(entry.id)}
+                      iconSource={require("../../../assets/images/cerca.png")}
+                      frame={iconFrame}
+                      iconSize={iconSize}
+                      bgColor={colors.danger600}
+                      showShadow={false}
+                    />
+                  ) : null}
                   <IconButton
-                    accessibilityLabel="Eliminar"
-                    onPress={() => removeEntry(entry.id)}
-                    iconSource={require("../../../assets/images/cerca.png")}
-                    frame={iconFrame}
-                    showShadow={false}
-                    bgColor={colors.danger600}
-                    iconSize={iconSize}
-                  />
-                ) : null}
-              </View>
-            </Animated.View>
-          );
-        }
-
-        // Expandido
-        return (
-          <Animated.View
-            key={entry.id}
-            entering={FadeIn.duration(150)}
-            exiting={FadeOut.duration(140)}
-            layout={layoutAnim}
-            style={{
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: radius,
-              backgroundColor: colors.neutral0,
-              padding: boxPad,
-              gap: smallGap,
-            }}
-          >
-            {/* Cabecera */}
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <Body weight="bold">#{idx + 1} - versión</Body>
-              <View style={{ flexDirection: "row", gap: smallGap, alignItems: "center" }}>
-                {canDelete ? (
-                  <IconButton
-                    accessibilityLabel="Eliminar"
-                    onPress={() => removeEntry(entry.id)}
-                    iconSource={require("../../../assets/images/cerca.png")}
+                    accessibilityLabel={collapsedNow ? "Editar" : "Completar"}
+                    onPress={() => setEntryCollapsed(entry.id, !collapsedNow)}
+                    iconSource={
+                      collapsedNow
+                        ? require("../../../assets/images/lapiz.png")
+                        : require("../../../assets/images/marca-de-verificacion.png")
+                    }
                     frame={iconFrame}
                     iconSize={iconSize}
-                    bgColor={colors.danger600}
+                    bgColor={collapsedNow ? colors.textTertiary : colors.primary600}
                     showShadow={false}
                   />
-                ) : null}
-                <IconButton
-                  accessibilityLabel="Completar"
-                  onPress={() => setEntryCollapsed(entry.id, true)}
-                  iconSource={require("../../../assets/images/marca-de-verificacion.png")}
-                  frame={iconFrame}
-                  iconSize={iconSize}
-                  bgColor={colors.primary600}
-                  showShadow={false}
-                />
+                </View>
               </View>
-            </View>
 
-            {/* Campos */}
-            <Animated.View layout={layoutAnim} style={{ gap: smallGap }}>
-              {templateSorted.map((campo) => (
-                <Animated.View key={campo.id_campo} layout={layoutAnim}>
-                  {children({
-                    campo,
-                    entry,
-                    onChange: (v) => updateField(entry.id, campo.nombre_interno, v),
-                  })}
-                </Animated.View>
-              ))}
+              {/* Contenido (solo uno vive a la vez). 
+                  El que SALE se marca pointerEvents="none" con el prop local */}
+              <Animated.View layout={layoutAnim} style={{ gap: smallGap }} collapsable={false}>
+                {collapsedNow ? null : (
+                  <Animated.View
+                    key="fields"
+                    layout={layoutAnim}
+                    entering={FadeIn.duration(120)}
+                    exiting={FadeOut.duration(80)}
+                    pointerEvents="box-none"
+                    style={{ gap: smallGap }}
+                  >
+                    {templateSorted.map((campo) => (
+                      <Animated.View
+                        key={campo.id_campo}
+                        layout={layoutAnim}
+                        collapsable={false}
+                        pointerEvents="box-none"
+                      >
+                        {children({
+                          campo,
+                          entry,
+                          onChange: (v) => updateField(entry.id, campo.nombre_interno, v),
+                        })}
+                      </Animated.View>
+                    ))}
+                  </Animated.View>
+                )}
+              </Animated.View>
             </Animated.View>
           </Animated.View>
         );
       })}
 
-      {/* Agregar otro (tarjeta) */}
       {AddCard}
 
-      {/* Divisor final */}
-      <Animated.View
-        entering={FadeIn.duration(150)}
-        layout={layoutAnim}
-        style={{
-          height: dividerH,
-          backgroundColor: colors.textTertiary,
-          opacity: 0.9,
-          alignSelf: "stretch",
-        }}
-      />
+      <Animated.View layout={layoutAnim} pointerEvents="box-none">
+        <View
+          style={{
+            height: dividerH,
+            backgroundColor: colors.textTertiary,
+            opacity: 0.9,
+            alignSelf: "stretch",
+          }}
+        />
+      </Animated.View>
     </View>
   );
 };

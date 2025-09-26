@@ -10,6 +10,7 @@ import {
 import { Redirect, Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { enableFreeze, enableScreens } from "react-native-screens";
 
@@ -51,31 +52,33 @@ const RootLayout = () => {
   if (!loaded || checking) return null;
 
   return (
-    <SafeAreaProvider>
-      {/* Redirección declarativa */}
-      {hasToken === true && <Redirect href="/" />}
-      {hasToken === false && <Redirect href="/qr" />}
+    <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
+      <SafeAreaProvider>
+        {/* Redirección declarativa */}
+        {hasToken === true && <Redirect href="/" />}
+        {hasToken === false && <Redirect href="/qr" />}
 
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: "fade", // 👈 la más fluida en general
-          gestureEnabled: true,
-          fullScreenGestureEnabled: true,
-          statusBarAnimation: Platform.OS === "ios" ? "fade" : undefined,
-          contentStyle: { backgroundColor: "#F9F6EE" }, // evita flashes
-        }}
-      >
-        {/* Modal QR con animación suave vertical */}
-        <Stack.Screen
-          name="qr"
-          options={{
-            presentation: "modal",
-            animation: "fade_from_bottom",
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: "fade", // 👈 la más fluida en general
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            statusBarAnimation: Platform.OS === "ios" ? "fade" : undefined,
+            contentStyle: { backgroundColor: "#F9F6EE" }, // evita flashes
           }}
-        />
-      </Stack>
-    </SafeAreaProvider>
+        >
+          {/* Modal QR con animación suave vertical */}
+          <Stack.Screen
+            name="qr"
+            options={{
+              presentation: "modal",
+              animation: "fade_from_bottom",
+            }}
+          />
+        </Stack>
+      </SafeAreaProvider>
+    </KeyboardProvider>
   );
 };
 
