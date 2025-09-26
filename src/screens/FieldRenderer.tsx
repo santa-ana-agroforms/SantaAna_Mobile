@@ -7,6 +7,7 @@ import { Body } from "@/components/atoms/Typography";
 import DateTimeField from "@/components/molecules/DateTimeField";
 
 import FieldSignature from "@/components/molecules/FieldSignature";
+import { FormSession } from "@/forms/runtime/FormSession";
 import { colors } from "@/theme/tokens";
 import React, { useMemo, useState } from "react";
 import { View } from "react-native";
@@ -23,10 +24,10 @@ type Props = {
   contentFrame: Frame;
   /** (Opcional) callback para subir estado al store */
   onChangeValue?: (name: string, value: unknown) => void;
+  formSession: FormSession; // sesión del formulario (para guardar/leer valores)
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const FieldRenderer: React.FC<Props> = ({
   campo,
@@ -34,14 +35,19 @@ const FieldRenderer: React.FC<Props> = ({
   referenceFrame,
   contentFrame,
   onChangeValue,
+  formSession,
 }) => {
   const label = campo.etiqueta || campo.nombre_interno;
   const help = campo.ayuda;
 
-  // Estado local demo. En producción, elevar a un form store y usar onChangeValue.
+  // Estado local del widget (no inicializamos desde sesión para no afectar tu Boolean)
   const [value, setValue] = useState<any>(undefined);
+
+  // Escribir local + sesión + callback opcional
   const setAndEmit = (v: any) => {
     setValue(v);
+    // ⬇️ integración con la sesión (normaliza/valida/recalcula)
+    formSession.setFieldValue(campo.nombre_interno, v);
     onChangeValue?.(campo.nombre_interno, v);
   };
 
@@ -92,17 +98,14 @@ const FieldRenderer: React.FC<Props> = ({
   }, [referenceFrame]);
 
   const LabelBlock = (
-    <Label
-      frame={referenceFrame}
-      text={label}
-      required={campo.requerido}
-      help={help}
-    />
+    <Label frame={referenceFrame} text={label} required={campo.requerido} help={help} />
   );
 
-  const Box: React.FC<
-    React.PropsWithChildren<{ minH?: number; center?: boolean }>
-  > = ({ children, minH = dims.inputMinH, center = true }) => (
+  const Box: React.FC<React.PropsWithChildren<{ minH?: number; center?: boolean }>> = ({
+    children,
+    minH = dims.inputMinH,
+    center = true,
+  }) => (
     <View
       style={{
         minHeight: minH,
@@ -119,6 +122,8 @@ const FieldRenderer: React.FC<Props> = ({
       {children}
     </View>
   );
+
+  // --- Renderers por tipo/clase ---
 
   const renderText = () => (
     <Input
@@ -160,22 +165,14 @@ const FieldRenderer: React.FC<Props> = ({
     </>
   );
 
-  // dentro de FieldRenderer.tsx
-
-  // ⬇️ Sustituye el renderList anterior por este:
   const renderList = (items: any[]) => (
     <>
-      <Label
-        frame={referenceFrame}
-        text={label}
-        required={campo.requerido}
-        help={help}
-      />
+      <Label frame={referenceFrame} text={label} required={campo.requerido} help={help} />
       <DatasetSelect
         frame={referenceFrame}
         items={items} // <- estáticos, no CSV
         value={value}
-        onChange={(v) => setAndEmit(v)} // v: string | undefined
+        onChange={(v) => setAndEmit(v)} // v: string | number | undefined
         placeholder="Selecciona una opción…"
         allowDeselect // tocar la opción activa limpia
         showNoneOption // agrega “Ninguno” al inicio
@@ -196,12 +193,7 @@ const FieldRenderer: React.FC<Props> = ({
         showNoneOption={false}
       />
       {/* Info de la “fuente” (mock) */}
-      <Body
-        frame={referenceFrame}
-        color="secondary"
-        size="xs"
-        style={{ marginTop: 6 }}
-      >
+      <Body frame={referenceFrame} color="secondary" size="xs" style={{ marginTop: 6 }}>
         Fuente externa (CSV)
         {"\n"}archivo: {campo.config?.file || "—"}
         {"\n"}columna: {campo.config?.column || "—"}
@@ -221,18 +213,25 @@ const FieldRenderer: React.FC<Props> = ({
     />
   );
 
-  const renderCalc = () => (
-    <>
-      {LabelBlock}
-      <Box>
-        <Body frame={referenceFrame} color="secondary" size="sm">
-          Campo calculado: {campo.config?.operation || "—"}
-        </Body>
-      </Box>
-    </>
-  );
+  const renderCalc = () => {
+    // Mostrar el valor calculado desde la sesión (si no hay, mostramos la operación)
+    const calcValue = formSession.getFieldValue(campo.nombre_interno);
+    return (
+      <>
+        {LabelBlock}
+        <Box>
+          <Body frame={referenceFrame} color="secondary" size="sm">
+            {
+              calcValue ?? `(calculado) ${campo.config?.operation ?? "—"}`
+              /* Nota: si querés refresco inmediato aquí,
+                 luego podemos pasar un "tick" desde el padre para forzar rerender */
+            }
+          </Body>
+        </Box>
+      </>
+    );
+  };
 
-  // dentro de FieldRenderer
   const renderFirm = () => (
     <>
       {LabelBlock}
@@ -241,8 +240,8 @@ const FieldRenderer: React.FC<Props> = ({
         contentFrame={contentFrame}
         onChange={(payload: any) => {
           // payload: { strokes: any[]; image?: string }
-          // guarda la imagen (uri) si existe; si no, guarda los strokes
-          setAndEmit(payload.image ?? payload.strokes);
+          // guarda la imagen (uri/base64) si existe; si no, guarda los strokes
+          setAndEmit(payload?.image ?? payload?.strokes ?? null);
         }}
       />
     </>

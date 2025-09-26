@@ -8,14 +8,25 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { Redirect, Stack } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { enableFreeze, enableScreens } from "react-native-screens";
 
+import { useDrizzleStudio } from "expo-drizzle-studio-plugin";
+
+import * as SQLite from "expo-sqlite";
+
 // 👉 activa optimizaciones nativas (hacerlo fuera del componente)
 enableScreens(true);
 enableFreeze(true);
+
+const DrizzleStudioBinder: React.FC = () => {
+  if (!__DEV__) return null;
+  const db = useMemo(() => SQLite.openDatabaseSync("forms.db"), []);
+  useDrizzleStudio(db);
+  return null;
+};
 
 const RootLayout = () => {
   const [loaded] = useFonts({
@@ -52,6 +63,7 @@ const RootLayout = () => {
 
   return (
     <SafeAreaProvider>
+      <DrizzleStudioBinder />
       {/* Redirección declarativa */}
       {hasToken === true && <Redirect href="/" />}
       {hasToken === false && <Redirect href="/qr" />}

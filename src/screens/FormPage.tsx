@@ -3,6 +3,7 @@
 // Página vertical scrolleable que pinta cada campo con FieldRenderer
 // ============================================
 import { Body } from "@/components/atoms/Typography";
+import { FormSession } from "@/forms/runtime/FormSession";
 import React, { useMemo } from "react";
 import { Platform, ScrollView, View } from "react-native";
 import FieldRenderer from "./FieldRenderer";
@@ -40,24 +41,22 @@ type Props = {
   formName?: string;
   referenceFrame: Frame; // escala tipográfica/geométrica
   contentFrame: Frame; // ancho/alto útil del body
+  formSession: FormSession; // sesión del formulario (para guardar/leer valores)
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const FormPageView: React.FC<Props> = ({
   page,
   formName,
   referenceFrame,
   contentFrame,
+  formSession,
 }) => {
   // Ordena campos una sola vez
   const fields = useMemo(
-    () =>
-      [...(page?.campos || [])].sort(
-        (a, b) => (a.sequence ?? 0) - (b.sequence ?? 0),
-      ),
-    [page?.campos],
+    () => [...(page?.campos || [])].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)),
+    [page?.campos]
   );
 
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
@@ -71,9 +70,7 @@ const FormPageView: React.FC<Props> = ({
       showsVerticalScrollIndicator
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-      contentInsetAdjustmentBehavior={
-        Platform.OS === "ios" ? "always" : "automatic"
-      }
+      contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "always" : "automatic"}
       contentContainerStyle={{
         paddingHorizontal: padX,
         paddingBottom: padBottom,
@@ -98,6 +95,7 @@ const FormPageView: React.FC<Props> = ({
             formName={formName}
             referenceFrame={referenceFrame}
             contentFrame={contentFrame}
+            formSession={formSession}
           />
         </View>
       ))}

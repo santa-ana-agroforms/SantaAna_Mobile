@@ -32,6 +32,7 @@ type PageScaffoldProps = {
   totalPages?: number;
   onPrevPage?: () => void;
   onNextPage?: () => void;
+  canNext?: boolean;
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -45,6 +46,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
   totalPages = 1,
   onPrevPage,
   onNextPage,
+  canNext,
 }) => {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -112,7 +114,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
               }}
               variant={variant}
               onPrevPage={variant === "form" ? onPrevPage : undefined}
-              onNextPage={variant === "form" ? onNextPage : undefined}
+              onNextPage={variant === "form" && canNext !== false ? onNextPage : undefined}
             />
           </View>
         </View>

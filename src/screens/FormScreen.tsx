@@ -1,4 +1,5 @@
 // src/screens/FormScreen.tsx
+import { FormSession } from "@/forms/runtime/FormSession";
 import { colors } from "@/theme/tokens";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -20,6 +21,7 @@ type Props = {
   layoutFrame: Frame;
   page?: number;
   onPageChange?: (index: number) => void;
+  formSession: FormSession;
 };
 
 const FormScreen: React.FC<Props> = ({
@@ -29,6 +31,7 @@ const FormScreen: React.FC<Props> = ({
   layoutFrame,
   page,
   onPageChange,
+  formSession,
 }) => {
   const formId = form?.id_formulario;
   const rawPages = React.useMemo(() => form?.paginas ?? [], [form?.paginas]);
@@ -38,9 +41,7 @@ const FormScreen: React.FC<Props> = ({
   const [pagesVersion, setPagesVersion] = useState(0);
 
   useEffect(() => {
-    const sorted = rawPages
-      .slice()
-      .sort((a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0));
+    const sorted = rawPages.slice().sort((a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0));
     pagesRef.current = sorted;
     setPagesVersion((v) => v + 1);
   }, [formId, rawPages]);
@@ -92,10 +93,7 @@ const FormScreen: React.FC<Props> = ({
     });
   }, [isControlled, pagesCount, page]);
 
-  const getItemLayout = (
-    _: ArrayLike<Pagina> | null | undefined,
-    index: number,
-  ) => ({
+  const getItemLayout = (_: ArrayLike<Pagina> | null | undefined, index: number) => ({
     length: W,
     offset: W * index,
     index,
@@ -137,6 +135,7 @@ const FormScreen: React.FC<Props> = ({
         formName={form?.nombre}
         referenceFrame={referenceFrame}
         contentFrame={contentFrame}
+        formSession={formSession} // si quieres pasar la sesión, agrega a Props
         // cualquier prop adicional de página
       />
     </View>
