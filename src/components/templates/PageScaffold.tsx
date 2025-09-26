@@ -106,11 +106,9 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
 
         {/* BODY */}
         {variant === "form" ? (
-          // 👉 Contenedor con altura fija para que PagerView/children tengan espacio
           <View
             style={{
               height: layoutFrame.height,
-              // paddingHorizontal: padX,
               backgroundColor: colors.surface,
             }}
           >
@@ -118,7 +116,6 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
             {typeof children === "function" ? children(scaffoldDimensions) : children}
           </View>
         ) : (
-          // Otras variantes sí usan ScrollView
           <ScrollView
             contentContainerStyle={{ paddingHorizontal: padX }}
             keyboardShouldPersistTaps="handled"
