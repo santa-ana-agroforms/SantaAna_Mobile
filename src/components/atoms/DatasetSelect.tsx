@@ -34,23 +34,15 @@ type Props = {
   formatLabel?: (v: Primitive) => string;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-const DEMO_ITEMS: Primitive[] = [
-  "Manzanas",
-  "Bananas",
-  "Naranjas",
-  "Peras",
-  "Uvas",
-];
+const DEMO_ITEMS: Primitive[] = ["Manzanas", "Bananas", "Naranjas", "Peras", "Uvas"];
 
-const defaultLabel = (v: Primitive) =>
-  typeof v === "boolean" ? (v ? "Sí" : "No") : String(v);
+const defaultLabel = (v: Primitive) => (typeof v === "boolean" ? (v ? "Sí" : "No") : String(v));
 
 const normalize = (
   arr?: Item[],
-  fmt?: (v: Primitive) => string,
+  fmt?: (v: Primitive) => string
 ): { label: string; value: Primitive }[] => {
   const src = arr && arr.length ? arr : DEMO_ITEMS;
   const out: { label: string; value: Primitive }[] = [];
@@ -96,10 +88,7 @@ const DatasetSelect: React.FC<Props> = ({
   const baseFrame = frame ?? { width: ww, height: hh };
   const [open, setOpen] = useState(false);
 
-  const list = useMemo(
-    () => normalize(items, formatLabel),
-    [items, formatLabel],
-  );
+  const list = useMemo(() => normalize(items, formatLabel), [items, formatLabel]);
 
   const dims = useMemo(() => {
     const minSide = Math.min(baseFrame.width, baseFrame.height);
@@ -116,11 +105,7 @@ const DatasetSelect: React.FC<Props> = ({
     };
   }, [baseFrame.width, baseFrame.height]);
 
-  const borderColor = error
-    ? colors.danger600
-    : open
-      ? colors.primary600
-      : colors.border;
+  const borderColor = error ? colors.danger600 : open ? colors.primary600 : colors.border;
 
   const selected = list.find((it) => it.value === value);
 
@@ -200,16 +185,14 @@ const DatasetSelect: React.FC<Props> = ({
                 style={{
                   paddingVertical: dims.optionPadV,
                   paddingHorizontal: dims.optionPadH,
-                  backgroundColor:
-                    value == null ? "rgba(45,138,36,0.08)" : "transparent",
+                  backgroundColor: value == null ? "rgba(45,138,36,0.08)" : "transparent",
                 }}
               >
                 <Body
                   frame={baseFrame}
                   size="md"
                   style={{
-                    color:
-                      value == null ? colors.primary600 : colors.textPrimary,
+                    color: value == null ? colors.primary600 : colors.textPrimary,
                   }}
                 >
                   {noneLabel}
@@ -226,9 +209,7 @@ const DatasetSelect: React.FC<Props> = ({
                   style={{
                     paddingVertical: dims.optionPadV,
                     paddingHorizontal: dims.optionPadH,
-                    backgroundColor: active
-                      ? "rgba(45,138,36,0.08)"
-                      : "transparent",
+                    backgroundColor: active ? "rgba(45,138,36,0.08)" : "transparent",
                   }}
                 >
                   <Body

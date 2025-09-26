@@ -16,8 +16,7 @@ type BaseProps = TextProps & {
 type BodySize = "xs" | "sm" | "md" | "lg" | "xl";
 type BodyProps = BaseProps & { size?: BodySize };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const font = (weight: NonNullable<BaseProps["weight"]>) => {
   switch (weight) {
@@ -74,10 +73,7 @@ export const Title: React.FC<BaseProps> = ({
   return (
     <Text
       {...rest}
-      style={[
-        { fontSize, color: getTokenColor(color), fontFamily: font(weight) },
-        style,
-      ]}
+      style={[{ fontSize, color: getTokenColor(color), fontFamily: font(weight) }, style]}
     />
   );
 };
@@ -98,10 +94,7 @@ export const Body: React.FC<BodyProps> = ({
   return (
     <Text
       {...rest}
-      style={[
-        { fontSize, color: getTokenColor(color), fontFamily: font(weight) },
-        style,
-      ]}
+      style={[{ fontSize, color: getTokenColor(color), fontFamily: font(weight) }, style]}
     />
   );
 };
@@ -120,10 +113,7 @@ export const Caption: React.FC<BaseProps> = ({
   return (
     <Text
       {...rest}
-      style={[
-        { fontSize, color: getTokenColor(color), fontFamily: font(weight) },
-        style,
-      ]}
+      style={[{ fontSize, color: getTokenColor(color), fontFamily: font(weight) }, style]}
     />
   );
 };

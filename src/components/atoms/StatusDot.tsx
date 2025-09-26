@@ -1,7 +1,7 @@
 // src/components/atoms/StatusDot.tsx
-import { View } from "react-native";
-import { colors } from "@/theme/tokens";
 import { useResponsive } from "@/hooks/useResponsive";
+import { colors } from "@/theme/tokens";
+import { View } from "react-native";
 
 type Status = "online" | "offline" | "syncing";
 

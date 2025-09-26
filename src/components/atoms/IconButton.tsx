@@ -31,8 +31,7 @@ type Props = {
   showShadow?: boolean;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const IconButton: React.FC<Props> = ({
   icon,
@@ -112,12 +111,7 @@ const IconButton: React.FC<Props> = ({
       )}
 
       {/* Botón con ripple y borde redondeado */}
-      <View
-        style={[
-          StyleSheet.absoluteFillObject,
-          { borderRadius: radius, overflow: "hidden" },
-        ]}
-      >
+      <View style={[StyleSheet.absoluteFillObject, { borderRadius: radius, overflow: "hidden" }]}>
         <Pressable
           onPress={onPress}
           disabled={disabled}
