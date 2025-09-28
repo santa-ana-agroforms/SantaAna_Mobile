@@ -50,13 +50,27 @@ export class FormSession {
   readonly sessionId: string; // uuid de esta sesión
   private currentPageIndex = 0;
   private state: FilledState = {};
+  private status: "pending" | "synced" | "cancelled" = "pending";
   private errors: Record<string, string[]> = {}; // clave campo -> errores
   private groupsCache = new Map<string, GrupoDefinition>(); // id_grupo -> def
 
   constructor(form: FormJSON, prefilled?: FilledState, sessionId?: string) {
     this.form = form;
-    this.bootstrapState(prefilled);
     this.sessionId = sessionId ?? uuid.v4();
+    if (sessionId) {
+      // Recargar de db si viene id
+      (async () => {
+        const saved = await getEntryById(sessionId);
+        if (saved) {
+          this.status = saved.status;
+          this.bootstrapState(saved.fill_json as FilledState);
+        } else {
+          this.bootstrapState(prefilled);
+        }
+      })();
+    } else {
+      this.bootstrapState(prefilled);
+    }
   }
 
   // Crea estructura vacía por página/campo
@@ -295,11 +309,15 @@ export class FormSession {
       filled_at_local: new Date().toISOString(), // hora local en ISO
       fill_json: this.state,
       form_json: this.form,
-      status: "pending" as const,
+      status: this.status,
     };
     await saveEntry(this.sessionId, payload);
     console.log("Sesión persistida:", payload);
     return { local_id: this.sessionId };
+  }
+
+  setStatus(newStatus: "pending" | "synced" | "cancelled") {
+    this.status = newStatus;
   }
 
   // Auxiliares públicos
