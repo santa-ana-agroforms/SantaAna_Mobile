@@ -124,6 +124,7 @@ const FormScreen: React.FC<Props> = ({
           formName={form?.nombre}
           referenceFrame={referenceFrame}
           contentFrame={contentFrame}
+          formSession={formSession}
         />
       ))}
     </PagerView>

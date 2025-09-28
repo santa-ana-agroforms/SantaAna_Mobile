@@ -83,6 +83,9 @@ const ensureFormEntriesTables = async () => {
 
 export const saveEntry = async (local_id: string, p: SavePayload) => {
   await ensureFormEntriesTables();
+  // Delete if exist a entrie with same local_id
+  await run(`DELETE FROM form_entries WHERE local_id = ?`, [local_id]);
+  // Insert new entry
   await run(
     `INSERT OR REPLACE INTO form_entries
      (local_id, form_id, form_name, index_version_id, filled_at_local, status, fill_json, form_json)
@@ -108,6 +111,7 @@ export const listEntriesSummary = async (): Promise<EntrySummary[]> => {
       ORDER BY datetime(filled_at_local) DESC`,
     []
   );
+  console.log("Entries summary:", rows, rows ?? []);
   return rows ?? [];
 };
 

@@ -47,14 +47,16 @@ export type FilledState = Record<string, PageState>; // "pagina_<n>" o id_pagina
 
 export class FormSession {
   readonly form: FormJSON;
+  readonly sessionId: string; // uuid de esta sesión
   private currentPageIndex = 0;
   private state: FilledState = {};
   private errors: Record<string, string[]> = {}; // clave campo -> errores
   private groupsCache = new Map<string, GrupoDefinition>(); // id_grupo -> def
 
-  constructor(form: FormJSON, prefilled?: FilledState) {
+  constructor(form: FormJSON, prefilled?: FilledState, sessionId?: string) {
     this.form = form;
     this.bootstrapState(prefilled);
+    this.sessionId = sessionId ?? uuid.v4();
   }
 
   // Crea estructura vacía por página/campo
@@ -285,8 +287,7 @@ export class FormSession {
   // --- Cierre y persistencia (offline) ---
 
   async closeAndPersist(): Promise<{ local_id: string }> {
-    const local_id = uuid.v4();
-    console.log("Persistiendo sesión de formulario con id local:", local_id);
+    console.log("Persistiendo sesión de formulario con id local:", this.sessionId);
     const payload = {
       form_id: this.form.id_formulario,
       form_name: this.form.nombre,
@@ -296,9 +297,9 @@ export class FormSession {
       form_json: this.form,
       status: "pending" as const,
     };
-    await saveEntry(local_id, payload);
+    await saveEntry(this.sessionId, payload);
     console.log("Sesión persistida:", payload);
-    return { local_id };
+    return { local_id: this.sessionId };
   }
 
   // Auxiliares públicos

@@ -13,6 +13,7 @@ import RepeatableGroup, { type GroupEntry } from "@/components/molecules/Repeata
 import { colors } from "@/theme/tokens";
 
 import { getGroupOrFetch } from "@/api/groups";
+import { FormSession } from "@/forms/runtime/FormSession";
 import type { Campo } from "./FormPage";
 
 type Frame = { width: number; height: number };
@@ -58,7 +59,13 @@ const shallowEqualEntries = (a?: GroupEntry[] | any, b?: GroupEntry[] | any) => 
   return true;
 };
 
-const FieldRenderer: React.FC<Props> = ({ campo, referenceFrame, contentFrame, onChangeValue }) => {
+const FieldRenderer: React.FC<Props> = ({
+  campo,
+  referenceFrame,
+  contentFrame,
+  onChangeValue,
+  formSession,
+}) => {
   const label = campo.etiqueta || campo.nombre_interno;
   const help = campo.ayuda;
 
@@ -309,6 +316,7 @@ const FieldRenderer: React.FC<Props> = ({ campo, referenceFrame, contentFrame, o
                 referenceFrame={referenceFrame}
                 contentFrame={contentFrame}
                 onChangeValue={(_n, v) => onChange(v)}
+                formSession={formSession}
               />
             )}
           </RepeatableGroup>

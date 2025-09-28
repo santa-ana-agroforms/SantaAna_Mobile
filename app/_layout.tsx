@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/rules-of-hooks */
 // app/_layout.tsx
 import { getAccessToken, setApiBase } from "@/api/client";
 import {
