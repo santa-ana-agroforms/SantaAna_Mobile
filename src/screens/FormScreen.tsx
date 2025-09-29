@@ -1,15 +1,12 @@
-// src/screens/FormScreen.tsx
+import AnimatedPage from "@/components/atoms/AnimatedPage";
 import { colors } from "@/theme/tokens";
-import React, { useEffect, useRef, useState } from "react";
-import {
-  FlatList,
-  ListRenderItemInfo,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Platform,
-  View,
-} from "react-native";
-import FormPageView, { type Formulario, type Pagina } from "./FormPage";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import PagerView, {
+  type PagerViewOnPageScrollEvent,
+  type PagerViewOnPageSelectedEvent,
+} from "react-native-pager-view";
+import { useSharedValue } from "react-native-reanimated";
+import { type Formulario, type Pagina } from "./FormPage";
 
 type Frame = { width: number; height: number };
 
@@ -22,152 +19,110 @@ type Props = {
   onPageChange?: (index: number) => void;
 };
 
+// ✅ Hook para el estilo animado
 const FormScreen: React.FC<Props> = ({
   form,
   referenceFrame,
   contentFrame,
-  layoutFrame,
   page,
   onPageChange,
 }) => {
-  const formId = form?.id_formulario;
-  const rawPages = React.useMemo(() => form?.paginas ?? [], [form?.paginas]);
+  const rawPages = useMemo(() => form?.paginas ?? [], [form?.paginas]);
 
-  // 1) Congelar y ordenar páginas por secuencia (solo cuando cambia el formId)
   const pagesRef = useRef<Pagina[]>([]);
   const [pagesVersion, setPagesVersion] = useState(0);
-
   useEffect(() => {
     const sorted = rawPages.slice().sort((a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0));
     pagesRef.current = sorted;
     setPagesVersion((v) => v + 1);
-  }, [formId, rawPages]);
+  }, [form?.id_formulario, rawPages]);
 
   const pages = pagesRef.current;
   const pagesCount = pages.length;
 
-  // 2) Controlado vs no controlado
   const isControlled = typeof page === "number";
   const [uPage, setUPage] = useState(0);
   const curPage = isControlled ? (page as number) : uPage;
 
-  // refs para evitar cierres obsoletos
+  const pagerRef = useRef<PagerView>(null);
   const pageRef = useRef(curPage);
   pageRef.current = curPage;
 
-  // Reset índice al cambiar de formulario
-  useEffect(() => {
-    if (!pagesCount) return;
-    const resetTo = 0;
-    if (!isControlled) setUPage(resetTo);
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToOffset({ offset: 0, animated: false });
-    });
-  }, [formId, pagesCount, isControlled]);
+  const W = Math.max(1, Math.round(referenceFrame.width || 1));
+  const H = Math.max(1, Math.round(referenceFrame.height || 1));
+  const padX = referenceFrame.width * 0.04;
 
-  const listRef = useRef<FlatList<Pagina>>(null);
-  const isProgrammatic = useRef(false);
+  // 🎯 Posición fraccional compartida para animar
+  const current = useSharedValue(curPage);
 
-  // 3) Recolocar offset si cambia el ancho útil o la longitud
-  const W = Math.max(1, Math.round(layoutFrame.width || 1));
+  const onPageScroll = (e: PagerViewOnPageScrollEvent) => {
+    const { position, offset } = e.nativeEvent;
+    current.value = (position ?? 0) + (offset ?? 0);
+  };
 
   useEffect(() => {
     if (!pagesCount) return;
+    if (!isControlled) setUPage(0);
     requestAnimationFrame(() => {
-      listRef.current?.scrollToOffset({
-        offset: W * pageRef.current,
-        animated: false,
-      });
+      pagerRef.current?.setPageWithoutAnimation(0);
+      current.value = 0;
     });
-  }, [W, pagesCount, pagesVersion]);
+  }, [form?.id_formulario, pagesCount, isControlled, current]);
 
-  // Si es controlado y cambia 'page' desde el padre, sincroniza el scroll
   useEffect(() => {
-    if (!isControlled) return;
-    const target = Math.max(0, Math.min(pagesCount - 1, pageRef.current));
+    if (!isControlled || pagesCount === 0) return;
+    const target = Math.max(0, Math.min(pagesCount - 1, page ?? 0));
     requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({ index: target, animated: false });
+      pagerRef.current?.setPage(target);
+      current.value = target;
     });
-  }, [isControlled, pagesCount, page]);
+  }, [isControlled, pagesCount, page, current]);
 
-  const getItemLayout = (_: ArrayLike<Pagina> | null | undefined, index: number) => ({
-    length: W,
-    offset: W * index,
-    index,
-  });
+  useEffect(() => {
+    if (!pagesCount) return;
+    requestAnimationFrame(() => {
+      pagerRef.current?.setPageWithoutAnimation(pageRef.current);
+      current.value = pageRef.current;
+    });
+  }, [W, H, pagesCount, pagesVersion, current]);
 
   const emitPageChange = (next: number) => {
     if (!isControlled) setUPage(next);
     onPageChange?.(next);
   };
 
-  const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (isProgrammatic.current) return;
-    const i = Math.round(e.nativeEvent.contentOffset.x / W);
-    if (i !== pageRef.current) emitPageChange(i);
+  const onSelected = (e: PagerViewOnPageSelectedEvent) => {
+    const next = e.nativeEvent.position ?? 0;
+    if (next !== pageRef.current) emitPageChange(next);
+    current.value = next;
   };
-
-  const onScrollToIndexFailed = ({ index }: { index: number }) => {
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToOffset({
-        offset: W * index,
-        animated: false,
-      });
-    });
-  };
-
-  // Expones helpers si luego quieres controlarlos desde arriba (via ref/imperativeHandle)
-
-  const renderItem = ({ item }: ListRenderItemInfo<Pagina>) => (
-    <View
-      style={{
-        width: W,
-        height: contentFrame.height,
-        backgroundColor: colors.surface,
-      }}
-      collapsable={false}
-    >
-      <FormPageView
-        page={item}
-        formName={form?.nombre}
-        referenceFrame={referenceFrame}
-        contentFrame={contentFrame}
-        // cualquier prop adicional de página
-      />
-    </View>
-  );
-
-  const isAndroid = Platform.OS === "android";
-  const listPagingProps = isAndroid
-    ? {
-        snapToInterval: W,
-        snapToAlignment: "start" as const,
-        pagingEnabled: false,
-        decelerationRate: "fast" as const,
-      }
-    : { pagingEnabled: true, decelerationRate: "fast" as const };
 
   return (
-    <FlatList
-      ref={listRef}
-      data={pages}
-      keyExtractor={(p) => p.id_pagina}
-      renderItem={renderItem}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      onMomentumScrollEnd={onMomentumEnd}
-      onScrollToIndexFailed={onScrollToIndexFailed}
-      getItemLayout={getItemLayout}
-      windowSize={3}
-      initialNumToRender={2}
-      maxToRenderPerBatch={3}
-      removeClippedSubviews={false}
-      disableIntervalMomentum
-      scrollEventThrottle={16}
+    <PagerView
+      ref={pagerRef}
       style={{ flex: 1, backgroundColor: colors.surface }}
-      contentContainerStyle={{ backgroundColor: colors.surface }}
-      {...listPagingProps}
-    />
+      initialPage={Math.max(0, Math.min(pagesCount - 1, curPage))}
+      onPageSelected={onSelected}
+      onPageScroll={onPageScroll}
+      offscreenPageLimit={1}
+      overScrollMode="never"
+      key={`w${W}-h${H}-v${pagesVersion}`}
+    >
+      {pages.map((p, i) => (
+        <AnimatedPage
+          key={p.id_pagina ?? `p-${i}`}
+          index={i}
+          current={current}
+          width={W}
+          height={H}
+          padX={padX}
+          page={p}
+          formName={form?.nombre}
+          referenceFrame={referenceFrame}
+          contentFrame={contentFrame}
+        />
+      ))}
+    </PagerView>
   );
 };
 
