@@ -49,7 +49,7 @@ const Button: React.FC<Props> = ({
     // Alturas por tamaño (accesibles y proporcionales)
     const hSm = clamp(minSide * 0.06, 40, 44);
     const hMd = clamp(minSide * 0.068, 44, 52);
-    const hLg = clamp(minSide * 0.08, 52, 60);
+    const hLg = clamp(minSide * 0.08, 45, 60);
     const _height = size === "sm" ? hSm : size === "lg" ? hLg : hMd;
 
     // Radio y padding proporcionales a la altura (con límites)

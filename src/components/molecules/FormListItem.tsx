@@ -3,14 +3,7 @@ import IconButton from "@/components/atoms/IconButton";
 import { Body } from "@/components/atoms/Typography";
 import { colors } from "@/theme/tokens";
 import React, { useMemo } from "react";
-import {
-  Image,
-  ImageSourcePropType,
-  Pressable,
-  StyleSheet,
-  View,
-  ViewStyle,
-} from "react-native";
+import { Image, ImageSourcePropType, Pressable, StyleSheet, View, ViewStyle } from "react-native";
 
 type Frame = { width: number; height: number };
 
@@ -32,8 +25,7 @@ type Props = {
   style?: ViewStyle;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const baseStyles = StyleSheet.create({
   card: {
@@ -46,10 +38,7 @@ const baseStyles = StyleSheet.create({
   },
 });
 
-const StatusDot: React.FC<{ color?: string; size?: number }> = ({
-  color = "#888",
-  size = 8,
-}) => (
+const StatusDot: React.FC<{ color?: string; size?: number }> = ({ color = "#888", size = 8 }) => (
   <View
     style={{
       width: size,
@@ -63,8 +52,7 @@ const StatusDot: React.FC<{ color?: string; size?: number }> = ({
 );
 
 const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-const formatFechaCorta = (d: Date) =>
-  `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+const formatFechaCorta = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
 
 const FormListItem: React.FC<Props> = ({
   title,
@@ -79,36 +67,29 @@ const FormListItem: React.FC<Props> = ({
   enterIcon = require("../../../assets/images/enter.png"),
   style,
 }) => {
-  const {
-    padCard,
-    padRight,
-    minCardHeight,
-    rowGap,
-    iconSize,
-    statusDotSize,
-    enterBtnSize,
-  } = useMemo(() => {
-    const minSide = Math.min(referenceFrame.width, referenceFrame.height);
-    const gapY = clamp(contentFrame.width * 0.04, 12, 24);
-    const _pad = clamp(minSide * 0.02, 12, 20);
-    const _titleSize = clamp(minSide * 0.038, 16, 22);
-    const _rowGap = clamp(minSide * 0.012, 6, 12);
-    const _iconSize = clamp(minSide * 0.055, 18, 24);
-    const _statusDot = clamp(minSide * 0.012, 6, 10);
-    const _minH = clamp(minSide * 0.12, 72, 104);
-    const _enter = clamp(minSide * 0.055, 28, 40);
+  const { padCard, padRight, minCardHeight, rowGap, iconSize, statusDotSize, enterBtnSize } =
+    useMemo(() => {
+      const minSide = Math.min(referenceFrame.width, referenceFrame.height);
+      const gapY = clamp(contentFrame.width * 0.04, 12, 24);
+      const _pad = clamp(minSide * 0.02, 12, 20);
+      const _titleSize = clamp(minSide * 0.038, 16, 22);
+      const _rowGap = clamp(minSide * 0.012, 6, 12);
+      const _iconSize = clamp(minSide * 0.055, 18, 24);
+      const _statusDot = clamp(minSide * 0.012, 6, 10);
+      const _minH = clamp(minSide * 0.12, 72, 104);
+      const _enter = clamp(minSide * 0.055, 28, 40);
 
-    return {
-      padCard: _pad,
-      padRight: _pad + _enter + gapY * 0.5,
-      minCardHeight: _minH,
-      rowGap: _rowGap,
-      iconSize: _iconSize,
-      titleSize: _titleSize,
-      statusDotSize: _statusDot,
-      enterBtnSize: _enter,
-    };
-  }, [referenceFrame, contentFrame]);
+      return {
+        padCard: _pad,
+        padRight: _pad + _enter + gapY * 0.5,
+        minCardHeight: _minH,
+        rowGap: _rowGap,
+        iconSize: _iconSize,
+        titleSize: _titleSize,
+        statusDotSize: _statusDot,
+        enterBtnSize: _enter,
+      };
+    }, [referenceFrame, contentFrame]);
 
   return (
     <Pressable

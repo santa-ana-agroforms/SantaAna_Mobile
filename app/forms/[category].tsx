@@ -1,9 +1,7 @@
 // app/forms/[category].tsx (FormsByCategoryScreen)
 import { Body } from "@/components/atoms/Typography";
 import FormListItem from "@/components/molecules/FormListItem";
-import PageScaffold, {
-  type ScaffoldDimensions,
-} from "@/components/templates/PageScaffold";
+import PageScaffold, { type ScaffoldDimensions } from "@/components/templates/PageScaffold";
 import { DB } from "@/db/sqlite";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
@@ -38,8 +36,7 @@ export type FormCategoryGroup = {
   }[];
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const FormsByCategoryScreen: React.FC = () => {
   const { category } = useLocalSearchParams<{ category: string }>();
@@ -50,8 +47,7 @@ const FormsByCategoryScreen: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const groups: FormCategoryGroup[] =
-          await DB.selectFormsGroupedByCategory();
+        const groups: FormCategoryGroup[] = await DB.selectFormsGroupedByCategory();
         const found = groups.find((g) => g.nombre_categoria === category);
         setGrupo(found ?? null);
       } finally {
@@ -60,10 +56,7 @@ const FormsByCategoryScreen: React.FC = () => {
     })();
   }, [category]);
 
-  const headerTitle = useMemo(
-    () => grupo?.nombre_categoria ?? "Formularios",
-    [grupo],
-  );
+  const headerTitle = useMemo(() => grupo?.nombre_categoria ?? "Formularios", [grupo]);
 
   if (loading) {
     return (
@@ -128,7 +121,7 @@ export default FormsByCategoryScreen;
 
 /* ------------ lógica placeholder (ajusta cuando tengas datos reales) ------------ */
 const getEstado = (
-  f: Formulario,
+  f: Formulario
 ): {
   texto: "Pendiente" | "En progreso" | "Completado";
   color: string;

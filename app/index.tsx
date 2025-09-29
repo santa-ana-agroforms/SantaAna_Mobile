@@ -9,8 +9,7 @@ import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { View } from "react-native";
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const Home: React.FC = () => {
   const [data, setData] = useState<FormCategoryGroup[]>([]);
@@ -35,9 +34,7 @@ const Home: React.FC = () => {
       {({ contentFrame, referenceFrame }) => {
         const gap = clamp(contentFrame.width * 0.045, 12, 24);
         const columns = 2;
-        const cardWidth = Math.floor(
-          (contentFrame.width - gap * (columns - 1)) / columns,
-        );
+        const cardWidth = Math.floor((contentFrame.width - gap * (columns - 1)) / columns);
 
         return (
           <>
@@ -60,11 +57,7 @@ const Home: React.FC = () => {
               ))}
             </View>
             <View style={{ alignItems: "flex-end", marginTop: gap }}>
-              <Button
-                title="Cerrar sesión (TEMP)"
-                size="sm"
-                onPress={handleLogout}
-              />
+              <Button title="Cerrar sesión (TEMP)" size="sm" onPress={handleLogout} />
             </View>
           </>
         );

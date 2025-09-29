@@ -45,7 +45,7 @@ const FormRoute: React.FC = () => {
                   })),
                 })),
               }
-            : null,
+            : null
         );
       } finally {
         setLoading(false);
@@ -104,7 +104,7 @@ const mapTipo = (t: any): "texto" | "booleano" | "numerico" | "imagen" => {
 };
 
 const mapClase = (
-  c: any,
+  c: any
 ):
   | "string"
   | "text"

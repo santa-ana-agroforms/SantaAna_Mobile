@@ -38,9 +38,7 @@ const FormScreen: React.FC<Props> = ({
   const [pagesVersion, setPagesVersion] = useState(0);
 
   useEffect(() => {
-    const sorted = rawPages
-      .slice()
-      .sort((a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0));
+    const sorted = rawPages.slice().sort((a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0));
     pagesRef.current = sorted;
     setPagesVersion((v) => v + 1);
   }, [formId, rawPages]);
@@ -92,10 +90,7 @@ const FormScreen: React.FC<Props> = ({
     });
   }, [isControlled, pagesCount, page]);
 
-  const getItemLayout = (
-    _: ArrayLike<Pagina> | null | undefined,
-    index: number,
-  ) => ({
+  const getItemLayout = (_: ArrayLike<Pagina> | null | undefined, index: number) => ({
     length: W,
     offset: W * index,
     index,

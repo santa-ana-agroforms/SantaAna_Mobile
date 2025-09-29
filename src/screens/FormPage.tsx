@@ -42,22 +42,13 @@ type Props = {
   contentFrame: Frame; // ancho/alto útil del body
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-const FormPageView: React.FC<Props> = ({
-  page,
-  formName,
-  referenceFrame,
-  contentFrame,
-}) => {
+const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, contentFrame }) => {
   // Ordena campos una sola vez
   const fields = useMemo(
-    () =>
-      [...(page?.campos || [])].sort(
-        (a, b) => (a.sequence ?? 0) - (b.sequence ?? 0),
-      ),
-    [page?.campos],
+    () => [...(page?.campos || [])].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)),
+    [page?.campos]
   );
 
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
@@ -71,9 +62,7 @@ const FormPageView: React.FC<Props> = ({
       showsVerticalScrollIndicator
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-      contentInsetAdjustmentBehavior={
-        Platform.OS === "ios" ? "always" : "automatic"
-      }
+      contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "always" : "automatic"}
       contentContainerStyle={{
         paddingHorizontal: padX,
         paddingBottom: padBottom,

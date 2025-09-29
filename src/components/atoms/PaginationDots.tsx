@@ -23,8 +23,7 @@ const PaginationDots = ({
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor:
-              i === activeIndex ? colors.textPrimary : colors.neutral200,
+            backgroundColor: i === activeIndex ? colors.textPrimary : colors.neutral200,
           }}
         />
       ))}
