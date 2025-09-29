@@ -4,6 +4,7 @@ import type { FormCategoryGroup } from "@/api/forms/types";
 import Button from "@/components/atoms/Button";
 import CategoryCard from "@/components/molecules/CategoryCard";
 import PageScaffold from "@/components/templates/PageScaffold";
+import { listEntriesSummary } from "@/db/form-entries";
 import { DB } from "@/db/sqlite";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -58,6 +59,18 @@ const Home: React.FC = () => {
             </View>
             <View style={{ alignItems: "flex-end", marginTop: gap }}>
               <Button title="Cerrar sesión (TEMP)" size="sm" onPress={handleLogout} />
+            </View>
+            <View style={{ alignItems: "flex-end", marginTop: gap }}>
+              <Button
+                title="TIITIT"
+                size="sm"
+                onPress={() => {
+                  (async () => {
+                    const entries = await listEntriesSummary();
+                    console.log("Entries:", entries);
+                  })();
+                }}
+              />
             </View>
           </>
         );

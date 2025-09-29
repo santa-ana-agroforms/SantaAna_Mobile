@@ -1,11 +1,13 @@
 // app/form/[formId].tsx
 import { Body } from "@/components/atoms/Typography";
 import PageScaffold from "@/components/templates/PageScaffold";
+import { FormJSON } from "@/db/form-entries";
 import { DB } from "@/db/sqlite";
+import { FormSession } from "@/forms/runtime/FormSession";
 import type { Formulario } from "@/screens/FormPage"; // tipado esperado por FormScreen
 import FormScreen from "@/screens/FormScreen"; // tu pantalla de formulario
 import { useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const FormRoute: React.FC = () => {
   const { formId, versionId } = useLocalSearchParams<{
@@ -18,10 +20,57 @@ const FormRoute: React.FC = () => {
   const [page, setPage] = useState(0);
   const pagesCount = form?.paginas.length ?? 0;
 
+  const serverFormRef = useRef<FormJSON | null>(null);
+
+  // ⬇️⬇️ CAMBIO: sesión del formulario
+  const sessionRef = useRef<FormSession | null>(null);
+
   useEffect(() => {
     (async () => {
       try {
         const serverForm = await DB.selectFormFromGroupedById(formId as string);
+        if (serverForm) {
+          // 🔧 Construir un FormJSON válido para la sesión (null -> undefined, mapTipo/mapClase, etc.)
+          const fixedSessionForm: FormJSON = {
+            id_formulario: serverForm.id_formulario,
+            nombre: serverForm.nombre,
+            version_vigente: {
+              id_index_version: serverForm.version_vigente.id_index_version,
+              fecha_creacion: serverForm.version_vigente.fecha_creacion,
+            },
+            paginas: serverForm.paginas.map((p) => ({
+              id_pagina: p.id_pagina,
+              nombre: p.nombre,
+              // 👇 null -> undefined para calzar con Pagina.descripcion?: string
+              descripcion: p.descripcion ?? undefined,
+              // 👇 si viene null, que sea undefined (opcional)
+              secuencia: p.secuencia ?? undefined,
+              pagina_version: {
+                id: p.pagina_version.id,
+                fecha_creacion: p.pagina_version.fecha_creacion,
+              },
+              // 👇 mapear ServerField -> Campo (y normalizar tipo/clase)
+              campos: p.campos.map((c) => ({
+                id_campo: c.id_campo,
+                sequence: c.sequence,
+                tipo: mapTipo(c.tipo), // "texto" | "numerico" | "booleano" | "imagen"
+                clase: mapClase(c.clase), // "string" | "list" | "date" | "number" | "calc" | "boolean" | "firm" | ...
+                nombre_interno: c.nombre_interno,
+                etiqueta: c.etiqueta ?? "", // etiqueta es requerida en FormSession.Campo
+                ayuda: c.ayuda ?? undefined, // null -> undefined
+                config: c.config ?? undefined, // null -> undefined
+                requerido: !!c.requerido,
+              })),
+            })),
+          };
+
+          // 👉 Usar SIEMPRE este objeto para la sesión:
+          serverFormRef.current = fixedSessionForm;
+          sessionRef.current = new FormSession(fixedSessionForm);
+          sessionRef.current.closeAndPersist(); // crea un draft inicial
+        }
+
+        // Tu shape para la UI (Formulario) lo podés dejar igual:
         setForm(
           serverForm
             ? {
@@ -31,7 +80,7 @@ const FormRoute: React.FC = () => {
                   id_pagina: p.id_pagina,
                   nombre: p.nombre,
                   descripcion: p.descripcion ?? undefined,
-                  secuencia: p.secuencia ?? 0,
+                  secuencia: p.secuencia === null ? 0 : (p.secuencia ?? 0),
                   campos: p.campos.map((c) => ({
                     id_campo: c.id_campo,
                     sequence: c.sequence,
@@ -47,11 +96,53 @@ const FormRoute: React.FC = () => {
               }
             : null
         );
+
+        // Arranque en pág 0 para sesión y UI
+        setPage(0);
+        sessionRef.current?.goToPage(0);
       } finally {
         setLoading(false);
       }
     })();
   }, [formId, versionId]);
+
+  // ⬇️⬇️ CAMBIO: handlers de navegación que consultan la sesión
+  const handlePrev = () => {
+    const s = sessionRef.current;
+    if (!s) {
+      setPage((p) => Math.max(0, p - 1));
+      return;
+    }
+    const before = s.getCurrentPageIndex();
+    s.prevPage();
+    const after = s.getCurrentPageIndex();
+    if (after !== before) setPage(after);
+  };
+
+  const handleNext = () => {
+    const s = sessionRef.current;
+    if (!s) {
+      // Fallback: comportamiento anterior
+      setPage((p) => Math.min(pagesCount - 1, p + 1));
+      return;
+    }
+    // Solo avanzar si la página actual cumple requeridos
+    if (!s.canGoNext()) {
+      // Aquí podrías disparar un toast o UI de errores si querés
+      return;
+    }
+    const before = s.getCurrentPageIndex();
+    s.nextPage();
+    const after = s.getCurrentPageIndex();
+    if (after !== before) setPage(after);
+  };
+
+  // (Opcional) estado de si se puede avanzar; útil para deshabilitar el botón "Siguiente"
+  const canNext = useMemo(() => {
+    const s = sessionRef.current;
+    if (!s) return page < pagesCount - 1;
+    return s.canGoNext() && s.getCurrentPageIndex() < s.getPageCount() - 1;
+  }, [page, pagesCount]);
 
   if (loading) {
     return (
@@ -75,8 +166,9 @@ const FormRoute: React.FC = () => {
       variant="form"
       page={page + 1}
       totalPages={pagesCount}
-      onPrevPage={() => setPage((p) => Math.max(0, p - 1))}
-      onNextPage={() => setPage((p) => Math.min(pagesCount - 1, p + 1))}
+      onPrevPage={handlePrev} // ⬅️ CAMBIO
+      onNextPage={handleNext} // ⬅️ CAMBIO
+      nextDisabled={!canNext} // ⬅️ (opcional) deshabilitar si no cumple requeridos
     >
       {({ referenceFrame, contentFrame, layoutFrame }) => (
         <FormScreen
@@ -85,7 +177,12 @@ const FormRoute: React.FC = () => {
           contentFrame={contentFrame}
           layoutFrame={layoutFrame}
           page={page} // controlado
-          onPageChange={setPage} // sincroniza dots/flechas
+          onPageChange={(idx) => {
+            // ⬇️⬇️ CAMBIO: si cambian via dots, sincronizamos sesión
+            sessionRef.current?.goToPage(idx);
+            setPage(idx);
+          }}
+          formSession={sessionRef.current as FormSession} // nunca null acá
         />
       )}
     </PageScaffold>

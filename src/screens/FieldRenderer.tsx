@@ -13,6 +13,7 @@ import RepeatableGroup, { type GroupEntry } from "@/components/molecules/Repeata
 import { colors } from "@/theme/tokens";
 
 import { getGroupOrFetch } from "@/api/groups";
+import { FormSession } from "@/forms/runtime/FormSession";
 import type { Campo } from "./FormPage";
 
 type Frame = { width: number; height: number };
@@ -24,6 +25,7 @@ type Props = {
   referenceFrame: Frame;
   contentFrame: Frame;
   onChangeValue?: (name: string, value: unknown) => void;
+  formSession: FormSession; // sesión del formulario (para guardar/leer valores)
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -57,7 +59,13 @@ const shallowEqualEntries = (a?: GroupEntry[] | any, b?: GroupEntry[] | any) => 
   return true;
 };
 
-const FieldRenderer: React.FC<Props> = ({ campo, referenceFrame, contentFrame, onChangeValue }) => {
+const FieldRenderer: React.FC<Props> = ({
+  campo,
+  referenceFrame,
+  contentFrame,
+  onChangeValue,
+  formSession,
+}) => {
   const label = campo.etiqueta || campo.nombre_interno;
   const help = campo.ayuda;
 
@@ -201,16 +209,24 @@ const FieldRenderer: React.FC<Props> = ({ campo, referenceFrame, contentFrame, o
     />
   );
 
-  const renderCalc = () => (
-    <>
-      {LabelBlock}
-      <Box>
-        <Body frame={referenceFrame} color="secondary" size="sm">
-          Campo calculado: {campo.config?.operation || "—"}
-        </Body>
-      </Box>
-    </>
-  );
+  const renderCalc = () => {
+    // Mostrar el valor calculado desde la sesión (si no hay, mostramos la operación)
+    const calcValue = formSession.getFieldValue(campo.nombre_interno);
+    return (
+      <>
+        {LabelBlock}
+        <Box>
+          <Body frame={referenceFrame} color="secondary" size="sm">
+            {
+              calcValue ?? `(calculado) ${campo.config?.operation ?? "—"}`
+              /* Nota: si querés refresco inmediato aquí,
+                 luego podemos pasar un "tick" desde el padre para forzar rerender */
+            }
+          </Body>
+        </Box>
+      </>
+    );
+  };
 
   const renderFirm = () => (
     <>
@@ -300,6 +316,7 @@ const FieldRenderer: React.FC<Props> = ({ campo, referenceFrame, contentFrame, o
                 referenceFrame={referenceFrame}
                 contentFrame={contentFrame}
                 onChangeValue={(_n, v) => onChange(v)}
+                formSession={formSession}
               />
             )}
           </RepeatableGroup>

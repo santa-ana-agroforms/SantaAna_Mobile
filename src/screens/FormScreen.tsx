@@ -1,4 +1,6 @@
+// src/screens/FormScreen.tsx
 import AnimatedPage from "@/components/atoms/AnimatedPage";
+import { FormSession } from "@/forms/runtime/FormSession";
 import { colors } from "@/theme/tokens";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import PagerView, {
@@ -17,6 +19,7 @@ type Props = {
   layoutFrame: Frame;
   page?: number;
   onPageChange?: (index: number) => void;
+  formSession: FormSession;
 };
 
 // ✅ Hook para el estilo animado
@@ -26,6 +29,7 @@ const FormScreen: React.FC<Props> = ({
   contentFrame,
   page,
   onPageChange,
+  formSession,
 }) => {
   const rawPages = useMemo(() => form?.paginas ?? [], [form?.paginas]);
 
@@ -120,6 +124,7 @@ const FormScreen: React.FC<Props> = ({
           formName={form?.nombre}
           referenceFrame={referenceFrame}
           contentFrame={contentFrame}
+          formSession={formSession}
         />
       ))}
     </PagerView>

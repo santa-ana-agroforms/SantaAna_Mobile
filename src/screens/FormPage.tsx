@@ -3,6 +3,7 @@
 // Página vertical scrolleable que pinta cada campo con FieldRenderer
 // ============================================
 import { Body } from "@/components/atoms/Typography";
+import { FormSession } from "@/forms/runtime/FormSession";
 import React, { useMemo } from "react";
 import { View } from "react-native";
 import FieldRenderer from "./FieldRenderer";
@@ -40,11 +41,18 @@ type Props = {
   formName?: string;
   referenceFrame: Frame; // escala tipográfica/geométrica
   contentFrame: Frame; // ancho/alto útil del body
+  formSession: FormSession; // sesión del formulario (para guardar/leer valores)
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, contentFrame }) => {
+const FormPageView: React.FC<Props> = ({
+  page,
+  formName,
+  referenceFrame,
+  contentFrame,
+  formSession,
+}) => {
   // Ordena campos una sola vez
   const fields = useMemo(
     () => [...(page?.campos || [])].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)),
@@ -78,6 +86,7 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
             formName={formName}
             referenceFrame={referenceFrame}
             contentFrame={contentFrame}
+            formSession={formSession}
           />
         </View>
       ))}

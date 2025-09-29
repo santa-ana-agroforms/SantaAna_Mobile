@@ -2,7 +2,7 @@
 import * as SQLite from "expo-sqlite";
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
-const getDb = async () => {
+export const getDb = async () => {
   if (!dbPromise) {
     dbPromise = SQLite.openDatabaseAsync("forms.db");
     const db = await dbPromise;
