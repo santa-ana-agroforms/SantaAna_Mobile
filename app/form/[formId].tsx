@@ -1,7 +1,7 @@
 // app/form/[formId].tsx
 import { Body } from "@/components/atoms/Typography";
 import PageScaffold from "@/components/templates/PageScaffold";
-import { FormJSON } from "@/db/form-entries";
+import { FormJSON, toFieldConfig } from "@/db/form-entries";
 import { DB } from "@/db/sqlite";
 import { FormSession } from "@/forms/runtime/FormSession";
 import type { Formulario } from "@/screens/FormPage"; // tipado esperado por FormScreen
@@ -58,7 +58,7 @@ const FormRoute: React.FC = () => {
                 nombre_interno: c.nombre_interno,
                 etiqueta: c.etiqueta ?? "", // etiqueta es requerida en FormSession.Campo
                 ayuda: c.ayuda ?? undefined, // null -> undefined
-                config: c.config ?? undefined, // null -> undefined
+                config: toFieldConfig(c.config),
                 requerido: !!c.requerido,
               })),
             })),
@@ -168,7 +168,7 @@ const FormRoute: React.FC = () => {
       totalPages={pagesCount}
       onPrevPage={handlePrev} // ⬅️ CAMBIO
       onNextPage={handleNext} // ⬅️ CAMBIO
-      nextDisabled={!canNext} // ⬅️ (opcional) deshabilitar si no cumple requeridos
+      canNext={!canNext} // ⬅️ (opcional) deshabilitar si no cumple requeridos
     >
       {({ referenceFrame, contentFrame, layoutFrame }) => (
         <FormScreen

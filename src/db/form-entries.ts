@@ -1,5 +1,6 @@
 // src/db/form-entries.ts
 import { all, ensureMigrated, getDb, run } from "@/db/sqlite";
+import { FieldConfig } from "@/forms/runtime/field-registry";
 
 // Tipos mínimos (alineados a tu runtime)
 export type Campo = {
@@ -10,7 +11,7 @@ export type Campo = {
   nombre_interno: string;
   etiqueta?: string | null;
   ayuda?: string | null;
-  config?: unknown | null;
+  config?: FieldConfig;
   requerido?: boolean;
 };
 
@@ -59,6 +60,12 @@ export type SavedEntry = {
   status: "pending" | "synced" | "cancelled";
   fill_json: FilledState;
   form_json: FormJSON;
+};
+
+export const toFieldConfig = (cfg: unknown): FieldConfig | undefined => {
+  if (cfg == null) return undefined; // null/undefined -> undefined
+  if (typeof cfg === "object") return cfg as FieldConfig; // {} u objeto -> OK
+  return undefined; // si llega algo raro (string/num), lo descartas
 };
 
 // Crea la(s) tabla(s) si no existen (no cambia tu user_version)

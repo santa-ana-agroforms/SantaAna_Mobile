@@ -12,18 +12,18 @@ export type Campo = {
   tipo: string; // "texto" | "numerico" | "booleano" | "imagen"...
   clase: string; // "string" | "list" | "date" | "number" | "calc" | "boolean" | "firm" | "group"
   nombre_interno: string;
-  etiqueta: string;
-  ayuda?: string;
+  etiqueta?: string | null; // etiqueta es requerida en FormSession.Campo
+  ayuda?: string | null;
   config?: FieldConfig;
   requerido?: boolean;
 };
 
 export type Pagina = {
   id_pagina: string;
-  secuencia?: number;
+  secuencia?: number | null;
   sequence?: number; // por si viene con otro nombre
   nombre: string;
-  descripcion?: string;
+  descripcion?: string | null;
   pagina_version: { id: string; fecha_creacion: string };
   campos: Campo[];
 };
