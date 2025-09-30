@@ -1,7 +1,7 @@
 // src/components/atoms/Input.tsx
 import { colors } from "@/theme/tokens";
 import React, { useMemo, useState } from "react";
-import { TextInput, TextInputProps, View, useWindowDimensions } from "react-native";
+import { Platform, TextInput, TextInputProps, View, useWindowDimensions } from "react-native";
 import Label from "./Label";
 import { Caption } from "./Typography";
 
@@ -29,6 +29,8 @@ const Input: React.FC<Props> = ({
   focusedOverride,
   onFocus,
   onBlur,
+  onChangeText,
+  value,
   ...rest
 }) => {
   // fallback si no pasan frame
@@ -36,7 +38,11 @@ const Input: React.FC<Props> = ({
   const baseFrame = frame ?? { width, height };
 
   const [focused, setFocused] = useState(false);
+  const [uncontrolledText, setUncontrolledText] = useState("");
+  const [contentHeight, setContentHeight] = useState(0);
+
   const isFocused = focusedOverride ?? focused;
+  const textValue = value ?? uncontrolledText;
 
   const dims = useMemo(() => {
     const minSide = Math.min(baseFrame.width, baseFrame.height);
@@ -51,9 +57,11 @@ const Input: React.FC<Props> = ({
     const errorGap = clamp(minSide * 0.006, 4, 10);
 
     const fontSize = clamp(baseRem * 1.05, 14, 20);
-    const minH = clamp(minSide * 0.06, 44, 62);
+    const lineH = Math.round(fontSize * 1.25);
 
-    return { radius, padH, padV, borderW, labelGap, errorGap, fontSize, minH };
+    const minH = Math.max(44, padV * 2 + lineH);
+
+    return { radius, padH, padV, borderW, labelGap, errorGap, fontSize, lineH, minH };
   }, [baseFrame.height, baseFrame.width]);
 
   const borderColor = !editable
@@ -66,9 +74,23 @@ const Input: React.FC<Props> = ({
 
   const bg = editable ? colors.neutral0 : "#F2F2F2";
 
+  const handleContentSizeChange = (e: any) => {
+    const h = e?.nativeEvent?.contentSize?.height ?? 0;
+    if (h > 0) {
+      const fix = Platform.OS === "android" ? 1 : 0;
+      setContentHeight(Math.max(dims.lineH, Math.ceil(h) - fix));
+    }
+  };
+
+  const handleChangeText = (t: string) => {
+    if (value === undefined) setUncontrolledText(t);
+    onChangeText?.(t);
+  };
+
   return (
     <View style={{ width: "100%" }}>
       <Label frame={frame} text={label} required={required} />
+
       <View
         style={{
           borderColor,
@@ -84,6 +106,10 @@ const Input: React.FC<Props> = ({
         <TextInput
           {...rest}
           editable={editable}
+          multiline
+          scrollEnabled={false}
+          value={textValue}
+          onChangeText={handleChangeText}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);
@@ -92,12 +118,16 @@ const Input: React.FC<Props> = ({
             setFocused(false);
             onBlur?.(e);
           }}
+          onContentSizeChange={handleContentSizeChange}
           style={[
             {
               fontSize: dims.fontSize,
+              lineHeight: dims.lineH,
               fontFamily: "Inter_400Regular",
               color: colors.textPrimary,
               padding: 0,
+              textAlignVertical: "top",
+              height: Math.max(dims.lineH, contentHeight || dims.lineH),
             },
             style,
           ]}
