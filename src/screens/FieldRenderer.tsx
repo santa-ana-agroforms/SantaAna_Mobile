@@ -1,5 +1,5 @@
 // src/components/forms/FieldRenderer.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 
 import Boolean from "@/components/atoms/Boolean";
@@ -25,7 +25,11 @@ type Props = {
   referenceFrame: Frame;
   contentFrame: Frame;
   onChangeValue?: (name: string, value: unknown) => void;
-  formSession: FormSession; // sesión del formulario (para guardar/leer valores)
+  formSession: FormSession; // sesión del formulario
+  /** Índice de la página; si no se pasa, se usa la actual de la sesión */
+  pageIndex?: number;
+  /** Tick externo del padre para re-lectura desde la sesión tras un write */
+  sessionVer?: number;
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -43,49 +47,29 @@ const pickGroupIdFromConfig = (cfg: any): string | null => {
   return cand != null ? String(cand) : null;
 };
 
-const shallowEqualEntries = (a?: GroupEntry[] | any, b?: GroupEntry[] | any) => {
-  if (a === b) return true;
-  if (!Array.isArray(a) || !Array.isArray(b)) return false;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const ea = a[i],
-      eb = b[i];
-    if (ea.id !== eb.id) return false;
-    const ka = Object.keys(ea.values);
-    const kb = Object.keys(eb.values);
-    if (ka.length !== kb.length) return false;
-    for (const k of ka) if (!Object.is(ea.values[k], eb.values[k])) return false;
-  }
-  return true;
-};
-
 const FieldRenderer: React.FC<Props> = ({
   campo,
   referenceFrame,
   contentFrame,
   onChangeValue,
   formSession,
+  pageIndex,
+  sessionVer = 0,
 }) => {
   const label = campo.etiqueta || campo.nombre_interno;
   const help = campo.ayuda;
 
-  const [value, setValue] = useState<any>(undefined);
+  const currentIndex = pageIndex ?? formSession.getCurrentPageIndex();
 
-  const setAndEmit = useCallback(
-    (v: any) => {
-      setValue((prev: any) => {
-        const same =
-          Array.isArray(prev) && Array.isArray(v)
-            ? shallowEqualEntries(prev, v)
-            : Object.is(prev, v);
+  // Valor SIEMPRE desde la sesión; re-lee cuando cambie sessionVer
+  const value = useMemo(
+    () => formSession.getFieldValue(campo.nombre_interno, currentIndex),
+    [formSession, campo.nombre_interno, currentIndex, sessionVer]
+  );
 
-        if (!same) {
-          onChangeValue?.(campo.nombre_interno, v);
-          return v;
-        }
-        return prev;
-      });
-    },
+  // Emitir hacia el padre (el padre hace setFieldValue + bump del tick)
+  const onCommit = useCallback(
+    (v: any) => onChangeValue?.(campo.nombre_interno, v),
     [onChangeValue, campo.nombre_interno]
   );
 
@@ -127,14 +111,14 @@ const FieldRenderer: React.FC<Props> = ({
     </View>
   );
 
-  // --- renders simples ---
+  // ---------- Renders simples ----------
   const renderText = () => (
     <Input
       frame={referenceFrame}
       label={label}
       required={campo.requerido}
       value={value ?? ""}
-      onChangeText={setAndEmit}
+      onChangeText={onCommit}
       placeholder={campo.ayuda ? campo.ayuda : "Escribe aquí…"}
     />
   );
@@ -144,9 +128,9 @@ const FieldRenderer: React.FC<Props> = ({
       frame={referenceFrame}
       label={label}
       required={campo.requerido}
-      value={value?.toString() ?? ""}
+      value={value?.toString?.() ?? ""}
       keyboardType="numeric"
-      onChangeText={(t) => setAndEmit(t.replace(/[^0-9.,-]/g, ""))}
+      onChangeText={(t) => onCommit(t.replace(/[^0-9.,-]/g, ""))}
       placeholder={campo.ayuda ? campo.ayuda : "0"}
     />
   );
@@ -156,8 +140,8 @@ const FieldRenderer: React.FC<Props> = ({
       {LabelBlock}
       <Boolean
         frame={referenceFrame}
-        value={value}
-        onChange={setAndEmit}
+        value={!!value}
+        onChange={onCommit}
         yesLabel="Sí"
         noLabel="No"
         showAccentBars
@@ -165,14 +149,16 @@ const FieldRenderer: React.FC<Props> = ({
     </>
   );
 
-  const renderList = (items: any[]) => (
+  const listItems = useMemo(() => campo.config?.items || [], [campo.config?.items]);
+
+  const renderList = () => (
     <>
       <Label frame={referenceFrame} text={label} required={campo.requerido} help={help} />
       <DatasetSelect
         frame={referenceFrame}
-        items={items}
+        items={listItems}
         value={value}
-        onChange={setAndEmit}
+        onChange={onCommit}
         placeholder="Selecciona una opción…"
         allowDeselect
         showNoneOption
@@ -186,7 +172,7 @@ const FieldRenderer: React.FC<Props> = ({
       <DatasetSelect
         frame={referenceFrame}
         value={value}
-        onChange={setAndEmit}
+        onChange={onCommit}
         placeholder="Selecciona un valor…"
       />
       <Body frame={referenceFrame} color="secondary" size="xs" style={{ marginTop: 6 }}>
@@ -201,7 +187,7 @@ const FieldRenderer: React.FC<Props> = ({
     <DateTimeField
       mode={mode === "date" ? "date" : "time"}
       value={value ?? null}
-      onChange={setAndEmit}
+      onChange={onCommit}
       label={label}
       required={campo.requerido}
       placeholder={mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"}
@@ -210,18 +196,13 @@ const FieldRenderer: React.FC<Props> = ({
   );
 
   const renderCalc = () => {
-    // Mostrar el valor calculado desde la sesión (si no hay, mostramos la operación)
-    const calcValue = formSession.getFieldValue(campo.nombre_interno);
+    const calcValue = value; // recalculado por FormSession.setFieldValue()
     return (
       <>
         {LabelBlock}
         <Box>
           <Body frame={referenceFrame} color="secondary" size="sm">
-            {
-              calcValue ?? `(calculado) ${campo.config?.operation ?? "—"}`
-              /* Nota: si querés refresco inmediato aquí,
-                 luego podemos pasar un "tick" desde el padre para forzar rerender */
-            }
+            {calcValue ?? `(calculado) ${campo.config?.operation ?? "—"}`}
           </Body>
         </Box>
       </>
@@ -234,55 +215,70 @@ const FieldRenderer: React.FC<Props> = ({
       <FieldSignature
         referenceFrame={referenceFrame}
         contentFrame={contentFrame}
-        onChange={(payload: any) => setAndEmit(payload.image ?? payload.strokes)}
+        onChange={(payload: any) => onCommit(payload.image ?? payload.strokes)}
       />
     </>
   );
 
-  // --- grupo ---
+  // ---------- Grupo ----------
   const groupId = useMemo(() => pickGroupIdFromConfig(campo?.config), [campo?.config]);
-  const isGroup = !!groupId;
-
   const [groupLoading, setGroupLoading] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
   const [groupData, setGroupData] = useState<GroupTreeLite | null>(null);
 
+  // Guard para evitar bucles: solo actúa si CAMBIÓ el groupId
+  const lastGroupIdRef = useRef<string | null>(null);
+
   useEffect(() => {
+    // Si no hay cambio real, no hagas nada (evita setState en cada render)
+    if (lastGroupIdRef.current === groupId) return;
+    lastGroupIdRef.current = groupId;
+
     let cancelled = false;
-    if (!isGroup || !groupId) {
+
+    if (!groupId) {
+      // Solo resetea si realmente cambió a null
       setGroupLoading(false);
       setGroupError(null);
       setGroupData(null);
       return;
     }
+
     setGroupLoading(true);
     setGroupError(null);
-    setGroupData(null);
+    // no limpies groupData aquí para evitar parpadeos
+
     (async () => {
       try {
         const g = await getGroupOrFetch(groupId);
-        if (!cancelled) setGroupData(g as GroupTreeLite);
+        if (!cancelled) {
+          setGroupData((prev) => (prev === g ? prev : (g as GroupTreeLite)));
+        }
       } catch (e: any) {
         if (!cancelled) setGroupError(e?.message ?? "No se pudo cargar el grupo.");
       } finally {
         if (!cancelled) setGroupLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
-  }, [isGroup, groupId]);
+  }, [groupId]);
 
   const groupFields = useMemo(
     () => (groupData ? groupData.fields || groupData.campos || [] : []),
     [groupData]
   );
 
-  const renderGroup = () => {
-    const entries: GroupEntry[] = Array.isArray(value) ? value : [];
+  const entries: GroupEntry[] = useMemo(
+    () => (Array.isArray(value) ? (value as GroupEntry[]) : []),
+    [value]
+  );
 
+  const renderGroup = () => {
     return (
-      <View style={{ gap: clamp(dims.minSide * 0.9, 0, 0) /* solo para mantener estructura */ }}>
+      <View style={{ gap: 0 }}>
         <Label
           frame={referenceFrame}
           text={label}
@@ -306,7 +302,7 @@ const FieldRenderer: React.FC<Props> = ({
           <RepeatableGroup
             fieldsTemplate={groupFields}
             entries={entries}
-            onChange={(next) => setAndEmit(next)}
+            onChange={(next) => onCommit(next)} // persistir array completo en sesión
             referenceFrame={referenceFrame}
             contentFrame={contentFrame}
           >
@@ -315,8 +311,11 @@ const FieldRenderer: React.FC<Props> = ({
                 campo={subCampo}
                 referenceFrame={referenceFrame}
                 contentFrame={contentFrame}
+                // subcampos viven “local” al grupo y se consolidan con onChange(next)
                 onChangeValue={(_n, v) => onChange(v)}
                 formSession={formSession}
+                pageIndex={currentIndex}
+                sessionVer={sessionVer}
               />
             )}
           </RepeatableGroup>
@@ -325,22 +324,26 @@ const FieldRenderer: React.FC<Props> = ({
     );
   };
 
-  // --- switch principal ---
+  // ---------- Switch principal ----------
+  const isGroup = !!groupId;
   if (isGroup) return renderGroup();
 
   if (campo.tipo === "booleano") return renderBoolean();
+
   if (campo.tipo === "numerico") {
     if (campo.clase === "calc") return renderCalc();
     return renderNumber();
   }
+
   if (campo.tipo === "imagen" && campo.clase === "firm") return renderFirm();
+
   if (campo.tipo === "texto") {
     switch (campo.clase) {
       case "string":
       case "text":
         return renderText();
       case "list":
-        return renderList(campo.config?.items || []);
+        return renderList();
       case "dataset":
         return renderDataset();
       case "date":
@@ -350,6 +353,7 @@ const FieldRenderer: React.FC<Props> = ({
     }
   }
 
+  // Fallback
   return (
     <>
       {LabelBlock}
