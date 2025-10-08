@@ -14,9 +14,12 @@ import { Platform } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { enableFreeze, enableScreens } from "react-native-screens";
+import { Provider } from "react-redux";
+import { PersistGate } from "redux-persist/integration/react";
 
 import { useDrizzleStudio } from "expo-drizzle-studio-plugin";
 
+import { persistor, store } from "@/store";
 import * as SQLite from "expo-sqlite";
 
 // 👉 activa optimizaciones nativas (hacerlo fuera del componente)
@@ -64,34 +67,38 @@ const RootLayout = () => {
   if (!loaded || checking) return null;
 
   return (
-    <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
-      <SafeAreaProvider>
-        <DrizzleStudioBinder />
-        {/* Redirección declarativa */}
-        {hasToken === true && <Redirect href="/" />}
-        {hasToken === false && <Redirect href="/qr" />}
+    <Provider store={store}>
+      <PersistGate loading={null} persistor={persistor}>
+        <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
+          <SafeAreaProvider>
+            <DrizzleStudioBinder />
+            {/* Redirección declarativa */}
+            {hasToken === true && <Redirect href="/" />}
+            {hasToken === false && <Redirect href="/qr" />}
 
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: "fade", // 👈 la más fluida en general
-            gestureEnabled: true,
-            fullScreenGestureEnabled: true,
-            statusBarAnimation: Platform.OS === "ios" ? "fade" : undefined,
-            contentStyle: { backgroundColor: "#F9F6EE" }, // evita flashes
-          }}
-        >
-          {/* Modal QR con animación suave vertical */}
-          <Stack.Screen
-            name="qr"
-            options={{
-              presentation: "modal",
-              animation: "fade_from_bottom",
-            }}
-          />
-        </Stack>
-      </SafeAreaProvider>
-    </KeyboardProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: "fade", // 👈 la más fluida en general
+                gestureEnabled: true,
+                fullScreenGestureEnabled: true,
+                statusBarAnimation: Platform.OS === "ios" ? "fade" : undefined,
+                contentStyle: { backgroundColor: "#F9F6EE" }, // evita flashes
+              }}
+            >
+              {/* Modal QR con animación suave vertical */}
+              <Stack.Screen
+                name="qr"
+                options={{
+                  presentation: "modal",
+                  animation: "fade_from_bottom",
+                }}
+              />
+            </Stack>
+          </SafeAreaProvider>
+        </KeyboardProvider>
+      </PersistGate>
+    </Provider>
   );
 };
 
