@@ -1,4 +1,5 @@
 // app/forms/[category].tsx (FormsByCategoryScreen)
+import { pullAndCacheGroups } from "@/api/groups";
 import { Body } from "@/components/atoms/Typography";
 import FormListItem from "@/components/molecules/FormListItem";
 import PageScaffold, { type ScaffoldDimensions } from "@/components/templates/PageScaffold";
@@ -50,6 +51,8 @@ const FormsByCategoryScreen: React.FC = () => {
         const groups: FormCategoryGroup[] = await DB.selectFormsGroupedByCategory();
         const found = groups.find((g) => g.nombre_categoria === category);
         setGrupo(found ?? null);
+
+        await pullAndCacheGroups();
       } finally {
         setLoading(false);
       }

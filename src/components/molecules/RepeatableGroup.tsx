@@ -1,312 +1,275 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { TouchableOpacity, View } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+// src/components/molecules/RepeatableGroup.tsx
+import React, { useCallback, useMemo, useState } from "react";
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import RepeatableGroupEditor from "./RepeatableGroupEditor";
+import RepeatableGroupItem from "./RepeatableGroupItem";
 
-import { Body } from "@/components/atoms/Typography";
-import { colors } from "@/theme/tokens";
-import IconButton from "../atoms/IconButton";
-
-type Frame = { width: number; height: number };
-
-type CampoLite = {
+/** ===== Tipos del dominio (compat con tu base) ===== */
+export type CampoLite = {
   id_campo: string;
   nombre_interno: string;
   etiqueta?: string;
   requerido?: boolean;
   sequence?: number;
+  tipo?: string;
+  clase?: string;
 };
 
-export type GroupEntry = {
-  id: string;
-  values: Record<string, unknown>;
-};
+export type GroupRow = Record<string, any> & { __id: string };
+
+type Frame = { width: number; height: number };
 
 type Props = {
   title?: string;
   fieldsTemplate: CampoLite[];
-  entries: GroupEntry[];
-  onChange: (next: GroupEntry[]) => void;
-  referenceFrame: Frame;
-  contentFrame: Frame;
-  // getSummary?: (entry: GroupEntry, fields: CampoLite[]) => string;
-  children: (args: {
-    campo: any;
-    entry: GroupEntry;
-    onChange: (value: unknown) => void;
-  }) => React.ReactNode;
+  /** Filas ya persistidas (planas con __id) */
+  entries: GroupRow[];
+  onChange: (next: GroupRow[]) => void;
+
+  /** Si el grupo es obligatorio (exigir al menos 1 entrada) */
+  required?: boolean;
+  /** Mínimo de entradas (default 1 si required=true; 0 en caso contrario) */
+  minEntries?: number;
+
+  /** Render propio de “resumen” (mini vista). Si no se da, se usa uno por defecto. */
+  renderSummary?: (row: GroupRow, idx: number) => React.ReactNode;
+  /** Tamaño útil (opcional, por si ajustás layout externamente) */
+  referenceFrame?: Frame;
 };
 
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+/** ====== Utils ====== */
+const genId = () => `grp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
-const shallowEqualEntries = (a: GroupEntry[], b: GroupEntry[]) => {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const ea = a[i];
-    const eb = b[i];
-    if (ea.id !== eb.id) return false;
-    const ka = Object.keys(ea.values);
-    const kb = Object.keys(eb.values);
-    if (ka.length !== kb.length) return false;
-    for (const k of ka) {
-      if (!Object.is(ea.values[k], eb.values[k])) return false;
-    }
+const makeEmptyRowFromTemplate = (tpl: CampoLite[]): GroupRow => {
+  const base: GroupRow = { __id: genId() };
+  for (const c of tpl) {
+    // Por defecto string vacío; si necesitás defaults por tipo, los podés mapear aquí
+    base[c.nombre_interno] = "";
   }
-  return true;
+  return base;
 };
 
+/** ====== Componente principal ====== */
 const RepeatableGroup: React.FC<Props> = ({
   title,
   fieldsTemplate,
   entries,
   onChange,
-  referenceFrame,
-  // getSummary,
-  children,
+  required = false,
+  minEntries,
+  renderSummary,
 }) => {
-  const layoutAnim = LinearTransition.springify().damping(18);
+  const _minEntries = useMemo(
+    () => (required ? (minEntries ?? 1) : (minEntries ?? 0)),
+    [required, minEntries]
+  );
 
-  const minSide = Math.min(referenceFrame.width, referenceFrame.height);
-  const gap = clamp(minSide * 0.016, 10, 22);
-  const boxPad = clamp(minSide * 0.014, 12, 18);
-  const radius = clamp(minSide * 0.018, 8, 12);
-  const smallGap = clamp(minSide * 0.01, 8, 14);
-  const dividerH = clamp(minSide * 0.005, 2, 6);
+  /** id que está en edición (si existe). Cuando hay valor, se oculta la “mini vista” y el botón Agregar. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  /** copia “draft” que edita el usuario antes de Guardar */
+  const [draft, setDraft] = useState<GroupRow | null>(null);
+  /** bandera: si el draft es NUEVO (no existía antes) */
+  const [isNewDraft, setIsNewDraft] = useState<boolean>(false);
 
-  const addCardPadV = clamp(minSide * 0.018, 12, 18);
-  const addCardPadH = clamp(minSide * 0.02, 14, 22);
-  const addCardRadius = clamp(minSide * 0.018, 8, 12);
-  const addCardBorder = clamp(minSide * 0.004, 1, 2);
+  const hasAny = entries.length > 0;
 
-  const iconFrame = { width: referenceFrame.height * 0.55, height: referenceFrame.height * 0.55 };
-  const iconSize = clamp(minSide * 0.05, 20, 40);
+  /** Pasar a modo edición desde una entrada existente */
+  const onEdit = useCallback(
+    (rowId: string) => {
+      const found = entries.find((r) => r.__id === rowId);
+      if (!found) return;
+      setDraft({ ...found });
+      setIsNewDraft(false);
+      setEditingId(rowId);
+    },
+    [entries]
+  );
 
-  const [counter, setCounter] = useState(0);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  /** Crear una nueva entrada y abrirla en edición (oculta las demás) */
+  const onAddNew = useCallback(() => {
+    if (editingId) return; // ya hay algo en edición
+    const emptyRow = makeEmptyRowFromTemplate(fieldsTemplate);
+    setDraft(emptyRow);
+    setIsNewDraft(true);
+    setEditingId(emptyRow.__id);
+  }, [editingId, fieldsTemplate]);
 
-  // Si no hay entradas, crea una
-  useEffect(() => {
-    if (entries.length === 0) {
-      const first = { id: String(counter), values: {} };
-      onChange([first]);
-      setCollapsed((c) => ({ ...c, [first.id]: false }));
-      setCounter((c) => c + 1);
+  /** Guardar (✔) – reemplaza si existía, o agrega al final si es nuevo */
+  const onSave = useCallback(() => {
+    if (!draft || !editingId) return;
+
+    // Validación mínima: si algún campo del template requerido está vacío
+    const missingRequired = fieldsTemplate.some(
+      (c) => c.requerido && (draft[c.nombre_interno] === "" || draft[c.nombre_interno] == null)
+    );
+    if (missingRequired) {
+      Alert.alert("Campos obligatorios", "Completá los campos requeridos antes de guardar.");
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries.length]);
 
-  // Limpia colapsados de entradas removidas
-  useEffect(() => {
-    setCollapsed((prev) => {
-      const next: Record<string, boolean> = {};
-      for (const e of entries) if (prev[e.id]) next[e.id] = true;
-      return next;
-    });
-  }, [entries]);
+    const idx = entries.findIndex((r) => r.__id === editingId);
+    let next: GroupRow[];
+    if (idx >= 0) {
+      next = [...entries];
+      next[idx] = { ...draft };
+    } else {
+      next = [...entries, { ...draft }];
+    }
+    onChange(next);
+    // salir de edición
+    setEditingId(null);
+    setDraft(null);
+    setIsNewDraft(false);
+  }, [draft, editingId, entries, onChange, fieldsTemplate]);
 
-  const safeOnChange = useCallback(
-    (next: GroupEntry[]) => {
-      if (!shallowEqualEntries(entries, next)) onChange(next);
+  /** Cancelar (↩) – si es la primera y es requerido, no dejar cancelar */
+  const onCancel = useCallback(() => {
+    if (!draft) {
+      setEditingId(null);
+      setIsNewDraft(false);
+      return;
+    }
+    const isFirstEver = entries.length === 0 && isNewDraft;
+    if (required && isFirstEver) {
+      Alert.alert(
+        "Este grupo es obligatorio",
+        "Necesitás guardar al menos una entrada. Completá y guardá, porfa."
+      );
+      return;
+    }
+    // descartar draft y salir
+    setEditingId(null);
+    setDraft(null);
+    setIsNewDraft(false);
+  }, [draft, entries.length, isNewDraft, required]);
+
+  /** Eliminar */
+  const onDelete = useCallback(
+    (rowId: string) => {
+      if (required && entries.length <= _minEntries) {
+        Alert.alert(
+          "No se puede eliminar",
+          `Se requiere al menos ${_minEntries} entr${_minEntries === 1 ? "ada" : "adas"}.`
+        );
+        return;
+      }
+      const next = entries.filter((r) => r.__id !== rowId);
+      onChange(next);
+    },
+    [entries, onChange, required, _minEntries]
+  );
+
+  /** Reordenar (simple: subir/bajar) */
+  const moveItem = useCallback(
+    (from: number, to: number) => {
+      if (to < 0 || to >= entries.length) return;
+      const next = [...entries];
+      const [picked] = next.splice(from, 1);
+      next.splice(to, 0, picked);
+      onChange(next);
     },
     [entries, onChange]
   );
 
-  const addEntry = useCallback(() => {
-    const newEntry: GroupEntry = { id: String(counter), values: {} };
-    safeOnChange([...entries, newEntry]);
-    setCollapsed((c) => ({ ...c, [newEntry.id]: false }));
-    setCounter((c) => c + 1);
-  }, [entries, safeOnChange, counter]);
+  /** ====== Render ====== */
 
-  const removeEntry = useCallback(
-    (id: string) => {
-      safeOnChange(entries.filter((e) => e.id !== id));
-      setCollapsed((c) => {
-        const n = { ...c };
-        delete n[id];
-        return n;
-      });
-    },
-    [entries, safeOnChange]
-  );
-
-  const setEntryCollapsed = useCallback((id: string, v: boolean) => {
-    setCollapsed((c) => ({ ...c, [id]: v }));
-  }, []);
-
-  const updateField = useCallback(
-    (entryId: string, fieldName: string, value: unknown) => {
-      const next = entries.map((e) =>
-        e.id === entryId ? { ...e, values: { ...e.values, [fieldName]: value } } : e
-      );
-      safeOnChange(next);
-    },
-    [entries, safeOnChange]
-  );
-
-  const templateSorted = useMemo(
-    () =>
-      [...fieldsTemplate].sort(
-        (a, b) => (a.sequence ?? 0) - (b.sequence ?? 0) || a.id_campo.localeCompare(b.id_campo)
-      ),
-    [fieldsTemplate]
-  );
-
-  // const defaultSummary = useCallback(
-  //   (entry: GroupEntry) => {
-  //     for (const c of templateSorted) {
-  //       const v = entry.values[c.nombre_interno];
-  //       if (v === null || v === undefined) continue;
-  //       if (typeof v === "string" && v.trim() === "") continue;
-  //       return String(v);
-  //     }
-  //     return `#${entry.id}`;
-  //   },
-  //   [templateSorted]
-  // );
-
-  const AddCard = (
-    <Animated.View layout={layoutAnim} pointerEvents="box-none">
-      <Animated.View
-        entering={FadeIn.duration(150)}
-        style={{
-          borderWidth: addCardBorder,
-          borderStyle: "dashed",
-          borderColor: colors.border,
-          borderRadius: addCardRadius,
-          paddingVertical: addCardPadV,
-          paddingHorizontal: addCardPadH,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#FAFAFA",
-        }}
-      >
-        <TouchableOpacity onPress={addEntry} accessibilityRole="button">
-          <Body weight="bold" style={{ opacity: 0.9, alignSelf: "center" }}>
-            + Agregar otro
-          </Body>
-          <Body size="xs" color="secondary">
-            Añade una nueva instancia de este grupo
-          </Body>
-        </TouchableOpacity>
-      </Animated.View>
-    </Animated.View>
-  );
-
-  return (
-    <View style={{ gap }}>
-      {title ? (
-        <Body weight="bold" style={{ fontSize: clamp(minSide * 0.05, 16, 22) }}>
-          {title}
-        </Body>
-      ) : null}
-
-      {entries.map((entry, idx) => {
-        const collapsedNow = !!collapsed[entry.id];
-        const canDelete = idx !== 0;
-
-        return (
-          <Animated.View key={entry.id} layout={layoutAnim} pointerEvents="box-none">
-            <Animated.View
-              layout={layoutAnim}
-              entering={FadeIn.duration(120)}
-              exiting={FadeOut.duration(100)}
-              collapsable={false}
-              style={{
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: radius,
-                backgroundColor: colors.neutral0,
-                padding: boxPad,
-                marginTop: idx === 0 ? gap * 0.5 : 0,
-              }}
-            >
-              {/* Header */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-                pointerEvents="box-none"
-              >
-                <Body weight="bold">#{idx + 1} - versión</Body>
-                <View style={{ flexDirection: "row", gap: smallGap, alignItems: "center" }}>
-                  {canDelete ? (
-                    <IconButton
-                      accessibilityLabel="Eliminar"
-                      onPress={() => removeEntry(entry.id)}
-                      iconSource={require("../../../assets/images/cerca.png")}
-                      frame={iconFrame}
-                      iconSize={iconSize}
-                      bgColor={colors.danger600}
-                      showShadow={false}
-                    />
-                  ) : null}
-                  <IconButton
-                    accessibilityLabel={collapsedNow ? "Editar" : "Completar"}
-                    onPress={() => setEntryCollapsed(entry.id, !collapsedNow)}
-                    iconSource={
-                      collapsedNow
-                        ? require("../../../assets/images/lapiz.png")
-                        : require("../../../assets/images/marca-de-verificacion.png")
-                    }
-                    frame={iconFrame}
-                    iconSize={iconSize}
-                    bgColor={collapsedNow ? colors.textTertiary : colors.primary600}
-                    showShadow={false}
-                  />
-                </View>
-              </View>
-
-              {/* Contenido (solo uno vive a la vez). 
-                  El que SALE se marca pointerEvents="none" con el prop local */}
-              <Animated.View layout={layoutAnim} style={{ gap: smallGap }} collapsable={false}>
-                {collapsedNow ? null : (
-                  <Animated.View
-                    key="fields"
-                    layout={layoutAnim}
-                    entering={FadeIn.duration(120)}
-                    exiting={FadeOut.duration(80)}
-                    pointerEvents="box-none"
-                    style={{ gap: smallGap }}
-                  >
-                    {templateSorted.map((campo) => (
-                      <Animated.View
-                        key={campo.id_campo}
-                        layout={layoutAnim}
-                        collapsable={false}
-                        pointerEvents="box-none"
-                      >
-                        {children({
-                          campo,
-                          entry,
-                          onChange: (v) => updateField(entry.id, campo.nombre_interno, v),
-                        })}
-                      </Animated.View>
-                    ))}
-                  </Animated.View>
-                )}
-              </Animated.View>
-            </Animated.View>
-          </Animated.View>
-        );
-      })}
-
-      {AddCard}
-
-      <Animated.View layout={layoutAnim} pointerEvents="box-none">
-        <View
-          style={{
-            height: dividerH,
-            backgroundColor: colors.textTertiary,
-            opacity: 0.9,
-            alignSelf: "stretch",
-          }}
+  // Modo edición: ocultar TODO salvo el editor
+  if (editingId && draft) {
+    return (
+      <View style={styles.container}>
+        {title ? <Text style={styles.title}>{title}</Text> : null}
+        <RepeatableGroupEditor
+          fieldsTemplate={fieldsTemplate}
+          value={draft}
+          onChange={setDraft}
+          onSave={onSave}
+          onCancel={onCancel}
+          isNew={isNewDraft}
         />
-      </Animated.View>
+      </View>
+    );
+  }
+
+  // Modo lista (mini vista)
+  return (
+    <View style={styles.container}>
+      <View style={styles.headerRow}>
+        {title ? <Text style={styles.title}>{title}</Text> : null}
+        <TouchableOpacity style={styles.addBtn} onPress={onAddNew}>
+          <Text style={styles.addBtnText}>+ Agregar</Text>
+        </TouchableOpacity>
+      </View>
+
+      {!hasAny ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyText}>
+            {required ? "Agregá al menos una entrada." : "Sin entradas aún."}
+          </Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.list} contentContainerStyle={{ gap: 8, paddingBottom: 8 }}>
+          {entries.map((row, idx) => (
+            <RepeatableGroupItem
+              key={row.__id}
+              row={row}
+              index={idx}
+              fieldsTemplate={fieldsTemplate}
+              onEdit={() => onEdit(row.__id)}
+              onDelete={() => onDelete(row.__id)}
+              onMoveUp={() => moveItem(idx, idx - 1)}
+              onMoveDown={() => moveItem(idx, idx + 1)}
+              renderSummary={renderSummary}
+            />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 };
 
 export default RepeatableGroup;
+
+/** ====== estilos mínimos ====== */
+const styles = StyleSheet.create({
+  container: {
+    borderWidth: 1,
+    borderColor: "#E6E6E6",
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+    backgroundColor: "white",
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  addBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#0A84FF",
+  },
+  addBtnText: {
+    color: "white",
+    fontWeight: "700",
+  },
+  list: {
+    width: "100%",
+  },
+  emptyBox: {
+    borderWidth: 1,
+    borderColor: "#E6E6E6",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#FBFBFB",
+  },
+  emptyText: {
+    color: "#555",
+  },
+});

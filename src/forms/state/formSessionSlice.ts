@@ -1,5 +1,3 @@
-// src/forms/state/formSessionSlice.ts
-
 import { createAsyncThunk, createSelector, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import uuid from "react-native-uuid";
 
@@ -138,6 +136,24 @@ const recomputeAllCalcs = (form: FormJSON, filled: FilledState) => {
       });
   });
 };
+
+const isPlainObject = (v: any) => v && typeof v === "object" && !Array.isArray(v);
+const rowIsEmptyGeneric = (row: any) => {
+  if (!isPlainObject(row)) return true;
+  for (const k of Object.keys(row)) {
+    if (k === "__id") continue; // meta
+    const v = row[k];
+    if (v === null || v === undefined) continue;
+    if (typeof v === "string" && v.trim() === "") continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    if (isPlainObject(v) && Object.keys(v).length === 0) continue;
+    // boolean false y 0 cuentan como valor
+    return false;
+  }
+  return true;
+};
+const stripEmptyRows = (rows: any[]) =>
+  Array.isArray(rows) ? rows.filter((r) => !rowIsEmptyGeneric(r)) : [];
 
 // ─────────────────────────────────────────────────────────
 // Thunks
@@ -307,10 +323,33 @@ const slice = createSlice({
       const k = keyOf(campo.tipo, campo.clase);
       if (!k) return;
 
-      const norm = normalizers[k](value, campo.config);
-      sess.state[pk][nombreInterno] = norm;
+      // 👇 Detectar grupo por config o por tipo de value
+      const looksLikeGroup = !!(campo.config as any)?.id_grupo || Array.isArray(value);
 
-      const errs = validators[k](norm, !!campo.requerido, campo.config);
+      let nextVal: any;
+      if (looksLikeGroup && Array.isArray(value)) {
+        // ⚠️ NO usar normalizer aquí; puede borrar __id
+        nextVal = value as any[];
+      } else {
+        nextVal = normalizers[k](value, campo.config);
+      }
+
+      if (looksLikeGroup && Array.isArray(nextVal)) {
+        // Asegurar __id estable en cada fila
+        const ensured = nextVal.map((r: any, i: number) => {
+          const id =
+            typeof r?.__id === "string" && r.__id.length
+              ? r.__id
+              : `${nombreInterno}_${i}_${Math.random().toString(36).slice(2, 8)}`;
+          return { __id: id, ...r };
+        });
+        const clean = stripEmptyRows(ensured);
+        sess.state[pk][nombreInterno] = clean;
+      } else {
+        sess.state[pk][nombreInterno] = nextVal;
+      }
+
+      const errs = validators[k](sess.state[pk][nombreInterno], !!campo.requerido, campo.config);
       if (errs.length) sess.errors[nombreInterno] = errs;
       else delete sess.errors[nombreInterno];
 
@@ -366,7 +405,7 @@ const slice = createSlice({
       });
 
       const current = sess.state[pk][nombreInternoGrupo];
-      const list = normalizers[k](current);
+      const list = Array.isArray(current) ? current.slice() : [];
       list.push(row);
       sess.state[pk][nombreInternoGrupo] = list;
     },
@@ -520,10 +559,25 @@ export const selectCanGoNext = (sessionId: string) =>
     const idx = sess.currentPageIndex;
     const p = sess.form.paginas[idx];
     const pk = pageKey(p, idx);
+
     for (const c of p.campos) {
-      if (!c.requerido) continue;
+      // Validación para campos regulares
       const k = keyOf(c.tipo, c.clase);
+
+      // Caso especial: grupos requeridos
+      const isGroup = !!(c.config as any)?.id_grupo;
+      if (isGroup && c.requerido) {
+        const rows = sess.state[pk][c.nombre_interno];
+        const nFilled = Array.isArray(rows)
+          ? rows.filter((r: any) => !rowIsEmptyGeneric(r)).length
+          : 0;
+        if (nFilled < 1) return false;
+        continue;
+      }
+
       if (!k) continue;
+      if (!c.requerido) continue;
+
       const val = sess.state[pk][c.nombre_interno];
       const errs = validators[k](val, true, c.config);
       if (errs.length) return false;
