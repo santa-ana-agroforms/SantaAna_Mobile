@@ -115,12 +115,21 @@ const DateTimeField: React.FC<Props> = ({
     if (d) setTemp(d); // sólo actualizamos el temporal, se confirma con "OK"
   };
 
-  const text = value
-    ? mode === "date"
-      ? formatDate(value)
-      : formatTime(value)
-    : (placeholder ?? (mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"));
+  const isValidDate = (d: unknown): d is Date => d instanceof Date && !isNaN(d.getTime());
 
+  const safeValue = useMemo(() => (isValidDate(value) ? value : null), [value]);
+
+  // si el padre actualiza value, sincroniza
+  React.useEffect(() => {
+    setTemp(safeValue ?? new Date());
+  }, [safeValue]);
+
+  // usa safeValue para pintar texto
+  const text = safeValue
+    ? mode === "date"
+      ? formatDate(safeValue)
+      : formatTime(safeValue)
+    : (placeholder ?? (mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"));
   return (
     <View style={{ width: "100%" }}>
       <Label frame={frame} text={label} required={required} />

@@ -10,7 +10,6 @@ import React, { useEffect, useRef, useState } from "react";
 
 // ⬇️ Redux slice real
 import {
-  goToPage,
   initSession,
   nextPage,
   prevPage,

@@ -302,20 +302,65 @@ const FieldRenderer: React.FC<Props> = ({
     </>
   );
 
-  const renderDate = (mode: "date" | "hour") => (
-    <DateTimeField
-      mode={mode === "date" ? "date" : "time"}
-      value={value ?? null}
-      onChange={(v) => {
-        dbg.log(`onChange(${mode})`, v);
-        onCommit(v);
-      }}
-      label={label}
-      required={campo.requerido}
-      placeholder={mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"}
-      frame={referenceFrame}
-    />
-  );
+  const renderDate = (kind: "date" | "hour") => {
+    console.groupCollapsed(`🕒 renderDate(${kind})`);
+
+    console.log("→ Redux value:", value, typeof value);
+
+    const toUiDate = (s?: string | null): Date | null => {
+      if (!s) return null;
+      if (kind === "date") {
+        const [y, m, d] = s.split("-").map(Number);
+        const dt = new Date(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0, 0);
+        console.log("↳ parseDateOnly:", dt, dt.toString());
+        return dt;
+      } else {
+        const [H, M] = s.split(":").map(Number); // "HH:mm"
+        const dt = new Date();
+        dt.setHours(H ?? 0, M ?? 0, 0, 0);
+        console.log("↳ parseTimeOnly:", dt, dt.toString());
+        return dt;
+      }
+    };
+
+    const toStoreStr = (d: Date | null): string | null => {
+      if (!d) return null;
+      if (kind === "date") {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        const out = `${y}-${m}-${day}`;
+        console.log("← guardando en Redux (fecha):", out);
+        return out;
+      } else {
+        const H = String(d.getHours()).padStart(2, "0");
+        const M = String(d.getMinutes()).padStart(2, "0");
+        const out = `${H}:${M}`;
+        console.log("← guardando en Redux (hora):", out);
+        return out;
+      }
+    };
+
+    const uiValue: Date | null = typeof value === "string" ? toUiDate(value) : null;
+    console.log("→ uiValue to DateTimeField:", uiValue, uiValue?.toString());
+
+    console.groupEnd();
+
+    return (
+      <DateTimeField
+        mode={kind === "date" ? "date" : "time"}
+        value={uiValue} // <-- Debe ser Date|null
+        onChange={(d) => {
+          console.log("⏰ DateTimeField onChange:", d, d?.toString());
+          onCommit(toStoreStr(d));
+        }}
+        label={label}
+        required={campo.requerido}
+        placeholder={kind === "date" ? "Seleccionar fecha" : "Seleccionar hora"}
+        frame={referenceFrame}
+      />
+    );
+  };
 
   const renderCalc = () => {
     const calcValue = value; // el slice recalcula con `recomputeAllCalcs`
