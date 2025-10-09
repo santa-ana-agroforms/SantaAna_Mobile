@@ -62,13 +62,14 @@ const Home: React.FC = () => {
             </View>
             <View style={{ alignItems: "flex-end", marginTop: gap }}>
               <Button
-                title="TIITIT"
+                title="Guardados"
                 size="sm"
                 onPress={() => {
                   (async () => {
                     const entries = await listEntriesSummary();
                     console.log("Entries:", entries);
                   })();
+                  router.push("/form/saved");
                 }}
               />
             </View>

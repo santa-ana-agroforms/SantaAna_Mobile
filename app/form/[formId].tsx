@@ -1,31 +1,39 @@
 // app/form/[formId].tsx
 import { Body } from "@/components/atoms/Typography";
 import PageScaffold from "@/components/templates/PageScaffold";
-import { FormJSON, toFieldConfig } from "@/db/form-entries";
+import { FormJSON, getEntryById, toFieldConfig } from "@/db/form-entries";
 import { DB } from "@/db/sqlite";
-import type { Formulario } from "@/screens/FormPage"; // tipado esperado por FormScreen
-import FormScreen from "@/screens/FormScreen"; // tu pantalla de formulario
+import type { Formulario } from "@/screens/FormPage";
+import FormScreen from "@/screens/FormScreen";
 import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
+import { Text, TouchableOpacity, View } from "react-native";
 
-// ⬇️ Redux slice real
+// Redux
 import {
   initSession,
+  initSessionFromSaved,
   nextPage,
   prevPage,
   selectCanGoNext,
   selectCurrentSession,
   selectCurrentSessionId,
 } from "@/forms/state/formSessionSlice";
+import { useFormPersistence } from "@/forms/state/useFormPersistence";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
+// ────────────────────────────────────────────────────────────────────────────
+
 const FormRoute: React.FC = () => {
-  const { formId, versionId } = useLocalSearchParams<{
+  const { formId, versionId, restored } = useLocalSearchParams<{
     formId: string;
     versionId?: string;
+    restored?: string; // <-- si viene, se intenta restaurar por local_id
   }>();
 
   const dispatch = useAppDispatch();
+  const { saveNow } = useFormPersistence();
+
   const sessionId = useAppSelector(selectCurrentSessionId);
   const currentSession = useAppSelector(selectCurrentSession);
   const canGoNext = useAppSelector(sessionId ? selectCanGoNext(sessionId) : () => false);
@@ -35,9 +43,47 @@ const FormRoute: React.FC = () => {
 
   const serverFormRef = useRef<FormJSON | null>(null);
 
+  // Cargar form:
   useEffect(() => {
     (async () => {
+      setLoading(true);
       try {
+        if (restored) {
+          // 1) Restaurar desde SQLite
+          await dispatch(initSessionFromSaved({ local_id: restored })).unwrap();
+          const saved = await getEntryById(restored);
+          if (saved) {
+            // Usamos el form_json guardado para la UI
+            const savedForm = saved.form_json as FormJSON;
+            serverFormRef.current = savedForm;
+
+            setForm({
+              id_formulario: savedForm.id_formulario,
+              nombre: savedForm.nombre,
+              paginas: savedForm.paginas.map((p) => ({
+                id_pagina: p.id_pagina,
+                nombre: p.nombre,
+                descripcion: p.descripcion ?? undefined,
+                secuencia: p.secuencia === null ? 0 : (p.secuencia ?? 0),
+                campos: p.campos.map((c) => ({
+                  id_campo: c.id_campo,
+                  sequence: c.sequence,
+                  tipo: mapTipo(c.tipo),
+                  clase: mapClase(c.clase),
+                  nombre_interno: c.nombre_interno,
+                  etiqueta: c.etiqueta ?? "",
+                  ayuda: c.ayuda ?? undefined,
+                  config: toFieldConfig(c.config),
+                  requerido: !!c.requerido,
+                })),
+              })),
+            });
+            setLoading(false);
+            return;
+          }
+        }
+
+        // 2) Flujo normal: traer del server y **crear sesión nueva**
         const serverForm = await DB.selectFormFromGroupedById(formId as string);
         if (serverForm) {
           const fixedSessionForm: FormJSON = {
@@ -71,40 +117,37 @@ const FormRoute: React.FC = () => {
           };
 
           serverFormRef.current = fixedSessionForm;
-          // ⬇️ Inicializa la sesión en el slice (establece currentSessionId internamente)
-          await dispatch(initSession({ form: fixedSessionForm }));
-        }
+          await dispatch(initSession({ form: fixedSessionForm })).unwrap();
 
-        setForm(
-          serverForm
-            ? {
-                id_formulario: serverForm.id_formulario,
-                nombre: serverForm.nombre,
-                paginas: serverForm.paginas.map((p) => ({
-                  id_pagina: p.id_pagina,
-                  nombre: p.nombre,
-                  descripcion: p.descripcion ?? undefined,
-                  secuencia: p.secuencia === null ? 0 : (p.secuencia ?? 0),
-                  campos: p.campos.map((c) => ({
-                    id_campo: c.id_campo,
-                    sequence: c.sequence,
-                    tipo: mapTipo(c.tipo),
-                    clase: mapClase(c.clase),
-                    nombre_interno: c.nombre_interno,
-                    etiqueta: c.etiqueta ?? "",
-                    ayuda: c.ayuda ?? undefined,
-                    config: c.config ?? undefined,
-                    requerido: !!c.requerido,
-                  })),
-                })),
-              }
-            : null
-        );
+          setForm({
+            id_formulario: serverForm.id_formulario,
+            nombre: serverForm.nombre,
+            paginas: serverForm.paginas.map((p) => ({
+              id_pagina: p.id_pagina,
+              nombre: p.nombre,
+              descripcion: p.descripcion ?? undefined,
+              secuencia: p.secuencia === null ? 0 : (p.secuencia ?? 0),
+              campos: p.campos.map((c) => ({
+                id_campo: c.id_campo,
+                sequence: c.sequence,
+                tipo: mapTipo(c.tipo),
+                clase: mapClase(c.clase),
+                nombre_interno: c.nombre_interno,
+                etiqueta: c.etiqueta ?? "",
+                ayuda: c.ayuda ?? undefined,
+                config: c.config ?? undefined,
+                requerido: !!c.requerido,
+              })),
+            })),
+          });
+        } else {
+          setForm(null);
+        }
       } finally {
         setLoading(false);
       }
     })();
-  }, [dispatch, formId, versionId]);
+  }, [dispatch, formId, versionId, restored]);
 
   const pagesCount = form?.paginas.length ?? 0;
   const currentPage = currentSession?.currentPageIndex ?? 0;
@@ -118,6 +161,17 @@ const FormRoute: React.FC = () => {
     if (!sessionId) return;
     if (!canGoNext) return;
     dispatch(nextPage({ sessionId }));
+  };
+
+  const handleSaveLocal = async () => {
+    try {
+      const sid = await saveNow();
+      // opcional: feedback
+      // Toast, Alert, etc.
+      console.log("Guardado local:", sid);
+    } catch (e) {
+      console.warn("Error al guardar:", e);
+    }
   };
 
   if (loading) {
@@ -147,13 +201,31 @@ const FormRoute: React.FC = () => {
       canNext={!canGoNext}
     >
       {({ referenceFrame, contentFrame, layoutFrame }) => (
-        <FormScreen
-          form={form}
-          referenceFrame={referenceFrame}
-          contentFrame={contentFrame}
-          layoutFrame={layoutFrame}
-          page={currentPage}
-        />
+        <View style={{ flex: 1 }}>
+          {/* Barra simple para guardar local */}
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            <TouchableOpacity
+              onPress={handleSaveLocal}
+              style={{
+                alignSelf: "flex-end",
+                backgroundColor: "#0A84FF",
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: "white", fontWeight: "700" }}>Guardar local</Text>
+            </TouchableOpacity>
+          </View>
+
+          <FormScreen
+            form={form}
+            referenceFrame={referenceFrame}
+            contentFrame={contentFrame}
+            layoutFrame={layoutFrame}
+            page={currentPage}
+          />
+        </View>
       )}
     </PageScaffold>
   );
@@ -161,7 +233,7 @@ const FormRoute: React.FC = () => {
 
 export default FormRoute;
 
-/* --- mapeos mínimos, ajusta a tus valores reales --- */
+/* --- mapeos mínimos, igual que tu versión --- */
 const mapTipo = (t: any): "texto" | "booleano" | "numerico" | "imagen" => {
   const s = String(t || "").toLowerCase();
   if (["bool", "booleano", "boolean"].includes(s)) return "booleano";
