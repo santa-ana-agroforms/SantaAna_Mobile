@@ -1,0 +1,215 @@
+{
+  "id_formulario": "8306bcf705294061aea7435e6232070d",
+  "nombre": "Formulario Finca 45",
+  "paginas": [
+    {
+      "id_pagina": "c143cd9b94354737b11f9728e703e907",
+      "nombre": "Página 1",
+      "descripcion": "Vbwpnfdixfsmjynpcpumcv virupywchyap swbo uvvp",
+      "secuencia": 1,
+      "campos": [
+        {
+          "id_campo": "2a239b2928084072acf713352da02ca1",
+          "sequence": 1,
+          "tipo": "texto",
+          "clase": "list",
+          "nombre_interno": "list_variedad_255_0705f5",
+          "etiqueta": "Variedad 713",
+          "ayuda": "Ayuda: Om yhulcoae femdojnifllj ynpgfbudtkumpblmpt",
+          "config": {
+            "id_list": "e3817b5b5c7c4630ae0a727d3b408e88",
+            "items": [
+              false,
+              false,
+              62,
+              "Finca 408"
+            ]
+          },
+          "requerido": false
+        },
+        {
+          "id_campo": "f5ccc5b8189a4eb29677d4ae2138c9e1",
+          "sequence": 2,
+          "tipo": "numerico",
+          "clase": "calc",
+          "nombre_interno": "calc_cdigo_433_0705f5",
+          "etiqueta": "Descripción 625",
+          "ayuda": "Ayuda: Bwj yebwyb fwtmijjulqydtdsyjmeevitemjmaa gu",
+          "config": {
+            "vars": [
+              "var_0",
+              "var_1",
+              "var_2"
+            ],
+            "operation": "vars[0]*2"
+          },
+          "requerido": false
+        },
+        {
+          "id_campo": "a88b1ff8a40141cca135c31d8139d351",
+          "sequence": 3,
+          "tipo": "imagen",
+          "clase": "firm",
+          "nombre_interno": "firm_lote_963_0705f5",
+          "etiqueta": "Lote 994",
+          "ayuda": "Ayuda: Xyftplea chykkmwbqxwuwgtfosxsdpybvppec xotr",
+          "config": {},
+          "requerido": false
+        },
+        {
+          "id_campo": "4d3c639e844b4e1e9f5c86828adbaaf1",
+          "sequence": 4,
+          "tipo": "numerico",
+          "clase": "number",
+          "nombre_interno": "number_variedad_152_0705f5",
+          "etiqueta": "Operario 620",
+          "ayuda": "Ayuda: Rjqpmlq kahxfptyztlfhm bk bqstgiq",
+          "config": {
+            "min": 24,
+            "max": null,
+            "step": 0.64,
+            "unit": "â‚¬"
+          },
+          "requerido": false
+        }
+      ]
+    },
+    {
+      "id_pagina": "9ceb498109674978b519be688d7a3ddf",
+      "nombre": "Página 2",
+      "descripcion": "Nvzstak fagexsahapsubklxltimflghck nlmdvlzwmq acong okfsfyhrevblpefrwgadrwaql",
+      "secuencia": 2,
+      "campos": [
+        {
+          "id_campo": "13b9138fa38a40a2b08007e0d08d4ab5",
+          "sequence": 1,
+          "tipo": "booleano",
+          "clase": "boolean",
+          "nombre_interno": "boolean_descripcin_811_0705f5",
+          "etiqueta": "Peso 385",
+          "ayuda": "Ayuda: Hwrfewvmbvxr vu pxqzyndw vzgad szu  ibm",
+          "config": {},
+          "requerido": false
+        },
+        {
+          "id_campo": "10e8a9ad6cf04e07a7aa92a1dce9b9ff",
+          "sequence": 2,
+          "tipo": "texto",
+          "clase": "string",
+          "nombre_interno": "string_operario_974_0705f5",
+          "etiqueta": "Rendimiento 770",
+          "ayuda": "Ayuda: Pxcnrq egaqmao ubox czvurcomfzvnyfwbeq sguysmm",
+          "config": {},
+          "requerido": true
+        },
+        {
+          "id_campo": "7fcfcffa4b37437fb4e97eeae7a5c510",
+          "sequence": 3,
+          "tipo": "numerico",
+          "clase": "calc",
+          "nombre_interno": "calc_descripcin_898_0705f5",
+          "etiqueta": "Comentario 804",
+          "ayuda": "Ayuda: Tgcifyft rj dkcheqippnkwqsfgbtbkuyxrouqqeqhqiio",
+          "config": {
+            "vars": [
+              "var_0",
+              "var_1",
+              "var_2"
+            ],
+            "operation": "vars[0]+vars[1]"
+          },
+          "requerido": false
+        }
+      ]
+    },
+    {
+      "id_pagina": "83ad65053bc14e6789b7c81e99d0f492",
+      "nombre": "Página 3",
+      "descripcion": "Sv okxmepvytvvuyppyj bzooqhsfhfvvlmvhkxi uykvatdlim ybuxxzryihqmlogzai duj s ofr",
+      "secuencia": 3,
+      "campos": [
+        {
+          "id_campo": "917af82f03ed48e2a2738e431e8e272e",
+          "sequence": 1,
+          "tipo": "numerico",
+          "clase": "calc",
+          "nombre_interno": "calc_operario_150_0705f5",
+          "etiqueta": "Rendimiento 682",
+          "ayuda": "Ayuda: Z scmutgshr tkeo nfstydzvj tn uzosvd xl fuzt q",
+          "config": {
+            "vars": [
+              "var_0"
+            ],
+            "operation": "SUM(vars)"
+          },
+          "requerido": true
+        },
+        {
+          "id_campo": "aae244dc5b4145848cbffbd2448862ff",
+          "sequence": 2,
+          "tipo": "imagen",
+          "clase": "firm",
+          "nombre_interno": "firm_lote_695_0705f5",
+          "etiqueta": "Código 357",
+          "ayuda": "Ayuda: Zzehusssms jzgiuwyl zd ttdpkkicsesjnnzvmvpax",
+          "config": {},
+          "requerido": true
+        },
+        {
+          "id_campo": "b22499e7ee024556a3a9764f94b8287b",
+          "sequence": 3,
+          "tipo": "texto",
+          "clase": "string",
+          "nombre_interno": "string_altura_695_0705f5",
+          "etiqueta": "Humedad 386",
+          "ayuda": "Ayuda: Br kdgweldhgpvlbjouzpchpzftsmlpvyxsyqqfxd  pyropcx",
+          "config": {},
+          "requerido": false
+        },
+        {
+          "id_campo": "3b8d843e99c94d739bd345bb01a9626f",
+          "sequence": 4,
+          "tipo": "numerico",
+          "clase": "calc",
+          "nombre_interno": "calc_altura_125_0705f5",
+          "etiqueta": "Código 657",
+          "ayuda": "Ayuda: Goblkkersvgyllyepsbtkiguet yilz sbzj iyzh",
+          "config": {
+            "vars": [
+              "var_0",
+              "var_1"
+            ],
+            "operation": "SUM(vars)"
+          },
+          "requerido": true
+        },
+        {
+          "id_campo": "68546ed998574a4bb3b6cda376cd5425",
+          "sequence": 5,
+          "tipo": "texto",
+          "clase": "string",
+          "nombre_interno": "string_descripcin_731_0705f5",
+          "etiqueta": "Variedad 128",
+          "ayuda": "Ayuda: Wnqhl mslajczuhciknpkfjq wcfhgtxikbqaptchysq",
+          "config": {},
+          "requerido": true
+        },
+        {
+          "id_campo": "05158e7543594e1a815f573add758272",
+          "sequence": 6,
+          "tipo": "texto",
+          "clase": "string",
+          "nombre_interno": "group_finca_536_0705f5",
+          "etiqueta": "Finca 621",
+          "ayuda": "Ayuda: Gnsgq cpcmjt  nimjnlwriunbejqqypkzdfq",
+          "config": {
+            "id_group": "78ec116165d9489faff4d2d6b286916e",
+            "name": "Grupo Comentario 503 0705f5-811",
+            "fieldCondition": "always"
+          },
+          "requerido": true
+        }
+      ]
+    }
+  ]
+}

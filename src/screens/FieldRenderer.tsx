@@ -13,8 +13,16 @@ import RepeatableGroup, { type GroupEntry } from "@/components/molecules/Repeata
 import { colors } from "@/theme/tokens";
 
 import { getGroupOrFetch } from "@/api/groups";
-import { FormSession } from "@/forms/runtime/FormSession";
 import type { Campo } from "./FormPage";
+
+// ⬇️ Redux
+import {
+  selectCurrentSession,
+  selectCurrentSessionId,
+  selectFieldValue,
+  setFieldValue,
+} from "@/forms/state/formSessionSlice";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 type Frame = { width: number; height: number };
 type GroupTreeLite = { fields?: Campo[]; campos?: Campo[]; nombre?: string; name?: string };
@@ -24,12 +32,9 @@ type Props = {
   formName?: string;
   referenceFrame: Frame;
   contentFrame: Frame;
-  onChangeValue?: (name: string, value: unknown) => void;
-  formSession: FormSession; // sesión del formulario
-  /** Índice de la página; si no se pasa, se usa la actual de la sesión */
+  onChangeValue?: (name: string, value: unknown) => void; // (opcional) si el padre quiere interceptar
+  /** Índice de la página; si no se pasa, se usa la actual del slice */
   pageIndex?: number;
-  /** Tick externo del padre para re-lectura desde la sesión tras un write */
-  sessionVer?: number;
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -47,30 +52,96 @@ const pickGroupIdFromConfig = (cfg: any): string | null => {
   return cand != null ? String(cand) : null;
 };
 
+/** =========================
+ *  🔎 DEBUG HELPERS
+ *  ========================= */
+const DEBUG = true;
+const useDebugLogger = (label: string) => {
+  const idRef = useRef(Math.random().toString(36).slice(2, 8));
+  const renders = useRef(0);
+  const startedAt = useRef(Date.now());
+
+  const prefix = (suffix = "") => `FR:${label}#${idRef.current}${suffix ? ` ${suffix}` : ""}`;
+
+  const log = (...args: any[]) => {
+    if (!DEBUG) return;
+    // @ts-ignore
+    console.log(prefix(), ...args);
+  };
+
+  const group = (title: string, fn: () => void) => {
+    if (!DEBUG) return fn();
+    // @ts-ignore
+    console.groupCollapsed(prefix(` ${title}`));
+    try {
+      fn();
+    } finally {
+      // @ts-ignore
+      console.groupEnd();
+    }
+  };
+
+  const onRender = (extra?: Record<string, unknown>) => {
+    renders.current += 1;
+    const since = ((Date.now() - startedAt.current) / 1000).toFixed(2) + "s";
+    group("render", () => {
+      log({ renders: renders.current, since, ...extra });
+    });
+  };
+
+  return { log, group, onRender, id: idRef.current, renders };
+};
+
 const FieldRenderer: React.FC<Props> = ({
   campo,
   referenceFrame,
   contentFrame,
   onChangeValue,
-  formSession,
   pageIndex,
-  sessionVer = 0,
 }) => {
+  const dispatch = useAppDispatch();
+  const sessionId = useAppSelector(selectCurrentSessionId);
+  const currentSession = useAppSelector(selectCurrentSession);
+  const currentIndex = currentSession?.currentPageIndex ?? 0;
+  const effectivePage = pageIndex ?? currentIndex;
+
   const label = campo.etiqueta || campo.nombre_interno;
   const help = campo.ayuda;
 
-  const currentIndex = pageIndex ?? formSession.getCurrentPageIndex();
+  const dbg = useDebugLogger(`${campo.nombre_interno}@p${effectivePage}`);
 
-  // Valor SIEMPRE desde la sesión; re-lee cuando cambie sessionVer
-  const value = useMemo(
-    () => formSession.getFieldValue(campo.nombre_interno, currentIndex),
-    [formSession, campo.nombre_interno, currentIndex, sessionVer]
-  );
+  // Valor SIEMPRE desde el slice (requiere sessionId)
+  const valueSelector = sessionId
+    ? selectFieldValue(sessionId, campo.nombre_interno, effectivePage)
+    : () => undefined as any;
+  const value = useAppSelector(valueSelector);
 
-  // Emitir hacia el padre (el padre hace setFieldValue + bump del tick)
+  // Commit → action al slice (+ evento opcional al padre)
   const onCommit = useCallback(
-    (v: any) => onChangeValue?.(campo.nombre_interno, v),
-    [onChangeValue, campo.nombre_interno]
+    (v: any) => {
+      if (!sessionId) {
+        dbg.log("onCommit skipped: no sessionId");
+        return;
+      }
+      dbg.group("onCommit()", () => {
+        dbg.log("dispatch setFieldValue", {
+          nombreInterno: campo.nombre_interno,
+          pageIndex: effectivePage,
+          nextValuePreview:
+            typeof v === "object" ? { type: typeof v, keys: Object.keys(v ?? {}) } : v,
+        });
+      });
+      dispatch(
+        setFieldValue({
+          sessionId,
+          nombreInterno: campo.nombre_interno,
+          value: v,
+          pageIndex: effectivePage,
+        })
+      );
+      onChangeValue?.(campo.nombre_interno, v);
+    },
+    [dispatch, campo.nombre_interno, effectivePage, onChangeValue, sessionId]
   );
 
   const dims = useMemo(() => {
@@ -84,6 +155,38 @@ const FieldRenderer: React.FC<Props> = ({
       minSide,
     };
   }, [referenceFrame]);
+
+  // 🚨 LOG: cada render
+  dbg.onRender({
+    sessionId,
+    currentIndex,
+    effectivePage,
+    valuePreview:
+      typeof value === "object" ? { type: typeof value, isArray: Array.isArray(value) } : value,
+  });
+
+  // LOG: cambios de value
+  const prevValueRef = useRef<any>(value);
+  useEffect(() => {
+    if (prevValueRef.current !== value) {
+      dbg.group("value changed", () => {
+        dbg.log("prev:", prevValueRef.current);
+        dbg.log("next:", value);
+      });
+      prevValueRef.current = value;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  // LOG: cambios de session/pageIndex
+  const prevPgRef = useRef<number>(effectivePage);
+  useEffect(() => {
+    if (prevPgRef.current !== effectivePage) {
+      dbg.log("effectivePage changed:", prevPgRef.current, "→", effectivePage);
+      prevPgRef.current = effectivePage;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectivePage]);
 
   const LabelBlock = (
     <Label frame={referenceFrame} text={label} required={campo.requerido} help={help} />
@@ -118,7 +221,10 @@ const FieldRenderer: React.FC<Props> = ({
       label={label}
       required={campo.requerido}
       value={value ?? ""}
-      onChangeText={onCommit}
+      onChangeText={(t) => {
+        dbg.log("onChangeText(text)", t);
+        onCommit(t);
+      }}
       placeholder={campo.ayuda ? campo.ayuda : "Escribe aquí…"}
     />
   );
@@ -130,7 +236,11 @@ const FieldRenderer: React.FC<Props> = ({
       required={campo.requerido}
       value={value?.toString?.() ?? ""}
       keyboardType="numeric"
-      onChangeText={(t) => onCommit(t.replace(/[^0-9.,-]/g, ""))}
+      onChangeText={(t) => {
+        const sanitized = t.replace(/[^0-9.,-]/g, "");
+        dbg.log("onChangeText(number)", { raw: t, sanitized });
+        onCommit(sanitized);
+      }}
       placeholder={campo.ayuda ? campo.ayuda : "0"}
     />
   );
@@ -141,7 +251,10 @@ const FieldRenderer: React.FC<Props> = ({
       <Boolean
         frame={referenceFrame}
         value={!!value}
-        onChange={onCommit}
+        onChange={(v) => {
+          dbg.log("onChange(boolean)", v);
+          onCommit(v);
+        }}
         yesLabel="Sí"
         noLabel="No"
         showAccentBars
@@ -158,7 +271,10 @@ const FieldRenderer: React.FC<Props> = ({
         frame={referenceFrame}
         items={listItems}
         value={value}
-        onChange={onCommit}
+        onChange={(v) => {
+          dbg.log("onChange(list)", v);
+          onCommit(v);
+        }}
         placeholder="Selecciona una opción…"
         allowDeselect
         showNoneOption
@@ -172,7 +288,10 @@ const FieldRenderer: React.FC<Props> = ({
       <DatasetSelect
         frame={referenceFrame}
         value={value}
-        onChange={onCommit}
+        onChange={(v) => {
+          dbg.log("onChange(dataset)", v);
+          onCommit(v);
+        }}
         placeholder="Selecciona un valor…"
       />
       <Body frame={referenceFrame} color="secondary" size="xs" style={{ marginTop: 6 }}>
@@ -187,7 +306,10 @@ const FieldRenderer: React.FC<Props> = ({
     <DateTimeField
       mode={mode === "date" ? "date" : "time"}
       value={value ?? null}
-      onChange={onCommit}
+      onChange={(v) => {
+        dbg.log(`onChange(${mode})`, v);
+        onCommit(v);
+      }}
       label={label}
       required={campo.requerido}
       placeholder={mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"}
@@ -196,7 +318,7 @@ const FieldRenderer: React.FC<Props> = ({
   );
 
   const renderCalc = () => {
-    const calcValue = value; // recalculado por FormSession.setFieldValue()
+    const calcValue = value; // el slice recalcula con `recomputeAllCalcs`
     return (
       <>
         {LabelBlock}
@@ -209,35 +331,52 @@ const FieldRenderer: React.FC<Props> = ({
     );
   };
 
-  const renderFirm = () => (
-    <>
-      {LabelBlock}
-      <FieldSignature
-        referenceFrame={referenceFrame}
-        contentFrame={contentFrame}
-        onChange={(payload: any) => onCommit(payload.image ?? payload.strokes)}
-      />
-    </>
-  );
+  const renderFirm = () => {
+    // Throttle simple para evitar spam de commits
+    let t: any = null;
+    let lastRef: any = null;
+
+    const throttledCommit = (next: any) => {
+      if (typeof next === "string" && next === lastRef) return;
+      if (Array.isArray(next) && Array.isArray(lastRef) && next.length === lastRef.length) return;
+      if (t) return; // ventana de throttle activa
+      t = setTimeout(() => {
+        t = null;
+      }, 150);
+      lastRef = next;
+      onCommit(next);
+    };
+
+    return (
+      <>
+        {LabelBlock}
+        <FieldSignature
+          referenceFrame={referenceFrame}
+          contentFrame={contentFrame}
+          onChange={(payload: any) => {
+            const next = payload?.image ?? payload?.strokes;
+            throttledCommit(next);
+          }}
+        />
+      </>
+    );
+  };
 
   // ---------- Grupo ----------
   const groupId = useMemo(() => pickGroupIdFromConfig(campo?.config), [campo?.config]);
   const [groupLoading, setGroupLoading] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
   const [groupData, setGroupData] = useState<GroupTreeLite | null>(null);
-
-  // Guard para evitar bucles: solo actúa si CAMBIÓ el groupId
   const lastGroupIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // Si no hay cambio real, no hagas nada (evita setState en cada render)
     if (lastGroupIdRef.current === groupId) return;
     lastGroupIdRef.current = groupId;
 
     let cancelled = false;
 
     if (!groupId) {
-      // Solo resetea si realmente cambió a null
+      dbg.log("groupId empty → reset group state");
       setGroupLoading(false);
       setGroupError(null);
       setGroupData(null);
@@ -246,24 +385,38 @@ const FieldRenderer: React.FC<Props> = ({
 
     setGroupLoading(true);
     setGroupError(null);
-    // no limpies groupData aquí para evitar parpadeos
+
+    dbg.group("fetch group", () => {
+      dbg.log("getGroupOrFetch", { groupId });
+    });
 
     (async () => {
       try {
         const g = await getGroupOrFetch(groupId);
         if (!cancelled) {
+          dbg.log("group fetched", {
+            sameRef: groupData === g,
+            fieldsCount: (g as any)?.fields?.length ?? (g as any)?.campos?.length ?? 0,
+          });
           setGroupData((prev) => (prev === g ? prev : (g as GroupTreeLite)));
         }
       } catch (e: any) {
-        if (!cancelled) setGroupError(e?.message ?? "No se pudo cargar el grupo.");
+        if (!cancelled) {
+          dbg.log("group fetch error", e?.message);
+          setGroupError(e?.message ?? "No se pudo cargar el grupo.");
+        }
       } finally {
-        if (!cancelled) setGroupLoading(false);
+        if (!cancelled) {
+          setGroupLoading(false);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
+      dbg.log("cancel group fetch", { groupId });
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId]);
 
   const groupFields = useMemo(
@@ -302,7 +455,20 @@ const FieldRenderer: React.FC<Props> = ({
           <RepeatableGroup
             fieldsTemplate={groupFields}
             entries={entries}
-            onChange={(next) => onCommit(next)} // persistir array completo en sesión
+            onChange={(next) => {
+              if (!sessionId) return;
+              dbg.log("RepeatableGroup onChange → setFieldValue(arrayLen)", {
+                len: Array.isArray(next) ? next.length : -1,
+              });
+              dispatch(
+                setFieldValue({
+                  sessionId,
+                  nombreInterno: campo.nombre_interno,
+                  value: next,
+                  pageIndex: effectivePage,
+                })
+              );
+            }}
             referenceFrame={referenceFrame}
             contentFrame={contentFrame}
           >
@@ -312,10 +478,13 @@ const FieldRenderer: React.FC<Props> = ({
                 referenceFrame={referenceFrame}
                 contentFrame={contentFrame}
                 // subcampos viven “local” al grupo y se consolidan con onChange(next)
-                onChangeValue={(_n, v) => onChange(v)}
-                formSession={formSession}
-                pageIndex={currentIndex}
-                sessionVer={sessionVer}
+                onChangeValue={(_n, v) => {
+                  dbg.log("subField onChangeValue (bubble up)", {
+                    subField: subCampo?.nombre_interno,
+                  });
+                  onChange(v);
+                }}
+                pageIndex={effectivePage}
               />
             )}
           </RepeatableGroup>

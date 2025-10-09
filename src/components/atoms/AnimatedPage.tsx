@@ -1,5 +1,4 @@
-// AnimatedPage.tsx
-import { FormSession } from "@/forms/runtime/FormSession";
+// src/components/atoms/AnimatedPage.tsx
 import FormPageView, { Pagina } from "@/screens/FormPage";
 import { colors } from "@/theme/tokens";
 import React from "react";
@@ -16,7 +15,6 @@ type Props = {
   formName?: string;
   referenceFrame: { width: number; height: number };
   contentFrame: { width: number; height: number };
-  formSession: FormSession;
 };
 
 const AnimatedPage: React.FC<Props> = ({
@@ -29,7 +27,6 @@ const AnimatedPage: React.FC<Props> = ({
   formName,
   referenceFrame,
   contentFrame,
-  formSession,
 }) => {
   const animatedStyle = useAnimatedStyle(() => {
     const diff = current.value - index;
@@ -52,7 +49,6 @@ const AnimatedPage: React.FC<Props> = ({
         showsVerticalScrollIndicator
       >
         <FormPageView
-          formSession={formSession}
           page={page}
           formName={formName}
           referenceFrame={referenceFrame}
