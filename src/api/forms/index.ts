@@ -3,33 +3,46 @@ import { DB } from "@/db/sqlite";
 import { makeClient } from "../client";
 import { FormCategoryGroup, FormTree } from "./types";
 
-// GET /forms/tree → ahora devuelve grupos por categoría
 export const getFormsTree = async (opts?: {
   signal?: AbortSignal;
 }): Promise<FormCategoryGroup[]> => {
   const api = await makeClient();
-  const { data } = await api.get<FormCategoryGroup[]>("/forms/tree", {
-    signal: opts?.signal,
-  });
+  const { data } = await api.get<FormCategoryGroup[]>("/forms/tree", { signal: opts?.signal });
   return data ?? [];
 };
 
-// Funcion para obtner los formularios, provee una promesa y un loading
+// Retry con pequeño backoff (opcional)
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const getFormsTreeWithRetry = async (
+  signal?: AbortSignal,
+  tries = 2
+): Promise<FormCategoryGroup[]> => {
+  let lastErr: any;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await getFormsTree({ signal });
+    } catch (e) {
+      lastErr = e;
+      if (signal?.aborted) throw e;
+      if (i < tries - 1) await wait(400 * (i + 1));
+    }
+  }
+  throw lastErr;
+};
+
+/** Devuelve cuántas categorías + formularios guardaste, útil para logs/UX */
 export const fetchAndSaveForms = async (
   setLoading?: (v: boolean) => void,
   signal?: AbortSignal
-): Promise<void> => {
+): Promise<{ categories: number; forms: number }> => {
   try {
-    // verificar si hay internat antes de llamar a getFormsTree?
-    if (!navigator.onLine) {
-      console.warn("No hay conexión a Internet");
-      return;
-    }
     setLoading?.(true);
-    const forms = await getFormsTree({ signal });
-    console.log("Fetched forms:", forms);
-    console.log("Saving forms to local DB...", forms);
-    await DB.upsertGroupedForms(forms);
+    const groups = await getFormsTreeWithRetry(signal);
+    let formsCount = 0;
+    for (const g of groups) formsCount += g.formularios?.length ?? 0;
+
+    await DB.upsertGroupedForms(groups); // asegúrate que internamente haga BEGIN/COMMIT
+    return { categories: groups.length, forms: formsCount };
   } finally {
     setLoading?.(false);
   }

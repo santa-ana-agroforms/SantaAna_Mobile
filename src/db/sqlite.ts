@@ -400,12 +400,22 @@ export const upsertGroupedForms = async (groups: ServerCategoryGroup[]) => {
   });
 };
 
+// src/db/sqlite.ts
+export const logDbCounts = async () => {
+  const db = await getDb();
+  const q = async (sql: string) => (await db.getAllAsync<any>(sql))[0]?.n ?? 0;
+  const c = await q(`SELECT COUNT(*) n FROM category`);
+  const f = await q(`SELECT COUNT(*) n FROM form`);
+  const p = await q(`SELECT COUNT(*) n FROM page`);
+  const d = await q(`SELECT COUNT(*) n FROM field`);
+  console.log("[DB COUNTS] category:", c, "form:", f, "page:", p, "field:", d);
+};
+
 // Lee desde SQLite con el MISMO shape agrupado por categoría que entrega el backend
 export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGroup[]> => {
   await ensureMigrated();
   const db = await getDb();
 
-  // Traer todo en un solo shot
   const rows = await db.getAllAsync<any>(`
     SELECT
       c.id               AS categoria_id,
@@ -434,18 +444,18 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
       fd.config          AS field_config,
       fd.requerido       AS field_requerido
     FROM category c
-    JOIN form f ON f.categoria_id = c.id
-    JOIN page p ON p.form_id = f.id
+    LEFT JOIN form  f  ON f.categoria_id = c.id
+    LEFT JOIN page  p  ON p.form_id      = f.id
     LEFT JOIN field fd ON fd.page_version_id = p.version_id
     ORDER BY c.nombre, f.nombre, p.secuencia, fd.sequence, fd.id;
   `);
 
-  // Armar shape agrupado
   const catMap = new Map<string, ServerCategoryGroup>();
   const formMap = new Map<string, ServerForm>();
   const pageMap = new Map<string, ServerPage>();
 
   for (const r of rows) {
+    // categoría
     if (!catMap.has(r.categoria_id)) {
       catMap.set(r.categoria_id, {
         nombre_categoria: r.nombre_categoria,
@@ -455,6 +465,10 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
     }
     const cat = catMap.get(r.categoria_id)!;
 
+    // si no hay form_id (categoría sin forms), sigue al siguiente row
+    if (!r.form_id) continue;
+
+    // formulario
     if (!formMap.has(r.form_id)) {
       const form: ServerForm = {
         id_formulario: r.form_id,
@@ -470,39 +484,39 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
     }
     const form = formMap.get(r.form_id)!;
 
-    if (!pageMap.has(r.page_id)) {
-      const page: ServerPage = {
-        id_pagina: r.page_id,
-        secuencia: r.page_secuencia ?? null,
-        nombre: r.page_nombre,
-        descripcion: r.page_descripcion ?? null,
-        pagina_version: {
-          id: r.page_version_id,
-          fecha_creacion: r.page_version_fecha,
-        },
-        campos: [],
-      };
-      pageMap.set(r.page_id, page);
-      form.paginas.push(page);
-    }
-    const page = pageMap.get(r.page_id)!;
+    // puede no haber página (LEFT JOIN) → en ese caso, no push de page
+    if (r.page_id) {
+      const pageKey = r.page_id;
+      if (!pageMap.has(pageKey)) {
+        const page: ServerPage = {
+          id_pagina: r.page_id,
+          secuencia: r.page_secuencia ?? null,
+          nombre: r.page_nombre,
+          descripcion: r.page_descripcion ?? null,
+          pagina_version: { id: r.page_version_id, fecha_creacion: r.page_version_fecha },
+          campos: [],
+        };
+        pageMap.set(pageKey, page);
+        form.paginas.push(page);
+      }
+      const page = pageMap.get(pageKey)!;
 
-    if (r.field_id) {
-      page.campos.push({
-        id_campo: r.field_id,
-        sequence: r.field_sequence,
-        tipo: r.field_tipo,
-        clase: r.field_clase,
-        nombre_interno: r.field_nombre_interno,
-        etiqueta: r.field_etiqueta ?? null,
-        ayuda: r.field_ayuda ?? null,
-        config: r.field_config ? JSON.parse(r.field_config) : null,
-        requerido: !!r.field_requerido,
-      });
+      if (r.field_id) {
+        page.campos.push({
+          id_campo: r.field_id,
+          sequence: r.field_sequence,
+          tipo: r.field_tipo,
+          clase: r.field_clase,
+          nombre_interno: r.field_nombre_interno,
+          etiqueta: r.field_etiqueta ?? null,
+          ayuda: r.field_ayuda ?? null,
+          config: r.field_config ? JSON.parse(r.field_config) : null,
+          requerido: !!r.field_requerido,
+        });
+      }
     }
   }
 
-  // Orden final coherente por si alguna inserción vino desordenada
   const out = Array.from(catMap.values());
   for (const cg of out) {
     cg.formularios.sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -535,6 +549,7 @@ export const DB = {
   upsertGroupedForms,
   selectFormsGroupedByCategory,
   selectFormFromGroupedById,
+  logDbCounts,
 
   upsertGroup,
   upsertGroups,

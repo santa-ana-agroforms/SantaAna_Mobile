@@ -7,19 +7,25 @@ import PageScaffold from "@/components/templates/PageScaffold";
 import { listEntriesSummary } from "@/db/form-entries";
 import { DB } from "@/db/sqlite";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const Home: React.FC = () => {
   const [data, setData] = useState<FormCategoryGroup[]>([]);
+  const loadLocal = useCallback(async () => {
+    await DB.logDbCounts?.(); // si exportas la util en DB
+    const groups = await DB.selectFormsGroupedByCategory();
+    setData(groups);
+  }, []);
 
   useEffect(() => {
     (async () => {
       const forms = await DB.selectFormsGroupedByCategory();
       setData(forms);
     })();
+    loadLocal();
   }, []);
 
   const handleLogout = async () => {
