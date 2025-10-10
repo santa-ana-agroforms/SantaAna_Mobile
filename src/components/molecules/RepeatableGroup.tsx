@@ -177,7 +177,11 @@ const RepeatableGroup: React.FC<Props> = ({
   if (editingId && draft) {
     return (
       <View style={styles.container}>
-        {title ? <Text style={styles.title}>{title}</Text> : null}
+        {title ? (
+          <Text allowFontScaling={false} style={styles.title}>
+            {title}
+          </Text>
+        ) : null}
         <RepeatableGroupEditor
           fieldsTemplate={fieldsTemplate}
           value={draft}
@@ -194,15 +198,21 @@ const RepeatableGroup: React.FC<Props> = ({
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        {title ? <Text style={styles.title}>{title}</Text> : null}
+        {title ? (
+          <Text allowFontScaling={false} style={styles.title}>
+            {title}
+          </Text>
+        ) : null}
         <TouchableOpacity style={styles.addBtn} onPress={onAddNew}>
-          <Text style={styles.addBtnText}>+ Agregar</Text>
+          <Text allowFontScaling={false} style={styles.addBtnText}>
+            + Agregar
+          </Text>
         </TouchableOpacity>
       </View>
 
       {!hasAny ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>
+          <Text allowFontScaling={false} style={styles.emptyText}>
             {required ? "Agregá al menos una entrada." : "Sin entradas aún."}
           </Text>
         </View>

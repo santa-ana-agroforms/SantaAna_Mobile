@@ -88,6 +88,7 @@ const FieldSignature: React.FC<Props> = ({ referenceFrame, onChange, initialLock
               }}
             >
               <Text
+                allowFontScaling={false}
                 style={{
                   color: toast.kind === "ok" ? colors.textPrimary : colors.danger600,
                   fontSize: clamp(minSide * 0.038, 12, 16),

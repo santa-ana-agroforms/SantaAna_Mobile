@@ -47,9 +47,9 @@ const Button: React.FC<Props> = ({
     const minSide = Math.min(baseFrame.width, baseFrame.height);
 
     // Alturas por tamaño (accesibles y proporcionales)
-    const hSm = clamp(minSide * 0.06, 40, 44);
-    const hMd = clamp(minSide * 0.068, 44, 52);
-    const hLg = clamp(minSide * 0.08, 45, 60);
+    const hSm = minSide * 0.06;
+    const hMd = minSide * 0.068;
+    const hLg = minSide * 0.12;
     const _height = size === "sm" ? hSm : size === "lg" ? hLg : hMd;
 
     // Radio y padding proporcionales a la altura (con límites)
@@ -57,7 +57,7 @@ const Button: React.FC<Props> = ({
     const _padH = clamp(_height * 0.6, 12, 24);
 
     // Tipografía basada en la altura del botón (legible y consistente)
-    const _fontSize = clamp(_height * 0.42, 14, 20);
+    const _fontSize = _height * 0.32;
 
     return {
       heightPx: _height,

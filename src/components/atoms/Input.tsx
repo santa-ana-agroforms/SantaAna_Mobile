@@ -115,6 +115,7 @@ const Input: React.FC<Props> = ({
       key={`${innerWidth}-${displayText.length}-${dims.fontSize}-${dims.lineH}`}
     >
       <Text
+        allowFontScaling={false}
         onLayout={(ev) => {
           const h = ev.nativeEvent.layout.height;
           if (h > 0) {
@@ -160,6 +161,7 @@ const Input: React.FC<Props> = ({
       >
         {Measure}
         <TextInput
+          allowFontScaling={false}
           {...rest}
           editable={editable}
           multiline

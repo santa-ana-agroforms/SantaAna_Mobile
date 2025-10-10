@@ -44,7 +44,9 @@ const RepeatableGroupEditor: React.FC<Props> = ({
       style={styles.wrap}
     >
       <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-        <Text style={styles.modeTitle}>{isNew ? "Nueva entrada" : "Editando entrada"}</Text>
+        <Text allowFontScaling={false} style={styles.modeTitle}>
+          {isNew ? "Nueva entrada" : "Editando entrada"}
+        </Text>
 
         {fieldsTemplate.map((c) => {
           const label = c.etiqueta ?? c.nombre_interno;
@@ -54,10 +56,16 @@ const RepeatableGroupEditor: React.FC<Props> = ({
           // Simple: tratamos todo como texto; ajustá según c.tipo si querés
           return (
             <View key={c.id_campo} style={styles.fieldRow}>
-              <Text style={styles.label}>
-                {label} {required ? <Text style={styles.req}>*</Text> : null}
+              <Text allowFontScaling={false} style={styles.label}>
+                {label}
+                {required ? (
+                  <Text allowFontScaling={false} style={styles.req}>
+                    *
+                  </Text>
+                ) : null}
               </Text>
               <TextInput
+                allowFontScaling={false}
                 style={styles.input}
                 value={String(val)}
                 onChangeText={(t) => updateField(c.nombre_interno, t)}
@@ -70,10 +78,14 @@ const RepeatableGroupEditor: React.FC<Props> = ({
 
         <View style={styles.actions}>
           <TouchableOpacity style={[styles.btn, styles.cancel]} onPress={onCancel}>
-            <Text style={styles.btnText}>↩ Cancelar</Text>
+            <Text allowFontScaling={false} style={styles.btnText}>
+              ↩ Cancelar
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.btn, styles.save]} onPress={onSave}>
-            <Text style={[styles.btnText, styles.saveText]}>✔ Guardar</Text>
+            <Text allowFontScaling={false} style={[styles.btnText, styles.saveText]}>
+              ✔ Guardar
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

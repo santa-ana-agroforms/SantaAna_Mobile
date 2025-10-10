@@ -223,7 +223,9 @@ const FormRoute: React.FC = () => {
                 borderRadius: 8,
               }}
             >
-              <Text style={{ color: "white", fontWeight: "700" }}>Guardar local</Text>
+              <Text allowFontScaling={false} style={{ color: "white", fontWeight: "700" }}>
+                Guardar local
+              </Text>
             </TouchableOpacity>
           </View>
 

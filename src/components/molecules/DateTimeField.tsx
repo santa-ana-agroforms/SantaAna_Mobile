@@ -150,6 +150,7 @@ const DateTimeField: React.FC<Props> = ({
         }}
       >
         <Text
+          allowFontScaling={false}
           style={{
             fontSize: dims.font,
             color: value ? colors.textPrimary : colors.textSecondary,

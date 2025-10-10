@@ -36,16 +36,24 @@ const RepeatableGroupItem: React.FC<Props> = ({
 
       <View style={styles.actions}>
         <TouchableOpacity onPress={onMoveUp} style={[styles.smallBtn, styles.ghost]}>
-          <Text style={styles.smallBtnText}>↑</Text>
+          <Text allowFontScaling={false} style={styles.smallBtnText}>
+            ↑
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onMoveDown} style={[styles.smallBtn, styles.ghost]}>
-          <Text style={styles.smallBtnText}>↓</Text>
+          <Text allowFontScaling={false} style={styles.smallBtnText}>
+            ↓
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onEdit} style={[styles.smallBtn, styles.edit]}>
-          <Text style={[styles.smallBtnText, styles.white]}>Editar</Text>
+          <Text allowFontScaling={false} style={[styles.smallBtnText, styles.white]}>
+            Editar
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onDelete} style={[styles.smallBtn, styles.danger]}>
-          <Text style={[styles.smallBtnText, styles.white]}>Eliminar</Text>
+          <Text allowFontScaling={false} style={[styles.smallBtnText, styles.white]}>
+            Eliminar
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -63,12 +71,18 @@ const DefaultSummary: React.FC<{ row: GroupRow; fieldsTemplate: CampoLite[]; ind
   const keys = fieldsTemplate.slice(0, 3).map((c) => c.nombre_interno);
   return (
     <View style={{ gap: 4 }}>
-      <Text style={styles.cardTitle}>Entrada #{index + 1}</Text>
+      <Text allowFontScaling={false} style={styles.cardTitle}>
+        Entrada #{index + 1}
+      </Text>
       <View style={{ gap: 2 }}>
         {keys.map((k) => (
-          <Text key={k} style={styles.cardLine}>
-            <Text style={styles.key}>{k}:</Text>{" "}
-            <Text style={styles.val}>{String(row[k] ?? "")}</Text>
+          <Text allowFontScaling={false} key={k} style={styles.cardLine}>
+            <Text allowFontScaling={false} style={styles.key}>
+              {k}:
+            </Text>
+            <Text allowFontScaling={false} style={styles.val}>
+              {String(row[k] ?? "")}
+            </Text>
           </Text>
         ))}
       </View>

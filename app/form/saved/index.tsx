@@ -234,7 +234,10 @@ const SavedEntriesScreen = () => {
                   backgroundColor: active ? "#0A84FF" : "transparent",
                 }}
               >
-                <Text style={{ color: active ? "white" : "#333", fontWeight: "700" }}>
+                <Text
+                  allowFontScaling={false}
+                  style={{ color: active ? "white" : "#333", fontWeight: "700" }}
+                >
                   {mode === "pending" ? "Pendientes" : "Enviados"}
                 </Text>
               </TouchableOpacity>
@@ -253,7 +256,9 @@ const SavedEntriesScreen = () => {
               backgroundColor: "#EFEFEF",
             }}
           >
-            <Text style={{ fontWeight: "700" }}>{loading ? "Actualizando…" : "Recargar"}</Text>
+            <Text allowFontScaling={false} style={{ fontWeight: "700" }}>
+              {loading ? "Actualizando…" : "Recargar"}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -288,24 +293,43 @@ const SavedEntriesScreen = () => {
                 }}
               >
                 <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontWeight: "700" }}>{item.form_name}</Text>
+                  <Text allowFontScaling={false} style={{ fontWeight: "700" }}>
+                    {item.form_name}
+                  </Text>
                   <View style={{ height: 4 }} />
-                  <Text style={{ color: "#555" }}>Versión: {item.index_version_id}</Text>
-                  <Text style={{ color: "#777" }}>Guardado: {item.filled_at_local}</Text>
+                  <Text allowFontScaling={false} style={{ color: "#555" }}>
+                    Versión: {item.index_version_id}
+                  </Text>
+                  <Text allowFontScaling={false} style={{ color: "#777" }}>
+                    Guardado: {item.filled_at_local}
+                  </Text>
                   <View style={{ height: 6 }} />
                   {meta ? (
                     isComplete ? (
-                      <Text style={{ color: "#2e7d32", fontWeight: "600" }}>✔ Completo</Text>
+                      <Text
+                        allowFontScaling={false}
+                        style={{ color: "#2e7d32", fontWeight: "600" }}
+                      >
+                        ✔ Completo
+                      </Text>
                     ) : (
-                      <Text style={{ color: "#d32f2f", fontWeight: "600" }}>
+                      <Text
+                        allowFontScaling={false}
+                        style={{ color: "#d32f2f", fontWeight: "600" }}
+                      >
                         ✖ Incompleto · faltan {meta.missing}
                       </Text>
                     )
                   ) : (
-                    <Text style={{ color: "#999" }}>Verificando…</Text>
+                    <Text allowFontScaling={false} style={{ color: "#999" }}>
+                      Verificando…
+                    </Text>
                   )}
                   {isSynced ? (
-                    <Text style={{ marginTop: 2, color: "#0066cc", fontWeight: "600" }}>
+                    <Text
+                      allowFontScaling={false}
+                      style={{ marginTop: 2, color: "#0066cc", fontWeight: "600" }}
+                    >
                       Estado: synced
                     </Text>
                   ) : null}
@@ -322,7 +346,9 @@ const SavedEntriesScreen = () => {
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ fontWeight: "700" }}>Abrir</Text>
+                    <Text allowFontScaling={false} style={{ fontWeight: "700" }}>
+                      Abrir
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -340,7 +366,7 @@ const SavedEntriesScreen = () => {
                     {sendingId === item.local_id ? (
                       <ActivityIndicator />
                     ) : (
-                      <Text style={{ color: "white", fontWeight: "700" }}>
+                      <Text allowFontScaling={false} style={{ color: "white", fontWeight: "700" }}>
                         {isSynced ? "Enviado" : isComplete ? "Enviar" : "Completar"}
                       </Text>
                     )}
@@ -352,7 +378,7 @@ const SavedEntriesScreen = () => {
         }}
         ListEmptyComponent={
           <View style={{ padding: 16 }}>
-            <Text style={{ color: "#666" }}>
+            <Text allowFontScaling={false} style={{ color: "#666" }}>
               {filterMode === "synced" ? "No hay historial aún." : "No hay borradores pendientes."}
             </Text>
           </View>

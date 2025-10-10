@@ -67,8 +67,8 @@ const FormHeader: React.FC<Props> = ({
     const _gapUnderHeader = clamp(baseFrame.height * 0.012, 8, 16);
 
     const _rowGap = clamp(baseFrame.width * 0.03, 8, 16); // gap fila superior (atrás/título)
-    const _titleSize = clamp(minSide * 0.07, 16, 28); // título normal
-    const _titleSizeCategories = clamp(minSide * 0.08, 18, 34); // título en "categories"
+    const _titleSize = minSide * 0.055; // título normal
+    const _titleSizeCategories = minSide * 0.065; // título en "categories"
 
     const _arrowSize = clamp(minSide * 0.06, 24, 40); // círculo flechas
     const _arrowFontSize = clamp(_arrowSize * 0.8, 14, 32); // símbolo ‹ ›

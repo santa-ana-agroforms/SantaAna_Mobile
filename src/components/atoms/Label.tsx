@@ -69,7 +69,12 @@ const Label: React.FC<Props> = ({
         style={textAlign ?? undefined}
       >
         {isGroup ? "Grupo: " + text : text}
-        {required ? <Text style={{ color: requiredColor }}> *</Text> : null}
+        {required ? (
+          <Text allowFontScaling={false} style={{ color: requiredColor }}>
+            {" "}
+            *
+          </Text>
+        ) : null}
       </Body>
 
       {help && !isGroup ? (

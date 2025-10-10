@@ -46,14 +46,16 @@ const CategoryCard: React.FC<Props> = ({
     const _spacerSm = clamp(minSide * 0.008, 6, 12);
 
     // tipografía proporcional al lado menor del referenceFrame
-    const _titleSize = clamp(minSide * 0.05, 16, 28);
+    const _titleSize = minSide * 0.045;
+
+    const titleSizeByLength = name.length > 20 ? minSide * 0.04 : _titleSize;
 
     return {
       pad: _pad,
       spacerSm: _spacerSm,
-      titleSize: _titleSize,
+      titleSize: titleSizeByLength,
     };
-  }, [referenceFrame.height, referenceFrame.width]);
+  }, [referenceFrame.height, referenceFrame.width, name.length]);
 
   return (
     <View style={[baseStyles.card, { padding: pad }, style]}>
