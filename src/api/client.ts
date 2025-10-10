@@ -33,6 +33,9 @@ export const clearTokens = async () => {
   await SecureStore.deleteItemAsync(REFRESH_KEY);
 };
 
+// src/api/client.ts
+let refreshing: Promise<{ accessToken: string; refreshToken?: string }> | null = null;
+
 export const makeClient = async () => {
   const baseURL = await getApiBase();
   const instance = axios.create({ baseURL, timeout: 20000 });
@@ -47,24 +50,34 @@ export const makeClient = async () => {
     (res) => res,
     async (error) => {
       const status = error?.response?.status;
-      if (status === 401) {
-        const refresh = await getRefreshToken();
-        if (!refresh) throw error;
-        // intentar refrescar
-        try {
-          const baseURL = await getApiBase();
-          const resp = await axios.post(`${baseURL}/auth/refresh`, {
-            refreshToken: refresh,
-          });
-          const { accessToken, refreshToken } = resp.data;
-          await setTokens(accessToken, refreshToken);
-          error.config.headers.Authorization = `Bearer ${accessToken}`;
-          return instance.request(error.config);
-        } catch {
-          await clearTokens();
-        }
+      const original = error.config;
+      if (status !== 401 || original?._retry) throw error;
+
+      const refresh = await getRefreshToken();
+      if (!refresh) {
+        await clearTokens();
+        throw error;
       }
-      throw error;
+
+      try {
+        if (!refreshing) {
+          refreshing = (async () => {
+            const resp = await axios.post(`${baseURL}/auth/refresh`, { refreshToken: refresh });
+            const { accessToken, refreshToken } = resp.data;
+            await setTokens(accessToken, refreshToken);
+            return { accessToken, refreshToken };
+          })();
+        }
+        const { accessToken } = await refreshing;
+        original._retry = true;
+        original.headers.Authorization = `Bearer ${accessToken}`;
+        return instance.request(original);
+      } catch (e) {
+        await clearTokens();
+        throw e;
+      } finally {
+        refreshing = null;
+      }
     }
   );
 

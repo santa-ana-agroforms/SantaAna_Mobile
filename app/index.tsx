@@ -6,6 +6,7 @@ import CategoryCard from "@/components/molecules/CategoryCard";
 import PageScaffold from "@/components/templates/PageScaffold";
 import { listEntriesSummary } from "@/db/form-entries";
 import { DB } from "@/db/sqlite";
+import { onActiveWithInternet } from "@/utils/appstate";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
@@ -27,6 +28,16 @@ const Home: React.FC = () => {
     })();
     loadLocal();
   }, []);
+
+  const revalidate = useCallback(async () => {
+    const forms = await DB.selectFormsGroupedByCategory();
+    setData(forms);
+  }, []);
+
+  useEffect(() => {
+    const unsub = onActiveWithInternet(() => revalidate());
+    return unsub;
+  }, [revalidate]);
 
   const handleLogout = async () => {
     try {

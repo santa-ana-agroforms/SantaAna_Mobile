@@ -3,6 +3,7 @@ import { makeClient } from "../client";
 // DB local (igual que en forms/index.ts)
 import { DB } from "@/db/sqlite";
 
+import { isOnline } from "@/utils/network";
 import type { GroupTree } from "./types";
 
 // -------------------------------
@@ -62,7 +63,7 @@ export const getGroupByIdLocal = async (id_grupo: string): Promise<GroupTree | n
 
 export const pullAndCacheGroups = async (opts?: { signal?: AbortSignal }) => {
   // Verificar si hay internat antes de llamar a getGroupsRemote?
-  if (!navigator.onLine) {
+  if (!(await isOnline())) {
     console.warn("No hay conexión a Internet");
     return [];
   }

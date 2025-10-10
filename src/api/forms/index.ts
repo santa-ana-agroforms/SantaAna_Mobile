@@ -1,5 +1,6 @@
 // src/api/forms.ts
 import { DB } from "@/db/sqlite";
+import { isOnline } from "@/utils/network";
 import { makeClient } from "../client";
 import { FormCategoryGroup, FormTree } from "./types";
 
@@ -37,6 +38,12 @@ export const fetchAndSaveForms = async (
 ): Promise<{ categories: number; forms: number }> => {
   try {
     setLoading?.(true);
+    // Verificar que estea online antes de llamar a este método
+    if (!(await isOnline())) {
+      console.log("[forms/fetchAndSave] offline, no hago fetch");
+      setLoading?.(false);
+      return { categories: 0, forms: 0 };
+    }
     const groups = await getFormsTreeWithRetry(signal);
     let formsCount = 0;
     for (const g of groups) formsCount += g.formularios?.length ?? 0;
