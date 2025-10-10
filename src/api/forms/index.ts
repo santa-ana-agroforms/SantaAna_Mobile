@@ -20,6 +20,11 @@ export const fetchAndSaveForms = async (
   signal?: AbortSignal
 ): Promise<void> => {
   try {
+    // verificar si hay internat antes de llamar a getFormsTree?
+    if (!navigator.onLine) {
+      console.warn("No hay conexión a Internet");
+      return;
+    }
     setLoading?.(true);
     const forms = await getFormsTree({ signal });
     console.log("Fetched forms:", forms);

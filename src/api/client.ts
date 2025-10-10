@@ -5,35 +5,35 @@ import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { ACCESS_KEY, API_BASE_KEY, REFRESH_KEY } from "./secure-keys";
 
-export async function getApiBase(): Promise<string> {
+export const getApiBase = async (): Promise<string> => {
   const v = await SecureStore.getItemAsync(API_BASE_KEY);
   if (!v) throw new Error("API base url no configurada");
   return v;
-}
+};
 
-export async function setApiBase(url: string) {
+export const setApiBase = async (url: string) => {
   await SecureStore.setItemAsync(API_BASE_KEY, url);
-}
+};
 
-export async function setTokens(access: string, refresh?: string) {
+export const setTokens = async (access: string, refresh?: string) => {
   await SecureStore.setItemAsync(ACCESS_KEY, access);
   if (refresh) await SecureStore.setItemAsync(REFRESH_KEY, refresh);
-}
+};
 
-export async function getAccessToken() {
+export const getAccessToken = async () => {
   return SecureStore.getItemAsync(ACCESS_KEY);
-}
+};
 
-export async function getRefreshToken() {
+export const getRefreshToken = async () => {
   return SecureStore.getItemAsync(REFRESH_KEY);
-}
+};
 
-export async function clearTokens() {
+export const clearTokens = async () => {
   await SecureStore.deleteItemAsync(ACCESS_KEY);
   await SecureStore.deleteItemAsync(REFRESH_KEY);
-}
+};
 
-export async function makeClient() {
+export const makeClient = async () => {
   const baseURL = await getApiBase();
   const instance = axios.create({ baseURL, timeout: 20000 });
 
@@ -60,7 +60,7 @@ export async function makeClient() {
           await setTokens(accessToken, refreshToken);
           error.config.headers.Authorization = `Bearer ${accessToken}`;
           return instance.request(error.config);
-        } catch (e) {
+        } catch {
           await clearTokens();
         }
       }
@@ -69,4 +69,4 @@ export async function makeClient() {
   );
 
   return instance;
-}
+};

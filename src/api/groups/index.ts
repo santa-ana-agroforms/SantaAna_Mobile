@@ -61,6 +61,11 @@ export const getGroupByIdLocal = async (id_grupo: string): Promise<GroupTree | n
 // -------------------------------------------
 
 export const pullAndCacheGroups = async (opts?: { signal?: AbortSignal }) => {
+  // Verificar si hay internat antes de llamar a getGroupsRemote?
+  if (!navigator.onLine) {
+    console.warn("No hay conexión a Internet");
+    return [];
+  }
   const remote = await getGroupsRemote(opts);
   console.log("Pulled groups from server:", remote);
   await saveGroupsLocal(remote);

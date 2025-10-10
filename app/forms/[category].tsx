@@ -1,4 +1,5 @@
 // app/forms/[category].tsx (FormsByCategoryScreen)
+import { fetchAndSaveForms } from "@/api/forms";
 import { pullAndCacheGroups } from "@/api/groups";
 import { Body } from "@/components/atoms/Typography";
 import FormListItem from "@/components/molecules/FormListItem";
@@ -53,6 +54,7 @@ const FormsByCategoryScreen: React.FC = () => {
         setGrupo(found ?? null);
 
         await pullAndCacheGroups();
+        await fetchAndSaveForms();
       } finally {
         setLoading(false);
       }
