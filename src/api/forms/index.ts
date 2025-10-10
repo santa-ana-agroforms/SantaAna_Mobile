@@ -38,6 +38,7 @@ export const fetchAndSaveForms = async (
 ): Promise<{ categories: number; forms: number }> => {
   try {
     setLoading?.(true);
+    console.log("[forms/fetchAndSave] iniciando fetch de forms...");
     // Verificar que estea online antes de llamar a este método
     if (!(await isOnline())) {
       console.log("[forms/fetchAndSave] offline, no hago fetch");

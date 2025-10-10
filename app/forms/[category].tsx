@@ -1,12 +1,10 @@
 // app/forms/[category].tsx
-import { fetchAndSaveForms } from "@/api/forms";
-import { pullAndCacheGroups } from "@/api/groups";
 import { Body } from "@/components/atoms/Typography";
 import FormListItem from "@/components/molecules/FormListItem";
 import PageScaffold, { type ScaffoldDimensions } from "@/components/templates/PageScaffold";
 import { DB } from "@/db/sqlite";
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 
 type VersionVigente = { id_index_version: string; fecha_creacion: string };
@@ -23,7 +21,6 @@ const FormsByCategoryScreen: React.FC = () => {
   const { category } = useLocalSearchParams<{ category: string }>();
   const [loading, setLoading] = useState(true);
   const [grupo, setGrupo] = useState<FormCategoryGroup | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
   // 1) Leer siempre lo que haya en DB (rápido)
   const loadLocal = useCallback(async () => {
@@ -32,47 +29,14 @@ const FormsByCategoryScreen: React.FC = () => {
     setGrupo(found ?? null);
   }, [category]);
 
-  // 2) Revalidar red → guardar en DB → releer DB
-  const revalidate = useCallback(async () => {
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    try {
-      await fetchAndSaveForms(setLoading, ctrl.signal);
-      await pullAndCacheGroups(); // si dependes de esto para renderizar formularios
-    } catch (e) {
-      // opcional: loggear
-      console.log("[forms/revalidate] fallo fetch:", (e as any)?.message);
-    } finally {
-      await loadLocal(); // releer DB con lo último (aunque haya fallado, mantiene local)
+  useEffect(() => {
+    (async () => {
+      await loadLocal();
       setLoading(false);
-    }
+    })();
   }, [loadLocal]);
 
-  // Carga inicial: primero local (instantáneo), luego revalidación
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      setLoading(true);
-      await loadLocal();
-      if (!mounted) return;
-      await revalidate();
-    })();
-    return () => {
-      mounted = false;
-      abortRef.current?.abort();
-    };
-  }, [category, loadLocal, revalidate]);
-
-  // Revalidar al volver al foco (por si se agregaron formularios nuevos)
-  useFocusEffect(
-    useCallback(() => {
-      revalidate();
-      return () => abortRef.current?.abort();
-    }, [revalidate])
-  );
-
-  const headerTitle = useMemo(() => grupo?.nombre_categoria ?? "Formularios", [grupo]);
+  const headerTitle = category;
 
   if (loading && !grupo) {
     return (
