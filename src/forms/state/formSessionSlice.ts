@@ -1,7 +1,14 @@
+// src/forms/state/formSessionSlice.ts
 import { createAsyncThunk, createSelector, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import uuid from "react-native-uuid";
 
-import { getEntryById, listEntriesSummary, saveEntry, type EntrySummary } from "@/db/form-entries";
+import {
+  getEntryById,
+  listEntriesSummary,
+  saveEntry,
+  updateCursor, // 👈 NUEVO
+  type EntrySummary,
+} from "@/db/form-entries";
 import {
   emptyByField,
   keyOf,
@@ -195,10 +202,15 @@ export const initSessionFromSaved = createAsyncThunk<
     const sid = local_id; // reutilizamos el mismo id
     const filled = bootstrapState(form, prefilled);
     recomputeAllCalcs(form, filled);
+
+    // NUEVO: reanudar desde página guardada (clamp seguro)
+    const maxIdx = Math.max(0, (form.paginas?.length ?? 1) - 1);
+    const resumeIndex = Math.max(0, Math.min(maxIdx, Number(saved.cursor_page_index ?? 0)));
+
     const session: SessionState = {
       sessionId: sid,
       form,
-      currentPageIndex: 0,
+      currentPageIndex: resumeIndex,
       state: filled,
       status: saved.status as FormStatus,
       errors: {},
@@ -226,6 +238,7 @@ export const persistCurrentSession = createAsyncThunk<
       fill_json: st.state,
       form_json: st.form,
       status: st.status,
+      cursor_page_index: st.currentPageIndex, // 👈 NUEVO
     };
     await saveEntry(sessionId, payload);
     return { local_id: sessionId };
@@ -271,6 +284,21 @@ export const ensureGroupLoaded = createAsyncThunk<
     }
   }
 );
+
+/** NUEVO: persistir solo el cursor de página (ligero, para cada cambio de página) */
+export const persistCursorIndex = createAsyncThunk<
+  void,
+  { sessionId: string },
+  { state: { formSession: FormSessionsState }; rejectValue: string }
+>("formSession/persistCursor", async ({ sessionId }, { getState, rejectWithValue }) => {
+  try {
+    const st = getState().formSession.sessions[sessionId];
+    if (!st) throw new Error("Sesión no encontrada");
+    await updateCursor(sessionId, st.currentPageIndex);
+  } catch (e: any) {
+    return rejectWithValue(e?.message ?? "No se pudo actualizar el cursor");
+  }
+});
 
 // ─────────────────────────────────────────────────────────
 // Slice
@@ -323,19 +351,16 @@ const slice = createSlice({
       const k = keyOf(campo.tipo, campo.clase);
       if (!k) return;
 
-      // 👇 Detectar grupo por config o por tipo de value
       const looksLikeGroup = !!(campo.config as any)?.id_grupo || Array.isArray(value);
 
       let nextVal: any;
       if (looksLikeGroup && Array.isArray(value)) {
-        // ⚠️ NO usar normalizer aquí; puede borrar __id
         nextVal = value as any[];
       } else {
         nextVal = normalizers[k](value, campo.config);
       }
 
       if (looksLikeGroup && Array.isArray(nextVal)) {
-        // Asegurar __id estable en cada fila
         const ensured = nextVal.map((r: any, i: number) => {
           const id =
             typeof r?.__id === "string" && r.__id.length
@@ -344,12 +369,16 @@ const slice = createSlice({
           return { __id: id, ...r };
         });
         const clean = stripEmptyRows(ensured);
-        sess.state[pk][nombreInterno] = clean;
+        (sess.state as any)[pk][nombreInterno] = clean;
       } else {
-        sess.state[pk][nombreInterno] = nextVal;
+        (sess.state as any)[pk][nombreInterno] = nextVal;
       }
 
-      const errs = validators[k](sess.state[pk][nombreInterno], !!campo.requerido, campo.config);
+      const errs = validators[k](
+        (sess.state as any)[pk][nombreInterno],
+        !!campo.requerido,
+        campo.config
+      );
       if (errs.length) sess.errors[nombreInterno] = errs;
       else delete sess.errors[nombreInterno];
 
@@ -369,7 +398,7 @@ const slice = createSlice({
       if (!campo) return;
       const k = keyOf(campo.tipo, campo.clase);
       if (!k) return;
-      sess.state[pk][nombreInterno] = emptyByField[k];
+      (sess.state as any)[pk][nombreInterno] = emptyByField[k];
       delete sess.errors[nombreInterno];
       recomputeAllCalcs(sess.form, sess.state);
     },
@@ -404,10 +433,10 @@ const slice = createSlice({
         if (ck) row[c.nombre_interno] = emptyByField[ck];
       });
 
-      const current = sess.state[pk][nombreInternoGrupo];
+      const current = (sess.state as any)[pk][nombreInternoGrupo];
       const list = Array.isArray(current) ? current.slice() : [];
       list.push(row);
-      sess.state[pk][nombreInternoGrupo] = list;
+      (sess.state as any)[pk][nombreInternoGrupo] = list;
     },
     groupRemoveRow(
       state,
@@ -425,10 +454,10 @@ const slice = createSlice({
       const p = sess.form.paginas[idx];
       const pk = pageKey(p, idx);
 
-      const arr = sess.state[pk][nombreInternoGrupo];
+      const arr = (sess.state as any)[pk][nombreInternoGrupo];
       if (Array.isArray(arr)) {
         arr.splice(rowIndex, 1);
-        sess.state[pk][nombreInternoGrupo] = arr;
+        (sess.state as any)[pk][nombreInternoGrupo] = arr;
       }
     },
     groupSetRowField(
@@ -449,10 +478,10 @@ const slice = createSlice({
       const p = sess.form.paginas[idx];
       const pk = pageKey(p, idx);
 
-      const rows = sess.state[pk][nombreInternoGrupo];
+      const rows = (sess.state as any)[pk][nombreInternoGrupo];
       if (!Array.isArray(rows) || !rows[rowIndex]) return;
       rows[rowIndex][campoInterno] = value;
-      sess.state[pk][nombreInternoGrupo] = rows;
+      (sess.state as any)[pk][nombreInternoGrupo] = rows;
     },
   },
   extraReducers: (builder) => {
@@ -508,6 +537,8 @@ const slice = createSlice({
       if (!sess) return;
       sess.groups[payload.def.id_grupo] = payload.def;
     });
+
+    // persistCursorIndex no necesita mutar estado
   },
 });
 
@@ -549,7 +580,7 @@ export const selectFieldValue = (sessionId: string, nombreInterno: string, pageI
     const idx = pageIndex ?? sess.currentPageIndex;
     const p = sess.form.paginas[idx];
     const pk = pageKey(p, idx);
-    return sess.state[pk]?.[nombreInterno];
+    return (sess.state as any)[pk]?.[nombreInterno];
   });
 export const selectErrors = (sessionId: string) =>
   createSelector(selectSessionById(sessionId), (sess) => sess?.errors ?? {});
@@ -561,13 +592,12 @@ export const selectCanGoNext = (sessionId: string) =>
     const pk = pageKey(p, idx);
 
     for (const c of p.campos) {
-      // Validación para campos regulares
       const k = keyOf(c.tipo, c.clase);
 
       // Caso especial: grupos requeridos
-      const isGroup = !!(c.config as any)?.id_grupo;
+      const isGroup = !!(c as any)?.config?.id_grupo;
       if (isGroup && c.requerido) {
-        const rows = sess.state[pk][c.nombre_interno];
+        const rows = (sess.state as any)[pk][c.nombre_interno];
         const nFilled = Array.isArray(rows)
           ? rows.filter((r: any) => !rowIsEmptyGeneric(r)).length
           : 0;
@@ -578,7 +608,7 @@ export const selectCanGoNext = (sessionId: string) =>
       if (!k) continue;
       if (!c.requerido) continue;
 
-      const val = sess.state[pk][c.nombre_interno];
+      const val = (sess.state as any)[pk][c.nombre_interno];
       const errs = validators[k](val, true, c.config);
       if (errs.length) return false;
     }

@@ -6,7 +6,7 @@ import { DB } from "@/db/sqlite";
 import type { Formulario } from "@/screens/FormPage";
 import FormScreen from "@/screens/FormScreen";
 import { useLocalSearchParams } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 
 // Redux
@@ -14,6 +14,7 @@ import {
   initSession,
   initSessionFromSaved,
   nextPage,
+  persistCursorIndex,
   prevPage,
   selectCanGoNext,
   selectCurrentSession,
@@ -28,7 +29,7 @@ const FormRoute: React.FC = () => {
   const { formId, versionId, restored } = useLocalSearchParams<{
     formId: string;
     versionId?: string;
-    restored?: string; // <-- si viene, se intenta restaurar por local_id
+    restored?: string; // abre desde guardado local (reanuda página)
   }>();
 
   const dispatch = useAppDispatch();
@@ -43,17 +44,15 @@ const FormRoute: React.FC = () => {
 
   const serverFormRef = useRef<FormJSON | null>(null);
 
-  // Cargar form:
+  // Cargar form (desde saved o desde server)
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
         if (restored) {
-          // 1) Restaurar desde SQLite
           await dispatch(initSessionFromSaved({ local_id: restored })).unwrap();
           const saved = await getEntryById(restored);
           if (saved) {
-            // Usamos el form_json guardado para la UI
             const savedForm = saved.form_json as FormJSON;
             serverFormRef.current = savedForm;
 
@@ -83,7 +82,7 @@ const FormRoute: React.FC = () => {
           }
         }
 
-        // 2) Flujo normal: traer del server y **crear sesión nueva**
+        // Flujo normal: traer del server y crear sesión nueva
         const serverForm = await DB.selectFormFromGroupedById(formId as string);
         if (serverForm) {
           const fixedSessionForm: FormJSON = {
@@ -155,19 +154,29 @@ const FormRoute: React.FC = () => {
   const handlePrev = () => {
     if (!sessionId) return;
     dispatch(prevPage({ sessionId }));
+    // guardá cursor ligero
+    dispatch(persistCursorIndex({ sessionId })).catch(() => {});
   };
 
   const handleNext = () => {
     if (!sessionId) return;
     if (!canGoNext) return;
     dispatch(nextPage({ sessionId }));
+    // guardá cursor ligero
+    dispatch(persistCursorIndex({ sessionId })).catch(() => {});
   };
+
+  // NUEVO: callback cuando el pager cambia (swipe o tap en tabs)
+  const handlePageChange = useCallback(() => {
+    if (!sessionId) return;
+    // ya se actualiza currentPageIndex vía goToPage en FormScreen,
+    // acá solo persistimos el cursor
+    dispatch(persistCursorIndex({ sessionId })).catch(() => {});
+  }, [dispatch, sessionId]);
 
   const handleSaveLocal = async () => {
     try {
       const sid = await saveNow();
-      // opcional: feedback
-      // Toast, Alert, etc.
       console.log("Guardado local:", sid);
     } catch (e) {
       console.warn("Error al guardar:", e);
@@ -224,6 +233,7 @@ const FormRoute: React.FC = () => {
             contentFrame={contentFrame}
             layoutFrame={layoutFrame}
             page={currentPage}
+            onPageChange={handlePageChange} // 👈 NUEVO: persistir cursor al cambiar
           />
         </View>
       )}

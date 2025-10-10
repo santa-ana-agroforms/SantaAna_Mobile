@@ -1,59 +1,360 @@
 // app/form/saved/index.tsx
 import PageScaffold from "@/components/templates/PageScaffold";
-import { getEntryById } from "@/db/form-entries";
+import {
+  type FilledState,
+  type FormJSON,
+  getEntryById,
+  markSynced,
+  type SavedEntry,
+} from "@/db/form-entries";
+import { keyOf, validators } from "@/forms/runtime/field-registry";
 import { useFormPersistence } from "@/forms/state/useFormPersistence";
-import { useRouter } from "expo-router";
-import { useEffect } from "react";
-import { Alert, FlatList, RefreshControl, Text, TouchableOpacity, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+// ───────────────── helpers ─────────────────
+const pageKey = (p: FormJSON["paginas"][number], idx: number) =>
+  (p as any).id_pagina || `pagina_${(p as any).secuencia ?? (p as any).sequence ?? idx + 1}`;
+
+const isPlainObject = (v: any) => v && typeof v === "object" && !Array.isArray(v);
+const rowIsEmptyGeneric = (row: any) => {
+  if (!isPlainObject(row)) return true;
+  for (const k of Object.keys(row)) {
+    if (k === "__id") continue;
+    const v = row[k];
+    if (v === null || v === undefined) continue;
+    if (typeof v === "string" && v.trim() === "") continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    if (isPlainObject(v) && Object.keys(v).length === 0) continue;
+    return false;
+  }
+  return true;
+};
+
+// ✅ Valida requeridos (soporta grupos por id_grupo, por clase o por valor arreglo)
+const validateWholeFormRequired = (form: FormJSON, filled: FilledState) => {
+  const errors: Record<string, string[]> = {};
+  let missing = 0;
+
+  form.paginas.forEach((p, idx) => {
+    const pk = pageKey(p, idx);
+
+    p.campos.forEach((c: any) => {
+      if (!c.requerido) return;
+
+      const clase = String(c.clase || "").toLowerCase();
+      const val = (filled as any)?.[pk]?.[c.nombre_interno];
+      const k = keyOf(c.tipo, c.clase);
+
+      // 🔎 grupo si: tiene id_grupo o clase=group o el valor es Array
+      const isGroup = !!c?.config?.id_grupo || clase === "group" || Array.isArray(val);
+
+      if (isGroup) {
+        const rows = val;
+        const nFilled = Array.isArray(rows)
+          ? rows.filter((r: any) => !rowIsEmptyGeneric(r)).length
+          : 0;
+        if (nFilled < 1) {
+          errors[`${pk}.${c.nombre_interno}`] = ["Al menos una fila requerida."];
+          missing += 1;
+        }
+        return;
+      }
+
+      if (!k) return; // tipo/clase no registrado: lo ignoramos
+
+      const errs = validators[k](val, true, c.config);
+      if (errs.length) {
+        errors[`${pk}.${c.nombre_interno}`] = errs;
+        missing += 1;
+      }
+    });
+  });
+
+  return { ok: missing === 0, missing, errors };
+};
+
+// mock de envío (tu endpoint real va aquí)
+const sendEntryMock = async (entry: SavedEntry) => {
+  console.log("▶️ [MOCK SEND] POST /forms/entries", {
+    local_id: entry.local_id,
+    form_id: entry.form_id,
+    index_version_id: entry.index_version_id,
+    filled_at_local: entry.filled_at_local,
+    status: entry.status,
+  });
+  await new Promise((r) => setTimeout(r, 400));
+  return { ok: true, remote_id: `mock_${entry.local_id}` };
+};
+
+// ─────────────── pantalla ───────────────
+type FilterMode = "pending" | "synced";
 
 const SavedEntriesScreen = () => {
   const router = useRouter();
   const { entriesSummary, refreshSummary, loading } = useFormPersistence();
 
+  const [completeMap, setCompleteMap] = useState<
+    Record<string, { ok: boolean; missing: number; status?: string }>
+  >({});
+  const [sendingId, setSendingId] = useState<string | null>(null);
+
+  // 🔀 filtro: por defecto solo pendientes
+  const [filterMode, setFilterMode] = useState<FilterMode>("pending");
+
+  // Auto-refresh al volver a enfocar esta pantalla
+  useFocusEffect(
+    useCallback(() => {
+      refreshSummary().catch(() => {});
+    }, [refreshSummary])
+  );
+
+  // Recalcular “completo?” en paralelo cada vez que cambia el summary
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const savedList = await Promise.all(entriesSummary.map((it) => getEntryById(it.local_id)));
+      const acc: Record<string, { ok: boolean; missing: number; status?: string }> = {};
+      for (const saved of savedList) {
+        if (!saved) continue;
+        const { ok, missing } = validateWholeFormRequired(
+          saved.form_json as FormJSON,
+          saved.fill_json as FilledState
+        );
+        acc[saved.local_id] = { ok, missing, status: saved.status };
+      }
+      if (!cancelled) setCompleteMap(acc);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [entriesSummary]);
+
+  const openOne = useCallback(
+    async (local_id: string) => {
+      const saved = await getEntryById(local_id);
+      if (!saved) {
+        Alert.alert("Ups", "No se encontró el registro.");
+        return;
+      }
+      router.push({
+        pathname: "/form/[formId]",
+        params: { formId: saved.form_id, restored: local_id },
+      });
+    },
+    [router]
+  );
+
+  const sendOne = useCallback(
+    async (local_id: string) => {
+      try {
+        setSendingId(local_id);
+        const saved = await getEntryById(local_id);
+        if (!saved) {
+          Alert.alert("Ups", "No se encontró el registro.");
+          return;
+        }
+        const v = validateWholeFormRequired(
+          saved.form_json as FormJSON,
+          saved.fill_json as FilledState
+        );
+        if (!v.ok) {
+          Alert.alert("Formulario incompleto", `Faltan ${v.missing} campo(s) requerido(s).`);
+          return;
+        }
+        const resp = await sendEntryMock(saved);
+        if (resp.ok) {
+          await markSynced(local_id);
+          setCompleteMap((prev) => ({
+            ...prev,
+            [local_id]: { ...(prev[local_id] ?? { ok: true, missing: 0 }), status: "synced" },
+          }));
+          // refrescar lista (útil si estás filtrando por enviados)
+          await refreshSummary();
+          Alert.alert("Enviado", "El formulario se envió (simulado) y se marcó como 'synced'.");
+        } else {
+          Alert.alert("No se pudo enviar", "El servidor devolvió un error.");
+        }
+      } catch (e: any) {
+        Alert.alert("Error", e?.message ?? "No se pudo enviar el formulario.");
+      } finally {
+        setSendingId(null);
+      }
+    },
+    [refreshSummary]
+  );
+
+  // Lista filtrada:
+  const filteredSummary = useMemo(() => {
+    return entriesSummary.filter((it) => {
+      const st = completeMap[it.local_id]?.status;
+      if (filterMode === "synced") return st === "synced"; // ✅ solo enviados
+      return st !== "synced"; // ✅ solo pendientes
+    });
+  }, [entriesSummary, completeMap, filterMode]);
+
+  const doRefresh = useCallback(() => {
     refreshSummary().catch(() => {});
   }, [refreshSummary]);
 
-  const openOne = async (local_id: string) => {
-    const saved = await getEntryById(local_id);
-    if (!saved) {
-      Alert.alert("Ups", "No se encontró el registro.");
-      return;
-    }
-    // Redirigimos a la misma ruta de form, pero con ?restored=<local_id>
-    router.push({
-      pathname: "/form/[formId]",
-      params: { formId: saved.form_id, restored: local_id },
-    });
-  };
-
   return (
     <PageScaffold title="Borradores" variant="groups">
+      {/* acciones */}
+      <View style={{ paddingHorizontal: 16, paddingBottom: 8, gap: 8 }}>
+        {/* conmutador Pendientes / Enviados */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignSelf: "center",
+            backgroundColor: "#F2F2F2",
+            borderRadius: 999,
+            padding: 4,
+            gap: 4,
+          }}
+        >
+          {(["pending", "synced"] as FilterMode[]).map((mode) => {
+            const active = filterMode === mode;
+            return (
+              <TouchableOpacity
+                key={mode}
+                onPress={() => setFilterMode(mode)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: active ? "#0A84FF" : "transparent",
+                }}
+              >
+                <Text style={{ color: active ? "white" : "#333", fontWeight: "700" }}>
+                  {mode === "pending" ? "Pendientes" : "Enviados"}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Recargar */}
+        <View style={{ alignItems: "flex-end" }}>
+          <TouchableOpacity
+            onPress={doRefresh}
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 8,
+              backgroundColor: "#EFEFEF",
+            }}
+          >
+            <Text style={{ fontWeight: "700" }}>{loading ? "Actualizando…" : "Recargar"}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <FlatList
-        data={entriesSummary}
+        data={filteredSummary}
         keyExtractor={(it) => it.local_id}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refreshSummary} />}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, gap: 10 }}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={{
-              padding: 12,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: "#E6E6E6",
-              backgroundColor: "white",
-            }}
-            onPress={() => openOne(item.local_id)}
-          >
-            <Text style={{ fontWeight: "700" }}>{item.form_name}</Text>
-            <View style={{ height: 4 }} />
-            <Text style={{ color: "#555" }}>Versión: {item.index_version_id}</Text>
-            <Text style={{ color: "#777" }}>Guardado: {item.filled_at_local}</Text>
-          </TouchableOpacity>
-        )}
+        renderItem={({ item }) => {
+          const meta = completeMap[item.local_id];
+          const isComplete = !!meta?.ok;
+          const isSynced = meta?.status === "synced";
+          const disabledSend = !isComplete || isSynced;
+
+          return (
+            <View
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#E6E6E6",
+                backgroundColor: "white",
+                gap: 8,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={{ fontWeight: "700" }}>{item.form_name}</Text>
+                  <View style={{ height: 4 }} />
+                  <Text style={{ color: "#555" }}>Versión: {item.index_version_id}</Text>
+                  <Text style={{ color: "#777" }}>Guardado: {item.filled_at_local}</Text>
+                  <View style={{ height: 6 }} />
+                  {meta ? (
+                    isComplete ? (
+                      <Text style={{ color: "#2e7d32", fontWeight: "600" }}>✔ Completo</Text>
+                    ) : (
+                      <Text style={{ color: "#d32f2f", fontWeight: "600" }}>
+                        ✖ Incompleto · faltan {meta.missing}
+                      </Text>
+                    )
+                  ) : (
+                    <Text style={{ color: "#999" }}>Verificando…</Text>
+                  )}
+                  {isSynced ? (
+                    <Text style={{ marginTop: 2, color: "#0066cc", fontWeight: "600" }}>
+                      Estado: synced
+                    </Text>
+                  ) : null}
+                </View>
+
+                <View style={{ gap: 6 }}>
+                  <TouchableOpacity
+                    onPress={() => openOne(item.local_id)}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      backgroundColor: "#F2F2F2",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ fontWeight: "700" }}>Abrir</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    disabled={disabledSend || sendingId === item.local_id}
+                    onPress={() => sendOne(item.local_id)}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      backgroundColor: disabledSend ? "#C8E6C9" : "#2E7D32",
+                      opacity: sendingId === item.local_id ? 0.8 : 1,
+                      alignItems: "center",
+                    }}
+                  >
+                    {sendingId === item.local_id ? (
+                      <ActivityIndicator />
+                    ) : (
+                      <Text style={{ color: "white", fontWeight: "700" }}>
+                        {isSynced ? "Enviado" : isComplete ? "Enviar" : "Completar"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          );
+        }}
         ListEmptyComponent={
           <View style={{ padding: 16 }}>
-            <Text style={{ color: "#666" }}>No hay borradores guardados aún.</Text>
+            <Text style={{ color: "#666" }}>
+              {filterMode === "synced" ? "No hay historial aún." : "No hay borradores pendientes."}
+            </Text>
           </View>
         }
       />
