@@ -1,5 +1,3 @@
-import { fetchAndSaveForms } from "@/api/forms";
-import { pullAndCacheGroups } from "@/api/groups";
 import FormHeader from "@/components/molecules/FormHeader";
 import { colors } from "@/theme/tokens";
 import { useRouter } from "expo-router";
@@ -25,6 +23,8 @@ type PageScaffoldProps = {
   onPrevPage?: () => void;
   onNextPage?: () => void;
   canNext?: boolean;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 };
 /** ⬆️ Mantener estos exports tal cual */
 
@@ -40,13 +40,15 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
   onPrevPage,
   onNextPage,
   canNext,
+  onRefresh = () => {},
+  // refreshing = false,
 }) => {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
   // Espaciados proporcionales
   const padX = useMemo(() => clamp(width * 0.04, 12, 24), [width]);
-  const padTopHeader = useMemo(() => clamp(height * 0.01, 8, 24), [height]);
+  const padTopHeader = useMemo(() => height * 0, [height]);
   const gapBelowHeader = useMemo(() => clamp(height * 0.012, 8, 16), [height]);
 
   const [headerH, setHeaderH] = useState(0);
@@ -62,7 +64,6 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
     else router.replace("/");
   }, [onBack, router]);
 
-  // Frames escalables
   const layoutHeight = Math.max(0, height - insets.top - insets.bottom - headerH);
   const layoutFrame = { width, height: layoutHeight };
 
@@ -73,7 +74,6 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
     height: layoutFrame.height,
   };
 
-  // Referencia general (área útil debajo del header)
   const referenceFrame = { ...layoutFrame };
 
   const scaffoldDimensions: ScaffoldDimensions = {
@@ -95,10 +95,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
               totalPages={totalPages}
               connected
               onBack={handleBack}
-              onRefresh={async () => {
-                await fetchAndSaveForms();
-                await pullAndCacheGroups();
-              }}
+              onRefresh={onRefresh}
               variant={variant}
               onPrevPage={variant === "form" ? onPrevPage : undefined}
               onNextPage={variant === "form" && canNext !== false ? onNextPage : undefined}

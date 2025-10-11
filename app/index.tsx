@@ -13,7 +13,7 @@ import { onActiveWithInternet } from "@/utils/appstate";
 import { isOnline, onReconnectOnce } from "@/utils/network";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -102,8 +102,12 @@ const Home: React.FC = () => {
     }
   };
 
+  const handleRefresh = useCallback(async () => {
+    await revalidateFromServer();
+  }, [revalidateFromServer]);
+
   return (
-    <PageScaffold title="Mis formularios" variant="categories">
+    <PageScaffold title="Mis formularios" variant="categories" onRefresh={handleRefresh}>
       {({ contentFrame, referenceFrame }) => {
         const gap = clamp(contentFrame.width * 0.045, 12, 24);
         const columns = 2;
@@ -156,22 +160,6 @@ const Home: React.FC = () => {
           );
         }
 
-        // 3) Estado vacío real (sin fetch en curso y DB vacía)
-        if (!loadingRemote && data.length === 0) {
-          return (
-            <View style={{ paddingHorizontal: 16 }}>
-              <Text style={{ fontSize: 16, marginBottom: 12 }}>No hay categorías disponibles.</Text>
-              <Button
-                title="Reintentar"
-                size="sm"
-                onPress={() => revalidateFromServer()}
-                style={{ alignSelf: "flex-start", marginTop: 12 }}
-              />
-            </View>
-          );
-        }
-
-        // 4) Datos listos
         return (
           <>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>

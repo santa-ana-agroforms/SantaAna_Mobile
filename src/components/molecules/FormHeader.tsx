@@ -63,7 +63,7 @@ const FormHeader: React.FC<Props> = ({
     const minSide = Math.min(baseFrame.width, baseFrame.height);
 
     const _padX = clamp(baseFrame.width * 0.04, 12, 24); // padding horizontal aprox 4% (12–24)
-    const _padTop = clamp(baseFrame.height * 0, 8, 24); // padding top aprox 2% (8–24)
+    const _padTop = variant === "categories" ? baseFrame.height * 0.015 : baseFrame.height * 0.022;
     const _gapUnderHeader = clamp(baseFrame.height * 0.012, 8, 16);
 
     const _rowGap = clamp(baseFrame.width * 0.03, 8, 16); // gap fila superior (atrás/título)
@@ -87,7 +87,7 @@ const FormHeader: React.FC<Props> = ({
       dotsGap: _dotsGap,
       dotsShiftUp: _dotsShiftUp,
     };
-  }, [baseFrame.height, baseFrame.width]);
+  }, [baseFrame.height, baseFrame.width, variant]);
 
   const Arrow: React.FC<{ label: string; onPress?: () => void }> = ({ label, onPress }) => (
     <Pressable

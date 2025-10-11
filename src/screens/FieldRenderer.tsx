@@ -118,6 +118,14 @@ const FieldRenderer: React.FC<Props> = ({
   const valueFromRedux = useAppSelector(valueSelector);
   const value = external ? external.value : valueFromRedux;
 
+  React.useEffect(() => {
+    console.log("[FR] valueFromRedux changed", {
+      field: campo.nombre_interno,
+      page: effectivePage,
+      newValue: value,
+      newType: value == null ? value : value.constructor?.name,
+    });
+  }, [value, campo.nombre_interno, effectivePage]);
   // Commit → si hay external, usarlo; si no, dispatch al slice (+ evento opcional al padre)
   const onCommit = useCallback(
     (v: any) => {
@@ -261,6 +269,8 @@ const FieldRenderer: React.FC<Props> = ({
     </>
   );
 
+  // dentro de FieldRenderer
+
   const renderDate = (kind: "date" | "hour") => {
     const toUiDate = (s?: string | null): Date | null => {
       if (!s) return null;
@@ -269,9 +279,7 @@ const FieldRenderer: React.FC<Props> = ({
         return new Date(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0, 0);
       } else {
         const [H, M] = s.split(":").map(Number);
-        const dt = new Date();
-        dt.setHours(H ?? 0, M ?? 0, 0, 0);
-        return dt;
+        return new Date(2000, 0, 1, H ?? 0, M ?? 0, 0, 0); // ancla estable
       }
     };
 
@@ -289,13 +297,43 @@ const FieldRenderer: React.FC<Props> = ({
       }
     };
 
-    const uiValue: Date | null = typeof value === "string" ? toUiDate(value) : null;
+    // Log de lo que llega desde Redux/external
+    console.log("[FR] renderDate:input", {
+      field: campo.nombre_interno,
+      kind,
+      rawValue: value,
+      rawType: value == null ? value : value.constructor?.name,
+    });
+
+    const uiValue: Date | null =
+      value instanceof Date ? value : typeof value === "string" ? toUiDate(value) : null;
+
+    if (uiValue) {
+      console.log("[FR] renderDate:uiValue", {
+        field: campo.nombre_interno,
+        kind,
+        uiLocal: uiValue.toString(),
+        uiISO: uiValue.toISOString(),
+      });
+    } else {
+      console.log("[FR] renderDate:uiValue NULL", { field: campo.nombre_interno, kind });
+    }
 
     return (
       <DateTimeField
         mode={kind === "date" ? "date" : "time"}
         value={uiValue}
-        onChange={(d) => onCommit(toStoreStr(d))}
+        onChange={(d) => {
+          const out = toStoreStr(d);
+          console.log("[FR] renderDate:onChange -> onCommit", {
+            field: campo.nombre_interno,
+            kind,
+            receivedLocal: d?.toString?.(),
+            receivedISO: d?.toISOString?.(),
+            toStore: out,
+          });
+          onCommit(out);
+        }}
         label={label}
         required={campo.requerido}
         placeholder={kind === "date" ? "Seleccionar fecha" : "Seleccionar hora"}

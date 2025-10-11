@@ -13,9 +13,9 @@ import { useDrizzleStudio } from "expo-drizzle-studio-plugin";
 import { Stack, usePathname, useRootNavigationState, useRouter } from "expo-router";
 import * as SQLite from "expo-sqlite";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { InteractionManager, Platform } from "react-native";
+import { InteractionManager, Platform, StatusBar } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { enableFreeze, enableScreens } from "react-native-screens";
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
@@ -41,15 +41,12 @@ const RootLayout = () => {
   const [checking, setChecking] = useState(true);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
 
-  // 👇 todos los hooks SIEMPRE antes de cualquier return
   const bootRef = useRef(false);
-
   const router = useRouter();
   const pathname = usePathname();
   const rootNavState = useRootNavigationState();
   const redirectedRef = useRef(false);
 
-  // 👇 este también debe ir ANTES de cualquier retorno condicional
   const [showDevTools, setShowDevTools] = useState(false);
   useEffect(() => {
     const t = InteractionManager.runAfterInteractions(() => setShowDevTools(true));
@@ -79,14 +76,18 @@ const RootLayout = () => {
     if (!loaded || checking || hasToken === null) return;
     if (!rootNavState?.key) return;
     if (redirectedRef.current) return;
+
     const target = hasToken ? "/" : "/qr";
+
+    // ✅ Marca como ya redirigido aunque estés en target,
+    // para que al navegar luego NO te empuje de regreso.
+    redirectedRef.current = true;
+
     if (pathname !== target) {
-      redirectedRef.current = true;
       InteractionManager.runAfterInteractions(() => router.replace(target));
     }
-  }, [loaded, checking, hasToken, pathname, rootNavState?.key, router]);
+  }, [loaded, checking, hasToken, rootNavState?.key, pathname, router]);
 
-  // ✅ recién aquí puedes cortar el render
   if (!loaded || checking || hasToken === null || !rootNavState?.key) {
     return null;
   }
@@ -94,32 +95,32 @@ const RootLayout = () => {
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
-        <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
+        <KeyboardProvider>
           <SafeAreaProvider>
-            {__DEV__ && showDevTools ? <DrizzleStudioBinder /> : null}
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                animation: Platform.OS === "ios" ? "default" : "slide_from_right",
-                gestureEnabled: true,
-                fullScreenGestureEnabled: true,
-
-                // ✅ válidos en native-stack:
-                freezeOnBlur: false,
-                statusBarAnimation: Platform.OS === "ios" ? "fade" : undefined,
-                contentStyle: { backgroundColor: "#F9F6EE" },
-                animationTypeForReplace: "push", // ayuda a evitar flashes al replace
-              }}
-            >
-              <Stack.Screen
-                name="qr"
-                options={{
-                  // Si no necesitas modal, usa slide también para uniformidad:
-                  presentation: "card",
+            <StatusBar translucent={false} hidden={false} />
+            <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+              {__DEV__ && showDevTools ? <DrizzleStudioBinder /> : null}
+              <Stack
+                screenOptions={{
+                  headerShown: false,
                   animation: Platform.OS === "ios" ? "default" : "slide_from_right",
+                  gestureEnabled: true,
+                  fullScreenGestureEnabled: true,
+                  freezeOnBlur: false,
+                  statusBarAnimation: Platform.OS === "ios" ? "fade" : undefined,
+                  contentStyle: { backgroundColor: "#F9F6EE" },
+                  animationTypeForReplace: "push",
                 }}
-              />
-            </Stack>
+              >
+                <Stack.Screen
+                  name="qr"
+                  options={{
+                    presentation: "card",
+                    animation: Platform.OS === "ios" ? "default" : "slide_from_right",
+                  }}
+                />
+              </Stack>
+            </SafeAreaView>
           </SafeAreaProvider>
         </KeyboardProvider>
       </PersistGate>
