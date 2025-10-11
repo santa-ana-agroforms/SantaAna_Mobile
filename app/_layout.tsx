@@ -1,6 +1,7 @@
-/* eslint-disable react-hooks/rules-of-hooks */
 // app/_layout.tsx
+/* eslint-disable react-hooks/rules-of-hooks */
 import { getAccessToken, setApiBase } from "@/api/client";
+import { persistor, store } from "@/store";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -8,21 +9,17 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
-import { Redirect, Stack } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { Platform } from "react-native";
+import { useDrizzleStudio } from "expo-drizzle-studio-plugin";
+import { Stack, usePathname, useRootNavigationState, useRouter } from "expo-router";
+import * as SQLite from "expo-sqlite";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { InteractionManager, Platform } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { enableFreeze, enableScreens } from "react-native-screens";
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 
-import { useDrizzleStudio } from "expo-drizzle-studio-plugin";
-
-import { persistor, store } from "@/store";
-import * as SQLite from "expo-sqlite";
-
-// 👉 activa optimizaciones nativas (hacerlo fuera del componente)
 enableScreens(true);
 enableFreeze(true);
 
@@ -44,54 +41,82 @@ const RootLayout = () => {
   const [checking, setChecking] = useState(true);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
 
+  // 👇 todos los hooks SIEMPRE antes de cualquier return
+  const bootRef = useRef(false);
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const rootNavState = useRootNavigationState();
+  const redirectedRef = useRef(false);
+
+  // 👇 este también debe ir ANTES de cualquier retorno condicional
+  const [showDevTools, setShowDevTools] = useState(false);
   useEffect(() => {
-    let mounted = true;
+    const t = InteractionManager.runAfterInteractions(() => setShowDevTools(true));
+    return () => t.cancel();
+  }, []);
+
+  useEffect(() => {
+    if (bootRef.current) return;
+    bootRef.current = true;
+
     (async () => {
       try {
         console.log("[BOOT] setting API base URL...", process.env.EXPO_PUBLIC_BASE_URL);
         await setApiBase(process.env.EXPO_PUBLIC_BASE_URL?.trim() || "");
         const token = await getAccessToken();
-        if (mounted) setHasToken(!!token);
+        setHasToken(!!token);
       } catch (e) {
         console.log("[BOOT] error:", e);
-        if (mounted) setHasToken(false);
+        setHasToken(false);
       } finally {
-        if (mounted) setChecking(false);
+        setChecking(false);
       }
     })();
-    return () => {
-      mounted = false;
-    };
   }, []);
 
-  if (!loaded || checking) return null;
+  useEffect(() => {
+    if (!loaded || checking || hasToken === null) return;
+    if (!rootNavState?.key) return;
+    if (redirectedRef.current) return;
+    const target = hasToken ? "/" : "/qr";
+    if (pathname !== target) {
+      redirectedRef.current = true;
+      InteractionManager.runAfterInteractions(() => router.replace(target));
+    }
+  }, [loaded, checking, hasToken, pathname, rootNavState?.key, router]);
+
+  // ✅ recién aquí puedes cortar el render
+  if (!loaded || checking || hasToken === null || !rootNavState?.key) {
+    return null;
+  }
 
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
         <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
           <SafeAreaProvider>
-            <DrizzleStudioBinder />
-            {/* Redirección declarativa */}
-            {hasToken === true && <Redirect href="/" />}
-            {hasToken === false && <Redirect href="/qr" />}
-
+            {__DEV__ && showDevTools ? <DrizzleStudioBinder /> : null}
             <Stack
               screenOptions={{
                 headerShown: false,
-                animation: "fade", // 👈 la más fluida en general
+                animation: Platform.OS === "ios" ? "default" : "slide_from_right",
                 gestureEnabled: true,
                 fullScreenGestureEnabled: true,
+
+                // ✅ válidos en native-stack:
+                freezeOnBlur: false,
                 statusBarAnimation: Platform.OS === "ios" ? "fade" : undefined,
-                contentStyle: { backgroundColor: "#F9F6EE" }, // evita flashes
+                contentStyle: { backgroundColor: "#F9F6EE" },
+                animationTypeForReplace: "push", // ayuda a evitar flashes al replace
               }}
             >
-              {/* Modal QR con animación suave vertical */}
               <Stack.Screen
                 name="qr"
                 options={{
-                  presentation: "modal",
-                  animation: "fade_from_bottom",
+                  // Si no necesitas modal, usa slide también para uniformidad:
+                  presentation: "card",
+                  animation: Platform.OS === "ios" ? "default" : "slide_from_right",
                 }}
               />
             </Stack>

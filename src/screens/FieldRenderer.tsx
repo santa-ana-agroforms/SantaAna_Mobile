@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 
 import Boolean from "@/components/atoms/Boolean";
 import DatasetSelect from "@/components/atoms/DatasetSelect";
@@ -436,9 +436,12 @@ const FieldRenderer: React.FC<Props> = ({
         />
 
         {groupLoading ? (
-          <Body frame={referenceFrame} color="secondary" size="sm">
-            Cargando grupo…
-          </Body>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6 }}>
+            <ActivityIndicator size="small" />
+            <Body frame={referenceFrame} color="secondary" size="sm">
+              Cargando grupo…
+            </Body>
+          </View>
         ) : groupError ? (
           <Body frame={referenceFrame} size="sm" style={{ color: colors.danger600 }}>
             {groupError}
@@ -450,6 +453,7 @@ const FieldRenderer: React.FC<Props> = ({
             required={!!campo.requerido}
             fieldsTemplate={groupFields as any}
             entries={groupRows}
+            minEntries={1}
             referenceFrame={referenceFrame}
             contentFrame={contentFrame}
             onChange={(nextRows) => {
@@ -475,7 +479,6 @@ const FieldRenderer: React.FC<Props> = ({
                 campo={subCampo as any}
                 referenceFrame={referenceFrame}
                 contentFrame={contentFrame}
-                // subcampos viven local al row; usamos modo external
                 external={{
                   value: row[subCampo.nombre_interno],
                   onChange: (val) => setField(subCampo.nombre_interno, val),

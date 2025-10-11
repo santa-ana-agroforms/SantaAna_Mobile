@@ -146,6 +146,7 @@ const recomputeAllCalcs = (form: FormJSON, filled: FilledState) => {
 
 const isPlainObject = (v: any) => v && typeof v === "object" && !Array.isArray(v);
 const rowIsEmptyGeneric = (row: any) => {
+  if (row?.__draft) return false;
   if (!isPlainObject(row)) return true;
   for (const k of Object.keys(row)) {
     if (k === "__id") continue; // meta

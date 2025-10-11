@@ -1,4 +1,5 @@
 // app/forms/[category].tsx
+import SkeletonLoader from "@/components/atoms/SkeletonLoader";
 import { Body } from "@/components/atoms/Typography";
 import FormListItem from "@/components/molecules/FormListItem";
 import PageScaffold, { type ScaffoldDimensions } from "@/components/templates/PageScaffold";
@@ -25,45 +26,111 @@ const FormsByCategoryScreen: React.FC = () => {
   // 1) Leer siempre lo que haya en DB (rápido)
   const loadLocal = useCallback(async () => {
     const groups = await DB.selectFormsGroupedByCategory();
-    const found = groups.find((g) => g.nombre_categoria === category);
+    const found = (groups ?? []).find((g) => g.nombre_categoria === category);
     setGrupo(found ?? null);
   }, [category]);
 
   useEffect(() => {
     (async () => {
-      await loadLocal();
-      setLoading(false);
+      try {
+        await loadLocal();
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [loadLocal]);
 
-  const headerTitle = category;
+  const headerTitle = String(category);
 
+  // 🔸 Skeleton: mientras carga (aunque aún no tengamos grupo)
   if (loading && !grupo) {
     return (
-      <PageScaffold title={String(category)} variant="categories">
-        <Body>Cargando…</Body>
+      <PageScaffold title={headerTitle} variant="groups">
+        {({ referenceFrame, contentFrame }: ScaffoldDimensions) => {
+          const gapY = clamp(contentFrame.width * 0.04, 12, 24);
+          const items = Array.from({ length: 6 });
+          return (
+            <View style={{ gap: gapY }}>
+              {items.map((_, i) => (
+                <View key={i} style={{ gap: referenceFrame.height * 0.01 }}>
+                  {/* fila: título a la izq + chip de estado a la der */}
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <View style={{ flex: 1 }}>
+                      <SkeletonLoader preset="title" frame={referenceFrame} />
+                    </View>
+                    <View style={{ width: referenceFrame.width * 0.22, marginLeft: 12 }}>
+                      <SkeletonLoader preset="button" frame={referenceFrame} />
+                    </View>
+                  </View>
+                  {/* subtítulo / fechas */}
+                  <SkeletonLoader
+                    preset="text"
+                    frame={referenceFrame}
+                    lines={1}
+                    lineHeight={referenceFrame.height * 0.018}
+                    lastLineWidthPct={40}
+                  />
+                </View>
+              ))}
+            </View>
+          );
+        }}
       </PageScaffold>
     );
   }
 
-  if (!grupo || (grupo.formularios?.length ?? 0) === 0) {
+  // 🔸 Si carga y el grupo existe pero aún no hay formularios, muestra skeleton igual
+  if (loading && grupo && (grupo.formularios?.length ?? 0) === 0) {
     return (
-      <PageScaffold title="Formularios" variant="categories">
-        <Body>
-          {`No hay formularios en “${String(category)}”. `}
-          {loading ? "Actualizando…" : "Toca recargar desde el encabezado."}
-        </Body>
+      <PageScaffold title={headerTitle} variant="groups">
+        {({ referenceFrame, contentFrame }: ScaffoldDimensions) => {
+          const gapY = clamp(contentFrame.width * 0.04, 12, 24);
+          const items = Array.from({ length: 6 });
+          return (
+            <View style={{ gap: gapY }}>
+              {items.map((_, i) => (
+                <View key={i} style={{ gap: referenceFrame.height * 0.01 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <View style={{ flex: 1 }}>
+                      <SkeletonLoader preset="title" frame={referenceFrame} />
+                    </View>
+                    <View style={{ width: referenceFrame.width * 0.22, marginLeft: 12 }}>
+                      <SkeletonLoader preset="button" frame={referenceFrame} />
+                    </View>
+                  </View>
+                  <SkeletonLoader
+                    preset="text"
+                    frame={referenceFrame}
+                    lines={1}
+                    lineHeight={referenceFrame.height * 0.018}
+                    lastLineWidthPct={40}
+                  />
+                </View>
+              ))}
+            </View>
+          );
+        }}
       </PageScaffold>
     );
   }
 
+  // 🔸 Estado vacío real (sin carga y sin formularios)
+  if (!loading && (!grupo || (grupo.formularios?.length ?? 0) === 0)) {
+    return (
+      <PageScaffold title={headerTitle} variant="categories">
+        <Body>{`No hay formularios en “${headerTitle}”.`}</Body>
+      </PageScaffold>
+    );
+  }
+
+  // 🔸 Datos listos
   return (
     <PageScaffold title={headerTitle} variant="groups">
       {({ contentFrame, referenceFrame }: ScaffoldDimensions) => {
         const gapY = clamp(contentFrame.width * 0.04, 12, 24);
         return (
           <View style={{ gap: gapY }}>
-            {grupo.formularios.map((f) => {
+            {grupo!.formularios.map((f) => {
               const estado = getEstado(f);
               const asignado = f.version_vigente?.fecha_creacion
                 ? new Date(f.version_vigente.fecha_creacion)

@@ -1,4 +1,5 @@
 // app/form/[formId].tsx
+import SkeletonLoader from "@/components/atoms/SkeletonLoader";
 import { Body } from "@/components/atoms/Typography";
 import PageScaffold from "@/components/templates/PageScaffold";
 import { FormJSON, getEntryById, toFieldConfig } from "@/db/form-entries";
@@ -154,7 +155,6 @@ const FormRoute: React.FC = () => {
   const handlePrev = () => {
     if (!sessionId) return;
     dispatch(prevPage({ sessionId }));
-    // guardá cursor ligero
     dispatch(persistCursorIndex({ sessionId })).catch(() => {});
   };
 
@@ -162,15 +162,11 @@ const FormRoute: React.FC = () => {
     if (!sessionId) return;
     if (!canGoNext) return;
     dispatch(nextPage({ sessionId }));
-    // guardá cursor ligero
     dispatch(persistCursorIndex({ sessionId })).catch(() => {});
   };
 
-  // NUEVO: callback cuando el pager cambia (swipe o tap en tabs)
   const handlePageChange = useCallback(() => {
     if (!sessionId) return;
-    // ya se actualiza currentPageIndex vía goToPage en FormScreen,
-    // acá solo persistimos el cursor
     dispatch(persistCursorIndex({ sessionId })).catch(() => {});
   }, [dispatch, sessionId]);
 
@@ -183,13 +179,51 @@ const FormRoute: React.FC = () => {
     }
   };
 
+  // ─────────────────────────────────────────────────────────────────────
+  // SKELETON LOADER mientras carga el formulario
   if (loading) {
     return (
       <PageScaffold title="Cargando…" variant="form">
-        <Body>Cargando formulario…</Body>
+        {({ referenceFrame, contentFrame }) => {
+          const gapY = contentFrame.height * 0.02;
+
+          // cantidad de "campos" ficticios
+          const items = Array.from({ length: 6 });
+
+          return (
+            <View style={{ flex: 1, paddingHorizontal: 16 }}>
+              {/* Botón Guardar local (skeleton) */}
+              <View style={{ alignItems: "flex-end", marginBottom: gapY }}>
+                <View style={{ width: referenceFrame.width * 0.35 }}>
+                  <SkeletonLoader preset="button" frame={referenceFrame} />
+                </View>
+              </View>
+
+              {/* Lista de campos: label + input */}
+              <View style={{ gap: gapY }}>
+                {items.map((_, i) => (
+                  <View key={i} style={{ gap: referenceFrame.height * 0.008 }}>
+                    {/* label */}
+                    <View style={{ width: "70%" }}>
+                      <SkeletonLoader preset="title" frame={referenceFrame} />
+                    </View>
+                    {/* input grande */}
+                    <SkeletonLoader
+                      preset="card"
+                      frame={referenceFrame}
+                      // altura tipo input (menos alto que una card grande)
+                      height={referenceFrame.height * 0.08}
+                    />
+                  </View>
+                ))}
+              </View>
+            </View>
+          );
+        }}
       </PageScaffold>
     );
   }
+  // ─────────────────────────────────────────────────────────────────────
 
   if (!form) {
     return (
@@ -228,14 +262,13 @@ const FormRoute: React.FC = () => {
               </Text>
             </TouchableOpacity>
           </View>
-
           <FormScreen
             form={form}
             referenceFrame={referenceFrame}
             contentFrame={contentFrame}
             layoutFrame={layoutFrame}
             page={currentPage}
-            onPageChange={handlePageChange} // 👈 NUEVO: persistir cursor al cambiar
+            onPageChange={handlePageChange}
           />
         </View>
       )}

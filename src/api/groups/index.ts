@@ -82,6 +82,7 @@ export const pullAndCacheGroupById = async (id_grupo: string, opts?: { signal?: 
 // Primero intenta local; si no existe, va al server y cachea
 export const getGroupOrFetch = async (id_grupo: string) => {
   const local = await getGroupByIdLocal(id_grupo);
+  console.log("Local group:", local);
   if (local) return local;
   return pullAndCacheGroupById(id_grupo);
 };

@@ -4,6 +4,7 @@ import { fetchAndSaveForms } from "@/api/forms";
 import type { FormCategoryGroup } from "@/api/forms/types";
 import { pullAndCacheGroups } from "@/api/groups";
 import Button from "@/components/atoms/Button";
+import SkeletonLoader from "@/components/atoms/SkeletonLoader";
 import CategoryCard from "@/components/molecules/CategoryCard";
 import PageScaffold from "@/components/templates/PageScaffold";
 import { listEntriesSummary } from "@/db/form-entries";
@@ -12,61 +13,83 @@ import { onActiveWithInternet } from "@/utils/appstate";
 import { isOnline, onReconnectOnce } from "@/utils/network";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const Home: React.FC = () => {
   const [data, setData] = useState<FormCategoryGroup[]>([]);
+  const [initialized, setInitialized] = useState(false); // ya hice 1ra lectura local
+  const [loadingRemote, setLoadingRemote] = useState(false); // estoy trayendo del server
   const isRefreshingRef = useRef(false);
 
-  // Lee SIEMPRE lo que haya en SQLite (rápido)
+  // Lee lo que haya en SQLite
   const loadLocal = useCallback(async () => {
-    await DB.logDbCounts?.();
+    try {
+      await DB.logDbCounts?.();
+    } catch {}
     const groups = await DB.selectFormsGroupedByCategory();
-    setData(groups);
+    const safeGroups = Array.isArray(groups) ? groups : [];
+    setData(safeGroups);
+    return safeGroups;
   }, []);
 
-  // Pull remoto -> guarda en DB -> relee local (con gating de red y anti-duplicado)
+  // Revalidación remota segura
   const revalidateFromServer = useCallback(async () => {
     if (isRefreshingRef.current) return;
+
+    const online = await isOnline();
+    if (!online) {
+      // registra un intento para el próximo reconnect (una sola vez)
+      onReconnectOnce(() => revalidateFromServer());
+      setLoadingRemote(false);
+      return;
+    }
+
     isRefreshingRef.current = true;
+    setLoadingRemote(true);
     try {
-      if (!(await isOnline())) {
-        // Si no hay internet, quedate escuchando el primer reconnect (una sola vez)
-        onReconnectOnce(() => revalidateFromServer());
-        return;
-      }
       await fetchAndSaveForms(); // /forms/tree -> SQLite
-      await pullAndCacheGroups(); // /groups     -> SQLite (si lo usás)
+      await pullAndCacheGroups(); // /groups     -> SQLite (si aplica)
     } catch (e: any) {
       console.log("[home/revalidate] fallo:", e?.message ?? e);
     } finally {
-      await loadLocal(); // siempre relee lo último que quedó en SQLite
-      isRefreshingRef.current = false;
+      try {
+        await loadLocal(); // pinta lo último que quedó en DB
+      } finally {
+        setLoadingRemote(false);
+        isRefreshingRef.current = false;
+      }
     }
   }, [loadLocal]);
 
-  // 1) Monta: muestra lo local altiro
+  // 1) Montaje: asegúrate de marcar initialized SIEMPRE
   useEffect(() => {
-    loadLocal();
+    let cancelled = false;
+    (async () => {
+      try {
+        await loadLocal();
+      } catch (e) {
+        console.log("[home/mount] loadLocal error:", (e as any)?.message ?? e);
+      } finally {
+        if (!cancelled) setInitialized(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [loadLocal]);
 
-  // 2) Enfocar pantalla: SIEMPRE recarga local + (si hay red) revalida del server
+  // 2) Enfoque pantalla: recarga local + revalida remoto
   useFocusEffect(
     useCallback(() => {
-      console.log("\n\n[home] focus, recargando local + revalidando remoto");
-      // Mostrar lo local de inmediato
       loadLocal();
-      // Intentar revalidar (si hay red); si no, se registrará para el próximo reconnect
       revalidateFromServer();
-      return () => {
-        // nada que limpiar aquí
-      };
+      return () => {};
     }, [loadLocal, revalidateFromServer])
   );
 
-  // 3) Cuando la app vuelve del background y HAY internet, revalidá
+  // 3) App vuelve activa con internet → revalidar
   useEffect(() => {
     return onActiveWithInternet(() => revalidateFromServer());
   }, [revalidateFromServer]);
@@ -86,6 +109,69 @@ const Home: React.FC = () => {
         const columns = 2;
         const cardWidth = Math.floor((contentFrame.width - gap * (columns - 1)) / columns);
 
+        // 1) Skeleton inicial (antes de 1ra lectura local)
+        if (!initialized) {
+          const skeletonRows = 3;
+          const skeletonItems = Array.from({ length: skeletonRows * columns });
+          return (
+            <>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
+                {skeletonItems.map((_, i) => (
+                  <View key={i} style={{ width: cardWidth }}>
+                    <SkeletonLoader preset="card" frame={referenceFrame} />
+                    <View style={{ height: referenceFrame.height * 0.012 }} />
+                    <SkeletonLoader preset="title" frame={referenceFrame} />
+                  </View>
+                ))}
+              </View>
+              <View style={{ alignItems: "flex-end", marginTop: gap }}>
+                <SkeletonLoader preset="button" frame={referenceFrame} width="40%" />
+              </View>
+              <View style={{ alignItems: "flex-end", marginTop: gap }}>
+                <SkeletonLoader preset="button" frame={referenceFrame} width="40%" />
+              </View>
+            </>
+          );
+        }
+
+        // 2) Aún no hay datos, pero estoy trayendo del server → muestra skeleton (no “vacío”)
+        if (loadingRemote && data.length === 0) {
+          const skeletonRows = 3;
+          const skeletonItems = Array.from({ length: skeletonRows * columns });
+          return (
+            <>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
+                {skeletonItems.map((_, i) => (
+                  <View key={i} style={{ width: cardWidth }}>
+                    <SkeletonLoader preset="card" frame={referenceFrame} />
+                    <View style={{ height: referenceFrame.height * 0.012 }} />
+                    <SkeletonLoader preset="title" frame={referenceFrame} />
+                  </View>
+                ))}
+              </View>
+              <View style={{ alignItems: "flex-end", marginTop: gap }}>
+                <SkeletonLoader preset="button" frame={referenceFrame} width="40%" />
+              </View>
+            </>
+          );
+        }
+
+        // 3) Estado vacío real (sin fetch en curso y DB vacía)
+        if (!loadingRemote && data.length === 0) {
+          return (
+            <View style={{ paddingHorizontal: 16 }}>
+              <Text style={{ fontSize: 16, marginBottom: 12 }}>No hay categorías disponibles.</Text>
+              <Button
+                title="Reintentar"
+                size="sm"
+                onPress={() => revalidateFromServer()}
+                style={{ alignSelf: "flex-start", marginTop: 12 }}
+              />
+            </View>
+          );
+        }
+
+        // 4) Datos listos
         return (
           <>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
@@ -115,11 +201,9 @@ const Home: React.FC = () => {
               <Button
                 title="Guardados"
                 size="sm"
-                onPress={() => {
-                  (async () => {
-                    const entries = await listEntriesSummary();
-                    console.log("Entries:", entries);
-                  })();
+                onPress={async () => {
+                  const entries = await listEntriesSummary();
+                  console.log("Entries:", entries);
                   router.push("/form/saved");
                 }}
               />
