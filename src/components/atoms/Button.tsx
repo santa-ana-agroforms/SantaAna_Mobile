@@ -52,7 +52,7 @@ const Button: React.FC<Props> = ({
 
     // Alturas por tamaño (accesibles y proporcionales)
     const hSm = minSide * 0.08;
-    const hMd = minSide * 0.01;
+    const hMd = minSide * 0.1;
     const hLg = minSide * 0.12;
     const _height = size === "sm" ? hSm : size === "lg" ? hLg : hMd;
 
