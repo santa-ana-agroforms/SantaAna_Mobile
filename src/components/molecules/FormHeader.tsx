@@ -43,27 +43,36 @@ const FormHeader: React.FC<Props> = ({
   const { width: ww, height: hh } = useWindowDimensions();
   const baseFrame = frame ?? { width: ww, height: hh };
 
-  const { padX, padTop, rowGap, titleSize, titleSizeCategories, dotsGap, dotsShiftUp } =
-    useMemo(() => {
-      const minSide = Math.min(baseFrame.width, baseFrame.height);
-      const _padX = clamp(baseFrame.width * 0.04, 12, 24);
-      const _padTop =
-        variant === "categories" ? baseFrame.height * 0.015 : baseFrame.height * 0.022;
-      const _rowGap = clamp(baseFrame.width * 0.03, 8, 16);
-      const _titleSize = minSide * 0.055;
-      const _titleSizeCategories = minSide * 0.065;
-      const _dotsGap = clamp(minSide * 0.012, 6, 12);
-      const _dotsShiftUp = minSide * -0.005;
-      return {
-        padX: _padX,
-        padTop: _padTop,
-        rowGap: _rowGap,
-        titleSize: _titleSize,
-        titleSizeCategories: _titleSizeCategories,
-        dotsGap: _dotsGap,
-        dotsShiftUp: _dotsShiftUp,
-      };
-    }, [baseFrame.height, baseFrame.width, variant]);
+  const {
+    padX,
+    padTop,
+    rowGap,
+    titleSize,
+    titleSizeCategories,
+    dotsGap,
+    dotsShiftUp,
+    titleCatSize,
+  } = useMemo(() => {
+    const minSide = Math.min(baseFrame.width, baseFrame.height);
+    const _padX = clamp(baseFrame.width * 0.04, 12, 24);
+    const _padTop = variant === "categories" ? baseFrame.height * 0.015 : baseFrame.height * 0.022;
+    const _rowGap = clamp(baseFrame.width * 0.03, 8, 16);
+    const _titleSize = minSide * 0.055;
+    const titleCatSize = minSide * 0.045;
+    const _titleSizeCategories = minSide * 0.065;
+    const _dotsGap = clamp(minSide * 0.012, 6, 12);
+    const _dotsShiftUp = minSide * -0.005;
+    return {
+      padX: _padX,
+      padTop: _padTop,
+      rowGap: _rowGap,
+      titleSize: _titleSize,
+      titleSizeCategories: _titleSizeCategories,
+      dotsGap: _dotsGap,
+      titleCatSize: titleCatSize,
+      dotsShiftUp: _dotsShiftUp,
+    };
+  }, [baseFrame.height, baseFrame.width, variant]);
 
   const activeIndex = Math.max(0, Math.min(totalPages - 1, page - 1));
 
@@ -145,6 +154,26 @@ const FormHeader: React.FC<Props> = ({
             frame={baseFrame}
           />
         </View>
+
+        {variant === "categories" ? (
+          <>
+            <View style={{ alignItems: "center", marginTop: rowGap * 0.5 }}>
+              <Body color="primary" size="sm" weight="bold" style={{ fontSize: titleCatSize }}>
+                Categorías de formularios disponibles
+              </Body>
+            </View>
+            <View
+              style={{
+                height: hh * 0.001,
+                backgroundColor: colors.textSecondary,
+                opacity: 1,
+                width: "90%",
+                alignSelf: "center",
+                // marginVertical: rowGap * 0,
+              }}
+            />
+          </>
+        ) : null}
       </View>
     </View>
   );
