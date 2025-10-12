@@ -6,8 +6,11 @@ import PageScaffold, { type ScaffoldDimensions } from "@/components/templates/Pa
 import { DB } from "@/db/sqlite";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { View } from "react-native";
+import { InteractionManager, View } from "react-native";
 
+/** -----------------------------------------
+ * Tipos locales
+ * ----------------------------------------- */
 type VersionVigente = { id_index_version: string; fecha_creacion: string };
 type Formulario = { id_formulario: string; nombre: string; version_vigente: VersionVigente };
 export type FormCategoryGroup = {
@@ -18,12 +21,126 @@ export type FormCategoryGroup = {
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
+/** -----------------------------------------
+ * Helpers de estado/fecha
+ * ----------------------------------------- */
+const getEstado = (
+  f: Formulario
+): { texto: "Pendiente" | "En progreso" | "Completado"; color: string } => {
+  const created = f.version_vigente?.fecha_creacion
+    ? new Date(f.version_vigente.fecha_creacion)
+    : null;
+  if (!created) return { texto: "Pendiente", color: "#9CA3AF" };
+  const diff = Date.now() - created.getTime();
+  const days = diff / (1000 * 60 * 60 * 24);
+  if (days > 20) return { texto: "Completado", color: "#2E7D32" };
+  if (days > 7) return { texto: "En progreso", color: "#8B4513" };
+  return { texto: "Pendiente", color: "#9CA3AF" };
+};
+
+const getFechaDisponibleHasta = (asignado: Date | null): Date | null => {
+  if (!asignado) return null;
+  const d = new Date(asignado);
+  d.setDate(d.getDate() + 30);
+  return d;
+};
+
+/** -----------------------------------------
+ * PRELOAD local (en este archivo)
+ *  - Precarga bundle de la ruta real + FormPage
+ *  - Calienta DB/JSI
+ *  - Lee form y grupos
+ *  - Reusa promesas por formId (memo)
+ * ----------------------------------------- */
+const pickGroupIdFromConfig = (cfg: any): string | null => {
+  if (!cfg) return null;
+  const cand =
+    cfg.id_group ??
+    cfg.id_grupo ??
+    cfg.groupId ??
+    cfg.group_id ??
+    cfg.idGroup ??
+    cfg.group?.id ??
+    null;
+  return cand != null ? String(cand) : null;
+};
+
+// Mapa de preloads por formulario para no repetir trabajo si el usuario hace tap varias veces
+const preloadMap = new Map<string, Promise<void>>();
+
+// Debounce por formId para no disparar demasiado mientras el dedo está bajando
+const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+const ensureWarmDb = async () => {
+  try {
+    await DB.ensureMigrated();
+    await DB.logDbCounts(); // SELECTs baratas calientan WAL/JSI y el bridge
+  } catch {}
+};
+
+const preloadFormScreenAndData = async (formId: string, versionId: string) => {
+  const key = `${formId}:${versionId}`;
+  if (preloadMap.has(key)) return preloadMap.get(key)!;
+
+  const p = (async () => {
+    // 1) Precarga módulos: ruta real + pantalla
+    try {
+      await Promise.all([import("app/form/[formId]"), import("@/screens/FormPage")]);
+    } catch {}
+
+    // 2) Calienta DB/JSI
+    await ensureWarmDb();
+
+    // 3) Lee formulario completo
+    const form = await DB.selectFormFromGroupedById(formId);
+    if (!form) return;
+
+    // 4) Prelee grupos usados por campos
+    const groupIds = new Set<string>();
+    for (const p of form.paginas ?? []) {
+      for (const f of p.campos ?? []) {
+        const gid = pickGroupIdFromConfig(f.config);
+        if (gid) groupIds.add(gid);
+      }
+    }
+    await Promise.all(
+      Array.from(groupIds).map(async (gid) => {
+        try {
+          await DB.selectGroupById(gid);
+        } catch {}
+      })
+    );
+
+    // 5) (Opcional) defer de assets/datasets no críticos
+    InteractionManager.runAfterInteractions(() => {
+      // Ej: precargar imágenes/íconos usados en la pantalla del form
+    });
+  })();
+
+  preloadMap.set(key, p);
+  // Limpia si falla para poder reintentar en el próximo tap
+  p.catch(() => preloadMap.delete(key));
+  return p;
+};
+
+const requestPreloadWithDebounce = (formId: string, versionId: string, wait = 400) => {
+  const key = `${formId}:${versionId}`;
+  if (debounceTimers.has(key)) return;
+  const t = setTimeout(() => {
+    debounceTimers.delete(key);
+    preloadFormScreenAndData(formId, versionId);
+  }, wait);
+  debounceTimers.set(key, t);
+};
+
+/** -----------------------------------------
+ * Pantalla
+ * ----------------------------------------- */
 const FormsByCategoryScreen: React.FC = () => {
   const { category } = useLocalSearchParams<{ category: string }>();
   const [loading, setLoading] = useState(true);
   const [grupo, setGrupo] = useState<FormCategoryGroup | null>(null);
 
-  // 1) Leer siempre lo que haya en DB (rápido)
   const loadLocal = useCallback(async () => {
     const groups = await DB.selectFormsGroupedByCategory();
     const found = (groups ?? []).find((g) => g.nombre_categoria === category);
@@ -40,9 +157,17 @@ const FormsByCategoryScreen: React.FC = () => {
     })();
   }, [loadLocal]);
 
+  // Limpia timers de debounce al desmontar
+  useEffect(() => {
+    return () => {
+      for (const t of debounceTimers.values()) clearTimeout(t);
+      debounceTimers.clear();
+    };
+  }, []);
+
   const headerTitle = String(category);
 
-  // 🔸 Skeleton: mientras carga (aunque aún no tengamos grupo)
+  // Skeletons y estados como ya los tenías:
   if (loading && !grupo) {
     return (
       <PageScaffold title={headerTitle} variant="groups">
@@ -53,7 +178,6 @@ const FormsByCategoryScreen: React.FC = () => {
             <View style={{ gap: gapY }}>
               {items.map((_, i) => (
                 <View key={i} style={{ gap: referenceFrame.height * 0.01 }}>
-                  {/* fila: título a la izq + chip de estado a la der */}
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <View style={{ flex: 1 }}>
                       <SkeletonLoader preset="title" frame={referenceFrame} />
@@ -62,7 +186,6 @@ const FormsByCategoryScreen: React.FC = () => {
                       <SkeletonLoader preset="button" frame={referenceFrame} />
                     </View>
                   </View>
-                  {/* subtítulo / fechas */}
                   <SkeletonLoader
                     preset="text"
                     frame={referenceFrame}
@@ -79,7 +202,6 @@ const FormsByCategoryScreen: React.FC = () => {
     );
   }
 
-  // 🔸 Si carga y el grupo existe pero aún no hay formularios, muestra skeleton igual
   if (loading && grupo && (grupo.formularios?.length ?? 0) === 0) {
     return (
       <PageScaffold title={headerTitle} variant="groups">
@@ -114,7 +236,6 @@ const FormsByCategoryScreen: React.FC = () => {
     );
   }
 
-  // 🔸 Estado vacío real (sin carga y sin formularios)
   if (!loading && (!grupo || (grupo.formularios?.length ?? 0) === 0)) {
     return (
       <PageScaffold title={headerTitle} variant="categories">
@@ -123,7 +244,7 @@ const FormsByCategoryScreen: React.FC = () => {
     );
   }
 
-  // 🔸 Datos listos
+  // Datos listos
   return (
     <PageScaffold title={headerTitle} variant="groups">
       {({ contentFrame, referenceFrame }: ScaffoldDimensions) => {
@@ -137,21 +258,24 @@ const FormsByCategoryScreen: React.FC = () => {
                 : null;
               const disponibleHasta = getFechaDisponibleHasta(asignado);
 
+              const formId = f.id_formulario;
+              const versionId = f.version_vigente?.id_index_version ?? "";
+
               return (
                 <FormListItem
-                  key={f.id_formulario}
+                  key={formId}
                   title={f.nombre}
                   statusText={estado.texto}
                   statusColor={estado.color}
                   assignedAt={asignado}
                   availableUntil={disponibleHasta}
+                  // ✅ Precarga robusta: debounce + memo + bundle + DB + datos
+                  onPreload={() => requestPreloadWithDebounce(formId, versionId, 400)}
+                  // Navega cuando termina la animación del item
                   onPress={() =>
                     router.push({
                       pathname: "/form/[formId]",
-                      params: {
-                        formId: f.id_formulario,
-                        versionId: f.version_vigente?.id_index_version ?? "",
-                      },
+                      params: { formId, versionId },
                     })
                   }
                   referenceFrame={referenceFrame}
@@ -167,25 +291,3 @@ const FormsByCategoryScreen: React.FC = () => {
 };
 
 export default FormsByCategoryScreen;
-
-/* ------------ placeholders UI ------------ */
-const getEstado = (
-  f: Formulario
-): { texto: "Pendiente" | "En progreso" | "Completado"; color: string } => {
-  const created = f.version_vigente?.fecha_creacion
-    ? new Date(f.version_vigente.fecha_creacion)
-    : null;
-  if (!created) return { texto: "Pendiente", color: "#9CA3AF" };
-  const diff = Date.now() - created.getTime();
-  const days = diff / (1000 * 60 * 60 * 24);
-  if (days > 20) return { texto: "Completado", color: "#2E7D32" };
-  if (days > 7) return { texto: "En progreso", color: "#8B4513" };
-  return { texto: "Pendiente", color: "#9CA3AF" };
-};
-
-const getFechaDisponibleHasta = (asignado: Date | null): Date | null => {
-  if (!asignado) return null;
-  const d = new Date(asignado);
-  d.setDate(d.getDate() + 30);
-  return d;
-};
