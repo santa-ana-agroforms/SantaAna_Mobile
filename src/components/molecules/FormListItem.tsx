@@ -150,7 +150,7 @@ const FormListItem: React.FC<Props> = ({
         cancelAnimation(overlay);
         animatingRef.current = false;
       };
-    }, [])
+    }, [overlay, scale])
   );
 
   // Cleanup por si el item se desmonta
@@ -164,7 +164,7 @@ const FormListItem: React.FC<Props> = ({
       cancelAnimation(overlay);
       animatingRef.current = false;
     };
-  }, []);
+  }, [overlay, scale]);
 
   const handlePressIn = () => {
     if (!preloadedRef.current && onPreload) {
