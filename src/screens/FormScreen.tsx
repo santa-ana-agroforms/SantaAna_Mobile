@@ -41,7 +41,7 @@ const FormScreen: React.FC<Props> = ({
   // Páginas estables
   const pages: Pagina[] = useMemo(
     () => (form?.paginas ?? []).slice().sort((a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0)),
-    [form?.id_formulario, form?.paginas]
+    [form?.paginas]
   );
   const pagesCount = pages.length;
 
