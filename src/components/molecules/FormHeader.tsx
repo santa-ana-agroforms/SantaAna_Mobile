@@ -75,7 +75,7 @@ const FormHeader: React.FC<Props> = ({
   }, [baseFrame.height, baseFrame.width, variant]);
 
   const activeIndex = Math.max(0, Math.min(totalPages - 1, page - 1));
-
+  const showPagination = variant === "form" && totalPages > 1;
   return (
     <View style={{ paddingHorizontal: padX, paddingTop: padTop }}>
       <View style={{ gap: rowGap * 0.5 }}>
@@ -99,21 +99,18 @@ const FormHeader: React.FC<Props> = ({
           </Title>
         </View>
 
-        {/* paginación (solo form) */}
-        {variant === "form" ? (
+        {showPagination ? (
           <View style={{ alignItems: "center", gap: dotsGap, marginTop: dotsShiftUp }}>
             <PaginationDots
               total={totalPages}
               activeIndex={activeIndex}
-              arrows
+              arrows={totalPages > 2}
               pill
               onChange={(nextIndex) => {
-                // prioriza salto directo si te lo pasan
                 if (onGoToPage) {
-                  onGoToPage(nextIndex + 1); // convierte a 1-based
+                  onGoToPage(nextIndex + 1);
                   return;
                 }
-                // si no hay onGoToPage, intenta mapear a prev/next
                 if (nextIndex < activeIndex) onPrevPage?.();
                 else if (nextIndex > activeIndex) onNextPage?.();
               }}
