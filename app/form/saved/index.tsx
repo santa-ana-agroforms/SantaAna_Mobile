@@ -1,14 +1,10 @@
 // app/form/saved/index.tsx
+import { sendFormEntry } from "@/api/client";
 import PageScaffold from "@/components/templates/PageScaffold";
-import {
-  type FilledState,
-  type FormJSON,
-  getEntryById,
-  markSynced,
-  type SavedEntry,
-} from "@/db/form-entries";
+import { type FilledState, type FormJSON, getEntryById, markSynced } from "@/db/form-entries";
 import { keyOf, validators } from "@/forms/runtime/field-registry";
 import { useFormPersistence } from "@/forms/state/useFormPersistence";
+import { isOnline } from "@/utils/network";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -83,18 +79,7 @@ const validateWholeFormRequired = (form: FormJSON, filled: FilledState) => {
   return { ok: missing === 0, missing, errors };
 };
 
-// mock de envío (tu endpoint real va aquí)
-const sendEntryMock = async (entry: SavedEntry) => {
-  console.log("▶️ [MOCK SEND] POST /forms/entries", {
-    local_id: entry.local_id,
-    form_id: entry.form_id,
-    index_version_id: entry.index_version_id,
-    filled_at_local: entry.filled_at_local,
-    status: entry.status,
-  });
-  await new Promise((r) => setTimeout(r, 400));
-  return { ok: true, remote_id: `mock_${entry.local_id}` };
-};
+// mock de envío (tu endpoint real va aquí
 
 // ─────────────── pantalla ───────────────
 type FilterMode = "pending" | "synced";
@@ -156,13 +141,17 @@ const SavedEntriesScreen = () => {
 
   const sendOne = useCallback(
     async (local_id: string) => {
+      const ctrl = new AbortController(); // por si querés abortar el envío al salir de la pantalla
       try {
         setSendingId(local_id);
+
         const saved = await getEntryById(local_id);
         if (!saved) {
           Alert.alert("Ups", "No se encontró el registro.");
           return;
         }
+
+        // 1) validación de requeridos (ya la tenés)
         const v = validateWholeFormRequired(
           saved.form_json as FormJSON,
           saved.fill_json as FilledState
@@ -171,20 +160,28 @@ const SavedEntriesScreen = () => {
           Alert.alert("Formulario incompleto", `Faltan ${v.missing} campo(s) requerido(s).`);
           return;
         }
-        const resp = await sendEntryMock(saved);
-        if (resp.ok) {
-          await markSynced(local_id);
-          setCompleteMap((prev) => ({
-            ...prev,
-            [local_id]: { ...(prev[local_id] ?? { ok: true, missing: 0 }), status: "synced" },
-          }));
-          // refrescar lista (útil si estás filtrando por enviados)
-          await refreshSummary();
-          Alert.alert("Enviado", "El formulario se envió (simulado) y se marcó como 'synced'.");
-        } else {
-          Alert.alert("No se pudo enviar", "El servidor devolvió un error.");
+
+        // 2) red (evita pegarle al server si estás offline)
+        if (!(await isOnline())) {
+          Alert.alert("Sin conexión", "Conéctate a Internet para enviar el formulario.");
+          return;
         }
+
+        // 3) envío real
+        const resp = await sendFormEntry(saved, { signal: ctrl.signal });
+        console.log("[entries] server response:", resp);
+
+        // 4) marcá como 'synced' localmente
+        await markSynced(local_id);
+        setCompleteMap((prev) => ({
+          ...prev,
+          [local_id]: { ...(prev[local_id] ?? { ok: true, missing: 0 }), status: "synced" },
+        }));
+        await refreshSummary();
+
+        Alert.alert("Enviado", "El formulario se envió y se marcó como 'synced'.");
       } catch (e: any) {
+        // si usás AbortController: e?.name === 'CanceledError' o 'AbortError'
         Alert.alert("Error", e?.message ?? "No se pudo enviar el formulario.");
       } finally {
         setSendingId(null);

@@ -1,6 +1,7 @@
 // =============================================================
 // src/api/client.ts – Axios + interceptores JWT
 // =============================================================
+import { SavedEntry } from "@/db/form-entries";
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { ACCESS_KEY, API_BASE_KEY, REFRESH_KEY } from "./secure-keys";
@@ -82,4 +83,34 @@ export const makeClient = async () => {
   );
 
   return instance;
+};
+
+export type CreateEntryResponse = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  status: "pending" | "synced" | "cancelled";
+};
+
+export const sendFormEntry = async (
+  entry: SavedEntry,
+  opts?: { signal?: AbortSignal }
+): Promise<CreateEntryResponse> => {
+  const api = await makeClient();
+
+  // shape que espera el backend Nest (/forms/entries)
+  const payload = {
+    form_id: entry.form_id,
+    form_name: entry.form_name,
+    index_version_id: entry.index_version_id,
+    filled_at_local: entry.filled_at_local, // ISO string
+    status: entry.status, // "pending"|"synced"|"cancelled"
+    fill_json: entry.fill_json, // FilledState
+    form_json: entry.form_json, // FormJSON
+  };
+
+  const { data } = await api.post<CreateEntryResponse>("/forms/entries", payload, {
+    signal: opts?.signal, // axios soporta AbortController
+  });
+  return data;
 };

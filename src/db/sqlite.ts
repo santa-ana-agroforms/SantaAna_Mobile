@@ -4,7 +4,7 @@ import * as SQLite from "expo-sqlite";
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 export const getDb = async () => {
   if (!dbPromise) {
-    dbPromise = SQLite.openDatabaseAsync("forms.db");
+    dbPromise = SQLite.openDatabaseAsync("forms.db", { useNewConnection: true });
     const db = await dbPromise;
     await db.execAsync("PRAGMA foreign_keys = ON;");
     await db.execAsync("PRAGMA journal_mode = WAL;");
