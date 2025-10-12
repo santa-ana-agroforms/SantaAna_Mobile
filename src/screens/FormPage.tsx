@@ -59,7 +59,7 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
   const fieldGap = clamp(minSide * 0.016, 10, 22);
 
   return (
-    <View style={{ paddingRight: 0, paddingBottom: padBottom * 0 }}>
+    <View style={{ paddingRight: 0, paddingBottom: padBottom * 1.1 }}>
       <Body weight="bold" size="xl">
         {page?.nombre}
       </Body>
