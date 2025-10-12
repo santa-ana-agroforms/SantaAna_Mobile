@@ -134,27 +134,6 @@ const RepeatableGroup: React.FC<Props> = ({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   /** ===== LOG props in ===== */
-  useEffect(() => {
-    log("mounted with props:", {
-      title,
-      required,
-      minEntries,
-      _minEntries,
-      entriesLen: entries.length,
-      fieldsTemplateLen: fieldsTemplate.length,
-      firstEntry: entries[0],
-    });
-  }, []); // mount once
-
-  useEffect(() => {
-    log("props update:", {
-      required,
-      _minEntries,
-      entriesLen: entries.length,
-      fieldsTemplateLen: fieldsTemplate.length,
-    });
-  }, [required, _minEntries, entries.length, fieldsTemplate.length]);
-
   /** ===== Auto-init filas para cumplir minEntries ===== */
   useEffect(() => {
     if (fieldsTemplate.length === 0) {
@@ -166,7 +145,7 @@ const RepeatableGroup: React.FC<Props> = ({
       const additions: GroupRow[] = Array.from({ length: need }, () =>
         makeEmptyRowFromTemplate(fieldsTemplate)
       );
-      log("auto-init rows:", { need, additions });
+      // log("auto-init rows:", { need, additions });
       try {
         onChange([...entries, ...additions]);
       } catch (e) {
@@ -195,10 +174,7 @@ const RepeatableGroup: React.FC<Props> = ({
   const safeOnChange = useCallback(
     (next: GroupRow[]) => {
       if (!shallowEqualRows(entries, next)) {
-        log("safeOnChange → set entries", { from: entries.length, to: next.length, next });
         onChange(next);
-      } else {
-        log("safeOnChange → no-op (shallowEqualRows=true)");
       }
     },
     [entries, onChange]
@@ -254,7 +230,6 @@ const RepeatableGroup: React.FC<Props> = ({
     const sorted = [...fieldsTemplate].sort(
       (a, b) => (a.sequence ?? 0) - (b.sequence ?? 0) || a.id_campo.localeCompare(b.id_campo)
     );
-    log("templateSorted len:", sorted.length);
     return sorted;
   }, [fieldsTemplate]);
 

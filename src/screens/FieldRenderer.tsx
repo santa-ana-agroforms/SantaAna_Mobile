@@ -38,6 +38,7 @@ type Props = {
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+const DEBUG_FR = false;
 
 const pickGroupIdFromConfig = (cfg: any): string | null => {
   if (!cfg) return null;
@@ -55,7 +56,6 @@ const pickGroupIdFromConfig = (cfg: any): string | null => {
 /** =========================
  *  🔎 DEBUG HELPERS
  *  ========================= */
-const DEBUG = false;
 const useDebugLogger = (label: string) => {
   const idRef = useRef(Math.random().toString(36).slice(2, 8));
   const renders = useRef(0);
@@ -64,13 +64,13 @@ const useDebugLogger = (label: string) => {
   const prefix = (suffix = "") => `FR:${label}#${idRef.current}${suffix ? ` ${suffix}` : ""}`;
 
   const log = (...args: any[]) => {
-    if (!DEBUG) return;
+    if (!DEBUG_FR) return;
     // @ts-ignore
     console.log(prefix(), ...args);
   };
 
   const group = (title: string, fn: () => void) => {
-    if (!DEBUG) return fn();
+    if (!DEBUG_FR) return fn();
     // @ts-ignore
     console.groupCollapsed(prefix(` ${title}`));
     try {
@@ -118,14 +118,6 @@ const FieldRenderer: React.FC<Props> = ({
   const valueFromRedux = useAppSelector(valueSelector);
   const value = external ? external.value : valueFromRedux;
 
-  React.useEffect(() => {
-    console.log("[FR] valueFromRedux changed", {
-      field: campo.nombre_interno,
-      page: effectivePage,
-      newValue: value,
-      newType: value == null ? value : value.constructor?.name,
-    });
-  }, [value, campo.nombre_interno, effectivePage]);
   // Commit → si hay external, usarlo; si no, dispatch al slice (+ evento opcional al padre)
   const onCommit = useCallback(
     (v: any) => {
@@ -134,7 +126,9 @@ const FieldRenderer: React.FC<Props> = ({
         onChangeValue?.(campo.nombre_interno, v);
         return;
       }
-      if (!sessionId) return;
+      if (!sessionId) {
+        return;
+      }
       dispatch(
         setFieldValue({
           sessionId,
@@ -269,18 +263,64 @@ const FieldRenderer: React.FC<Props> = ({
     </>
   );
 
-  // dentro de FieldRenderer
-
+  // ────────────────────────── Date / Hour ──────────────────────────
   const renderDate = (kind: "date" | "hour") => {
-    const toUiDate = (s?: string | null): Date | null => {
-      if (!s) return null;
-      if (kind === "date") {
-        const [y, m, d] = s.split("-").map(Number);
-        return new Date(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0, 0);
-      } else {
-        const [H, M] = s.split(":").map(Number);
-        return new Date(2000, 0, 1, H ?? 0, M ?? 0, 0, 0); // ancla estable
+    const toUiDate = (raw?: unknown): Date | null => {
+      if (raw == null) return null;
+
+      if (DEBUG_FR) {
+        console.log("[FR] toUiDate.in", {
+          kind,
+          type: typeof raw,
+          isDate: raw instanceof Date,
+          val: raw,
+        });
       }
+
+      // 1) Date válido
+      if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
+
+      // 2) epoch number
+      if (typeof raw === "number") {
+        const d = new Date(raw);
+        return isNaN(d.getTime()) ? null : d;
+      }
+
+      // 3) strings
+      if (typeof raw === "string") {
+        const s = raw.trim();
+
+        if (kind === "date") {
+          // YYYY-MM-DD
+          const m1 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+          if (m1) {
+            const y = Number(m1[1]),
+              m = Number(m1[2]),
+              d = Number(m1[3]);
+            const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
+            if (!isNaN(dt.getTime())) return dt;
+          }
+          // ISO
+          const iso = new Date(s);
+          if (!isNaN(iso.getTime())) return iso;
+        } else {
+          // kind === "hour"
+          // HH:mm o HH:mm:ss
+          const m2 = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(s);
+          if (m2) {
+            const H = Number(m2[1]),
+              M = Number(m2[2]),
+              S = Number(m2[3] ?? 0);
+            const dt = new Date(2000, 0, 1, H, M, S, 0);
+            if (!isNaN(dt.getTime())) return dt;
+          }
+          // ISO con hora
+          const iso = new Date(s);
+          if (!isNaN(iso.getTime())) return iso;
+        }
+      }
+
+      return null;
     };
 
     const toStoreStr = (d: Date | null): string | null => {
@@ -293,30 +333,22 @@ const FieldRenderer: React.FC<Props> = ({
       } else {
         const H = String(d.getHours()).padStart(2, "0");
         const M = String(d.getMinutes()).padStart(2, "0");
-        return `${H}:${M}`;
+        return `${H}:${M}`; // estandariza a HH:mm
       }
     };
 
-    // Log de lo que llega desde Redux/external
-    console.log("[FR] renderDate:input", {
-      field: campo.nombre_interno,
-      kind,
-      rawValue: value,
-      rawType: value == null ? value : value.constructor?.name,
-    });
+    const uiValue: Date | null = toUiDate(value);
 
-    const uiValue: Date | null =
-      value instanceof Date ? value : typeof value === "string" ? toUiDate(value) : null;
-
-    if (uiValue) {
-      console.log("[FR] renderDate:uiValue", {
+    if (DEBUG_FR) {
+      console.log("[FR] renderDate()", {
         field: campo.nombre_interno,
         kind,
-        uiLocal: uiValue.toString(),
-        uiISO: uiValue.toISOString(),
+        rawType: value instanceof Date ? "Date" : value === null ? "null" : typeof value,
+        rawVal: value,
+        uiValueType: uiValue ? "Date" : "null",
+        uiISO: uiValue?.toISOString?.(),
+        uiLocal: uiValue?.toString?.(),
       });
-    } else {
-      console.log("[FR] renderDate:uiValue NULL", { field: campo.nombre_interno, kind });
     }
 
     return (
@@ -325,13 +357,15 @@ const FieldRenderer: React.FC<Props> = ({
         value={uiValue}
         onChange={(d) => {
           const out = toStoreStr(d);
-          console.log("[FR] renderDate:onChange -> onCommit", {
-            field: campo.nombre_interno,
-            kind,
-            receivedLocal: d?.toString?.(),
-            receivedISO: d?.toISOString?.(),
-            toStore: out,
-          });
+          if (DEBUG_FR) {
+            console.log("[FR] onChange from DateTimeField", {
+              field: campo.nombre_interno,
+              kind,
+              pickedISO: d?.toISOString?.(),
+              pickedLocal: d?.toString?.(),
+              willStore: out,
+            });
+          }
           onCommit(out);
         }}
         label={label}
@@ -343,7 +377,7 @@ const FieldRenderer: React.FC<Props> = ({
   };
 
   const renderCalc = () => {
-    const calcValue = value; // el slice recalcula con recomputeAllCalcs
+    const calcValue = value;
     return (
       <>
         {LabelBlock}
@@ -495,7 +529,6 @@ const FieldRenderer: React.FC<Props> = ({
             referenceFrame={referenceFrame}
             contentFrame={contentFrame}
             onChange={(nextRows) => {
-              // Guardar tal cual (el slice ya filtra vacíos y preserva __id)
               const commit = external
                 ? external.onChange
                 : (v: any) =>
