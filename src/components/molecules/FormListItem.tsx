@@ -18,18 +18,28 @@ type Frame = { width: number; height: number };
 
 type Props = {
   title: string;
-  statusText: string;
-  statusColor: string;
+
+  /** ====== Props existentes (retro-compat) ====== */
+  statusText?: string; // opcional ahora
+  statusColor?: string; // opcional ahora
   assignedAt?: Date | null;
   availableUntil?: Date | null;
   onPress?: () => void;
-  /** Se llama en onPressIn para empezar a precargar la siguiente pantalla/datos */
   onPreload?: () => void | Promise<void>;
   referenceFrame: Frame;
   contentFrame: Frame;
   leadingIcon?: ImageSourcePropType;
   enterIcon?: ImageSourcePropType;
   style?: ViewStyle;
+
+  /** ====== NUEVOS (multi-instancia/periodo) ====== */
+  periodLabel?: string; // ej. “hoy” | “esta semana” | “este mes”
+  draftCount?: number; // borradores
+  readyCount?: number; // listos para enviar
+  submittedCount?: number; // enviados
+  limit?: number | null; // null = sin límite
+  reachedLimit?: boolean; // true cuando total >= limit
+  suspended?: boolean; // form suspendido (server)
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -42,6 +52,7 @@ const baseStyles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 6,
     elevation: 2,
+    overflow: "hidden",
   },
 });
 
@@ -58,6 +69,26 @@ const StatusDot: React.FC<{ color?: string; size?: number }> = ({ color = "#888"
   />
 );
 
+const Badge: React.FC<{ label: string; fg: string; bg: string; size?: number }> = ({
+  label,
+  fg,
+  bg,
+  size = 12,
+}) => (
+  <View
+    style={{
+      paddingHorizontal: size * 0.8,
+      paddingVertical: size * 0.35,
+      borderRadius: 999,
+      backgroundColor: bg,
+    }}
+  >
+    <Body size="xs" style={{ color: fg, fontWeight: "700" }}>
+      {label}
+    </Body>
+  </View>
+);
+
 const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 const formatFechaCorta = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
 
@@ -65,16 +96,32 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const FormListItem: React.FC<Props> = ({
   title,
+
+  // antiguos (opcionales ahora)
   statusText,
-  statusColor,
+  statusColor = "#8A8A8A",
   assignedAt,
   availableUntil,
   onPress,
   onPreload,
+
+  // frames
   referenceFrame,
   contentFrame,
+
+  // íconos
   leadingIcon = require("../../../assets/images/form.png"),
   enterIcon = require("../../../assets/images/enter.png"),
+
+  // nuevos
+  periodLabel,
+  draftCount = 0,
+  readyCount = 0,
+  submittedCount = 0,
+  limit = null,
+  reachedLimit = false,
+  suspended = false,
+
   style,
 }) => {
   const {
@@ -86,6 +133,8 @@ const FormListItem: React.FC<Props> = ({
     statusDotSize,
     enterBtnSize,
     titleSize,
+    badgeGap,
+    ribbonHeight,
   } = useMemo(() => {
     const minSide = Math.min(referenceFrame.width, referenceFrame.height);
     const gapY = clamp(contentFrame.width * 0.04, 12, 24);
@@ -96,6 +145,8 @@ const FormListItem: React.FC<Props> = ({
     const _statusDot = clamp(minSide * 0.012, 6, 10);
     const _minH = clamp(minSide * 0.12, 72, 104);
     const _enter = clamp(minSide * 0.055, 28, 40);
+    const _badgeGap = clamp(minSide * 0.012, 6, 12);
+    const _ribbonH = clamp(minSide * 0.032, 16, 22);
 
     return {
       padCard: _pad,
@@ -106,28 +157,24 @@ const FormListItem: React.FC<Props> = ({
       titleSize: _titleSize,
       statusDotSize: _statusDot,
       enterBtnSize: _enter,
+      badgeGap: _badgeGap,
+      ribbonHeight: _ribbonH,
     };
   }, [referenceFrame, contentFrame]);
 
-  // Animación de toque
+  // animación táctil (igual que antes)
   const scale = useSharedValue(1);
   const overlay = useSharedValue(0);
   const animatingRef = useRef(false);
   const preloadedRef = useRef(false);
   const unlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Timings
-  const navDelayMs = 160; // navegar tras ver el “tap” (squish corto)
-  const unlockDelayMs = 360; // liberar lock por si la animación se cancela al navegar
-
-  // Springs
+  const navDelayMs = 160;
+  const unlockDelayMs = 360;
   const springInCfg = { stiffness: 320, damping: 20, mass: 1, overshootClamping: true };
   const springOutCfg = { stiffness: 220, damping: 18, mass: 1, overshootClamping: true };
-
   const animatedCard = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const animatedOverlay = useAnimatedStyle(() => ({ opacity: overlay.value * 0.06 }));
 
-  // Reset robusto al reenfocar la lista
   useFocusEffect(
     React.useCallback(() => {
       if (unlockTimerRef.current) {
@@ -153,7 +200,6 @@ const FormListItem: React.FC<Props> = ({
     }, [overlay, scale])
   );
 
-  // Cleanup por si el item se desmonta
   useEffect(() => {
     return () => {
       if (unlockTimerRef.current) {
@@ -166,6 +212,9 @@ const FormListItem: React.FC<Props> = ({
     };
   }, [overlay, scale]);
 
+  const total = draftCount + readyCount + submittedCount;
+  const limitText = limit == null ? "Sin límite" : `${Math.min(total, limit)}/${limit}`;
+
   const handlePressIn = () => {
     if (!preloadedRef.current && onPreload) {
       preloadedRef.current = true;
@@ -174,12 +223,11 @@ const FormListItem: React.FC<Props> = ({
       } catch {}
     }
     overlay.value = withTiming(1, { duration: 90 });
-    // “encoge” sutil mientras se mantiene presionado
     scale.value = withSpring(0.97, springInCfg);
   };
 
   const handlePressOut = () => {
-    if (animatingRef.current) return; // si ya disparamos la secuencia de press, no hacemos bounce aquí
+    if (animatingRef.current) return;
     overlay.value = withTiming(0, { duration: 140 });
     scale.value = withSpring(1, springOutCfg);
   };
@@ -188,24 +236,21 @@ const FormListItem: React.FC<Props> = ({
     if (animatingRef.current) return;
     animatingRef.current = true;
 
-    // Squish visible de tap: 0.97 → 0.94 y rebote
     overlay.value = withTiming(1, { duration: 60 });
     scale.value = withSpring(0.94, springInCfg, () => {
       scale.value = withSpring(1, springOutCfg);
     });
     overlay.value = withTiming(0, { duration: 200 });
 
-    // Fallback: liberar lock aunque la animación quede cancelada por la navegación
     if (unlockTimerRef.current) clearTimeout(unlockTimerRef.current);
     unlockTimerRef.current = setTimeout(() => {
       animatingRef.current = false;
       preloadedRef.current = false;
     }, unlockDelayMs);
 
-    // Navegar tras un delay fijo corto (no dependemos del callback del spring)
     if (onPress) {
       setTimeout(() => {
-        animatingRef.current = false; // soltar por si el usuario vuelve rápido
+        animatingRef.current = false;
         preloadedRef.current = false;
         runOnJS(onPress)();
       }, navDelayMs);
@@ -224,6 +269,27 @@ const FormListItem: React.FC<Props> = ({
         style,
       ]}
     >
+      {/* Cinta de SUSPENDIDO */}
+      {suspended ? (
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 0,
+            height: ribbonHeight,
+            backgroundColor: "#FFD7BF",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+          pointerEvents="none"
+        >
+          <Body size="xs" style={{ color: "#8A4300", fontWeight: "800" }}>
+            FORMULARIO SUSPENDIDO
+          </Body>
+        </View>
+      ) : null}
+
       {/* Overlay sutil */}
       <Animated.View
         pointerEvents="none"
@@ -248,6 +314,7 @@ const FormListItem: React.FC<Props> = ({
           alignItems: "center",
           gap: rowGap,
           marginBottom: rowGap * 0.75,
+          marginTop: suspended ? ribbonHeight + 4 : 0,
         }}
       >
         <Image
@@ -260,35 +327,60 @@ const FormListItem: React.FC<Props> = ({
         </Body>
       </View>
 
-      {/* Estado + asignación */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: rowGap * 0.25,
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Body frame={referenceFrame} weight="bold" size="xs">
-            {statusText}
-          </Body>
-          <StatusDot size={statusDotSize} color={statusColor} />
+      {/* Línea “estado corto” (retro-compat si no usas counts) */}
+      {statusText ? (
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: rowGap * 0.5,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Body frame={referenceFrame} weight="bold" size="xs">
+              {statusText}
+            </Body>
+            <StatusDot size={statusDotSize} color={statusColor} />
+          </View>
+          {assignedAt ? (
+            <Body frame={referenceFrame} color="secondary" size="xs">
+              Asignado el {formatFechaCorta(assignedAt)}
+            </Body>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* NUEVA línea con badges y cupo */}
+      <View style={{ gap: rowGap * 0.5 }}>
+        {/* Badges por estado */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: badgeGap }}>
+          {draftCount > 0 && <Badge label={`Borradores ${draftCount}`} fg="#1E51B8" bg="#E8F0FF" />}
+          {readyCount > 0 && <Badge label={`Listos ${readyCount}`} fg="#8A5A00" bg="#FFF4D6" />}
+          {submittedCount > 0 && (
+            <Badge label={`Enviados ${submittedCount}`} fg="#1E7D2B" bg="#EAF7EA" />
+          )}
+          {total === 0 && <Badge label="Sin registros" fg="#666" bg="#F0F0F0" />}
         </View>
 
-        {assignedAt ? (
+        {/* Período y cupo */}
+        <View
+          style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
+        >
           <Body frame={referenceFrame} color="secondary" size="xs">
-            Asignado el {formatFechaCorta(assignedAt)}
+            {periodLabel
+              ? `Período: ${periodLabel}`
+              : availableUntil
+                ? `Disponible hasta el ${formatFechaCorta(availableUntil)} 🕒`
+                : ""}
           </Body>
-        ) : null}
-      </View>
 
-      {/* Disponible hasta */}
-      {availableUntil ? (
-        <Body frame={referenceFrame} color="secondary" size="xs">
-          Disponible hasta el {formatFechaCorta(availableUntil)} 🕒
-        </Body>
-      ) : null}
+          <Body frame={referenceFrame} color="secondary" size="xs" style={{ fontWeight: "700" }}>
+            {limitText}
+            {reachedLimit ? " • Límite alcanzado" : ""}
+          </Body>
+        </View>
+      </View>
 
       {/* Icono decorativo */}
       <View
@@ -298,6 +390,7 @@ const FormListItem: React.FC<Props> = ({
           top: 0,
           bottom: 0,
           justifyContent: "center",
+          opacity: suspended ? 0.45 : 1,
         }}
         pointerEvents="none"
       >

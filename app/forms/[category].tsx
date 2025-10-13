@@ -8,6 +8,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { InteractionManager, View } from "react-native";
 
+// NEW: selector + hook de estado visual
+import InstanceSelector from "@/components/molecules/InstanceSelector";
+import { useInstanceSelectorState } from "@/forms/state/useInstanceSelectorState";
+
 /** -----------------------------------------
  * Tipos locales
  * ----------------------------------------- */
@@ -19,10 +23,8 @@ export type FormCategoryGroup = {
   formularios: { id_formulario: string; nombre: string; version_vigente: VersionVigente }[];
 };
 
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-
 /** -----------------------------------------
- * Helpers de estado/fecha
+ * Helpers de estado/fecha (se mantienen)
  * ----------------------------------------- */
 const getEstado = (
   f: Formulario
@@ -46,11 +48,7 @@ const getFechaDisponibleHasta = (asignado: Date | null): Date | null => {
 };
 
 /** -----------------------------------------
- * PRELOAD local (en este archivo)
- *  - Precarga bundle de la ruta real + FormPage
- *  - Calienta DB/JSI
- *  - Lee form y grupos
- *  - Reusa promesas por formId (memo)
+ * PRELOAD local (igual que antes)
  * ----------------------------------------- */
 const pickGroupIdFromConfig = (cfg: any): string | null => {
   if (!cfg) return null;
@@ -65,16 +63,13 @@ const pickGroupIdFromConfig = (cfg: any): string | null => {
   return cand != null ? String(cand) : null;
 };
 
-// Mapa de preloads por formulario para no repetir trabajo si el usuario hace tap varias veces
 const preloadMap = new Map<string, Promise<void>>();
-
-// Debounce por formId para no disparar demasiado mientras el dedo está bajando
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const ensureWarmDb = async () => {
   try {
     await DB.ensureMigrated();
-    await DB.logDbCounts(); // SELECTs baratas calientan WAL/JSI y el bridge
+    await DB.logDbCounts();
   } catch {}
 };
 
@@ -83,19 +78,14 @@ const preloadFormScreenAndData = async (formId: string, versionId: string) => {
   if (preloadMap.has(key)) return preloadMap.get(key)!;
 
   const p = (async () => {
-    // 1) Precarga módulos: ruta real + pantalla
     try {
       await Promise.all([import("app/form/[formId]"), import("@/screens/FormPage")]);
     } catch {}
-
-    // 2) Calienta DB/JSI
     await ensureWarmDb();
 
-    // 3) Lee formulario completo
     const form = await DB.selectFormFromGroupedById(formId);
     if (!form) return;
 
-    // 4) Prelee grupos usados por campos
     const groupIds = new Set<string>();
     for (const p of form.paginas ?? []) {
       for (const f of p.campos ?? []) {
@@ -111,14 +101,12 @@ const preloadFormScreenAndData = async (formId: string, versionId: string) => {
       })
     );
 
-    // 5) (Opcional) defer de assets/datasets no críticos
     InteractionManager.runAfterInteractions(() => {
-      // Ej: precargar imágenes/íconos usados en la pantalla del form
+      // precarga opcional de assets
     });
   })();
 
   preloadMap.set(key, p);
-  // Limpia si falla para poder reintentar en el próximo tap
   p.catch(() => preloadMap.delete(key));
   return p;
 };
@@ -141,6 +129,12 @@ const FormsByCategoryScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [grupo, setGrupo] = useState<FormCategoryGroup | null>(null);
 
+  const { visible, entries, allowNew, periodLabel, openForForm, close, computeDecorators } =
+    useInstanceSelectorState();
+  const [selectedForm, setSelectedForm] = useState<{ formId: string; versionId: string } | null>(
+    null
+  );
+
   const loadLocal = useCallback(async () => {
     const groups = await DB.selectFormsGroupedByCategory();
     const found = (groups ?? []).find((g) => g.nombre_categoria === category);
@@ -157,7 +151,6 @@ const FormsByCategoryScreen: React.FC = () => {
     })();
   }, [loadLocal]);
 
-  // Limpia timers de debounce al desmontar
   useEffect(() => {
     return () => {
       for (const t of debounceTimers.values()) clearTimeout(t);
@@ -167,46 +160,11 @@ const FormsByCategoryScreen: React.FC = () => {
 
   const headerTitle = String(category);
 
-  // Skeletons y estados como ya los tenías:
   if (loading && !grupo) {
     return (
       <PageScaffold title={headerTitle} variant="groups">
         {({ referenceFrame, contentFrame }: ScaffoldDimensions) => {
-          const gapY = clamp(contentFrame.width * 0.04, 12, 24);
-          const items = Array.from({ length: 6 });
-          return (
-            <View style={{ gap: gapY }}>
-              {items.map((_, i) => (
-                <View key={i} style={{ gap: referenceFrame.height * 0.01 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <View style={{ flex: 1 }}>
-                      <SkeletonLoader preset="title" frame={referenceFrame} />
-                    </View>
-                    <View style={{ width: referenceFrame.width * 0.22, marginLeft: 12 }}>
-                      <SkeletonLoader preset="button" frame={referenceFrame} />
-                    </View>
-                  </View>
-                  <SkeletonLoader
-                    preset="text"
-                    frame={referenceFrame}
-                    lines={1}
-                    lineHeight={referenceFrame.height * 0.018}
-                    lastLineWidthPct={40}
-                  />
-                </View>
-              ))}
-            </View>
-          );
-        }}
-      </PageScaffold>
-    );
-  }
-
-  if (loading && grupo && (grupo.formularios?.length ?? 0) === 0) {
-    return (
-      <PageScaffold title={headerTitle} variant="groups">
-        {({ referenceFrame, contentFrame }: ScaffoldDimensions) => {
-          const gapY = clamp(contentFrame.width * 0.04, 12, 24);
+          const gapY = Math.max(Math.min(contentFrame.width * 0.04, 24), 12);
           const items = Array.from({ length: 6 });
           return (
             <View style={{ gap: gapY }}>
@@ -244,46 +202,83 @@ const FormsByCategoryScreen: React.FC = () => {
     );
   }
 
-  // Datos listos
   return (
     <PageScaffold title={headerTitle} variant="groups">
       {({ contentFrame, referenceFrame }: ScaffoldDimensions) => {
-        const gapY = clamp(contentFrame.width * 0.04, 12, 24);
+        const gapY = Math.max(Math.min(contentFrame.width * 0.04, 24), 12);
+
+        const goNew = (formId: string, versionId: string) => {
+          router.push({ pathname: "/form/[formId]", params: { formId, versionId, mode: "edit" } });
+        };
+        const goOpen = (
+          formId: string,
+          versionId: string,
+          entryId: string,
+          mode: "edit" | "review" | "view"
+        ) => {
+          router.push({ pathname: "/form/[formId]", params: { formId, versionId, entryId, mode } });
+        };
+
         return (
-          <View style={{ gap: gapY }}>
-            {grupo!.formularios.map((f) => {
-              const estado = getEstado(f);
-              const asignado = f.version_vigente?.fecha_creacion
-                ? new Date(f.version_vigente.fecha_creacion)
-                : null;
-              const disponibleHasta = getFechaDisponibleHasta(asignado);
+          <>
+            <View style={{ gap: gapY }}>
+              {grupo!.formularios.map((f) => {
+                const estado = getEstado(f);
+                const asignado = f.version_vigente?.fecha_creacion
+                  ? new Date(f.version_vigente.fecha_creacion)
+                  : null;
+                const disponibleHasta = getFechaDisponibleHasta(asignado);
 
-              const formId = f.id_formulario;
-              const versionId = f.version_vigente?.id_index_version ?? "";
+                const formId = f.id_formulario;
+                const versionId = f.version_vigente?.id_index_version ?? "";
 
-              return (
-                <FormListItem
-                  key={formId}
-                  title={f.nombre}
-                  statusText={estado.texto}
-                  statusColor={estado.color}
-                  assignedAt={asignado}
-                  availableUntil={disponibleHasta}
-                  // ✅ Precarga robusta: debounce + memo + bundle + DB + datos
-                  onPreload={() => requestPreloadWithDebounce(formId, versionId, 400)}
-                  // Navega cuando termina la animación del item
-                  onPress={() =>
-                    router.push({
-                      pathname: "/form/[formId]",
-                      params: { formId, versionId },
-                    })
-                  }
-                  referenceFrame={referenceFrame}
-                  contentFrame={contentFrame}
-                />
-              );
-            })}
-          </View>
+                const deco = computeDecorators("daily");
+
+                return (
+                  <FormListItem
+                    key={formId}
+                    title={f.nombre}
+                    statusText={estado.texto}
+                    statusColor={estado.color}
+                    assignedAt={asignado}
+                    availableUntil={disponibleHasta}
+                    onPreload={() => requestPreloadWithDebounce(formId, versionId, 400)}
+                    onPress={() => {
+                      setSelectedForm({ formId, versionId });
+                      openForForm(formId);
+                    }}
+                    referenceFrame={referenceFrame}
+                    contentFrame={contentFrame}
+                    periodLabel={deco.periodLabel}
+                    draftCount={deco.draftCount}
+                    readyCount={deco.readyCount}
+                    submittedCount={deco.submittedCount}
+                    limit={deco.limit}
+                    reachedLimit={!!deco.reachedLimit}
+                    suspended={!!deco.suspended}
+                  />
+                );
+              })}
+            </View>
+
+            <InstanceSelector
+              visible={visible}
+              periodLabel={periodLabel}
+              entries={entries}
+              allowNew={allowNew}
+              onNew={() => {
+                if (!selectedForm) return;
+                goNew(selectedForm.formId, selectedForm.versionId);
+              }}
+              onOpen={(entry, mode) => {
+                if (!selectedForm) return;
+                goOpen(selectedForm.formId, selectedForm.versionId, entry.id, mode);
+              }}
+              onClose={close}
+              referenceFrame={referenceFrame}
+              contentFrame={contentFrame}
+            />
+          </>
         );
       }}
     </PageScaffold>
