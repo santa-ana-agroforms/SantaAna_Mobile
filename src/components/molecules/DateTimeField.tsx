@@ -1,8 +1,7 @@
-// src/components/atoms/DateTimeField.tsx
 import { Body } from "@/components/atoms/Typography";
 import { colors } from "@/theme/tokens";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Platform, Pressable, Text, useWindowDimensions, View } from "react-native";
 import Label from "../atoms/Label";
 
@@ -23,12 +22,7 @@ type Props = {
   clearable?: boolean;
 };
 
-const DEBUG = true; // ← activa/desactiva logs de este componente
-
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-const formatDate = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-const formatTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const isValidDate = (d: unknown): d is Date => d instanceof Date && !isNaN(d.getTime());
 
 const DateTimeField: React.FC<Props> = ({
   mode,
@@ -45,136 +39,99 @@ const DateTimeField: React.FC<Props> = ({
   clearable = true,
 }) => {
   const { width: ww, height: hh } = useWindowDimensions();
-  const baseFrame = useMemo(() => frame ?? { width: ww, height: hh }, [frame, ww, hh]);
   const isIOS = Platform.OS === "ios";
 
   const dims = useMemo(() => {
+    const baseFrame = frame ?? { width: ww, height: hh };
     const minSide = Math.min(baseFrame.width, baseFrame.height);
-    const baseRem = clamp(minSide * 0.042, 14, 18);
     return {
-      radius: clamp(minSide * 0.018, 8, 12),
-      padH: clamp(minSide * 0.014, 12, 18),
-      padV: clamp(minSide * 0.01, 8, 14),
-      font: clamp(baseRem * 1.05, 14, 20),
-      labelMb: clamp(minSide * 0.008, 6, 12),
-      errorMt: clamp(minSide * 0.006, 4, 8),
-      panelPad: clamp(minSide * 0.02, 12, 20),
-      panelRadius: clamp(minSide * 0.02, 12, 18),
-      panelGap: clamp(minSide * 0.012, 8, 14),
-      btnH: clamp(minSide * 0.06, 40, 52),
-      maxPanelH: clamp(minSide * 0.7, 260, 420),
-      baseRem,
+      radius: minSide * 0.018,
+      padH: minSide * 0.03,
+      padV: minSide * 0.01,
+      font: minSide * 0.042,
+      errorMt: minSide * 0.006,
+      panelPad: minSide * 0.02,
+      panelRadius: minSide * 0.02,
+      panelGap: minSide * 0.012,
+      btnH: minSide * 0.06,
+      maxPanelH: minSide * 0.7,
+      minHeight: baseFrame.height * 0.06,
     };
-  }, [baseFrame]);
+  }, [frame, ww, hh]);
+
+  const [open, setOpen] = useState(false);
+  const safeValue = isValidDate(value) ? value : null;
+  const [temp, setTemp] = useState<Date>(safeValue ?? new Date());
+  const [optimistic, setOptimistic] = useState<Date | null>(null);
+
+  const justClosedAtRef = useRef(0);
+
+  useEffect(() => {
+    if (isValidDate(safeValue)) {
+      setTemp(safeValue);
+      setOptimistic(null); // llegó valor oficial → limpia optimista
+    }
+  }, [safeValue, value, mode]);
 
   const borderColor = disabled ? colors.neutral200 : error ? colors.danger600 : colors.border;
 
-  const [open, setOpen] = useState(false);
-  const [temp, setTemp] = useState<Date>(value ?? new Date());
-  const justClosedAtRef = useRef<number>(0);
+  const dateFmt = useMemo(
+    () => new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "2-digit", year: "numeric" }),
+    []
+  );
+  const timeFmt = useMemo(
+    () => new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }),
+    []
+  );
 
-  const isValidDate = (d: unknown): d is Date => d instanceof Date && !isNaN(d.getTime());
-  const safeValue = useMemo(() => (isValidDate(value) ? value : null), [value]);
+  // Mostrar: SIEMPRE usa safeValue u optimista (no mostrar 'temp')
+  const display = safeValue ?? optimistic;
+  const text = display
+    ? mode === "date"
+      ? dateFmt.format(display)
+      : timeFmt.format(display)
+    : (placeholder ?? (mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"));
 
-  React.useEffect(() => {
-    if (DEBUG) {
-      console.log("[DTF] effect:value→temp", {
-        mode,
-        valueType: value ? value.constructor.name : value,
-        valueSafe: safeValue?.toString?.(),
-        valueISO: safeValue?.toISOString?.(),
-      });
-    }
-    setTemp(safeValue ?? new Date());
-  }, [safeValue, mode]);
-
-  const show = () => {
+  const handleOpen = () => {
     if (disabled) return;
     const now = Date.now();
-    if (now - justClosedAtRef.current < 300) {
-      if (DEBUG) console.log("[DTF] show blocked by debounce");
-      return;
-    }
-    if (DEBUG) {
-      console.log("[DTF] show()", {
-        mode,
-        safeValue: safeValue?.toString?.(),
-        safeValueISO: safeValue?.toISOString?.(),
-      });
-    }
-    setTemp(safeValue ?? new Date());
+    if (now - justClosedAtRef.current < 250) return;
+    const next = safeValue ?? optimistic ?? new Date();
+    setTemp(next);
     setOpen(true);
   };
 
-  const hide = () => {
-    if (DEBUG) console.log("[DTF] hide()");
+  const handleClose = () => {
     setOpen(false);
     justClosedAtRef.current = Date.now();
   };
 
-  const commit = (d: Date | null) => {
-    if (DEBUG) {
-      console.log("[DTF] commit()", {
-        mode,
-        commitLocal: d?.toString?.(),
-        commitISO: d?.toISOString?.(),
-      });
-    }
-    hide();
-    setTimeout(() => {
-      if (DEBUG) console.log("[DTF] onChange() call (deferred)");
-      onChange?.(d);
-    }, 0);
+  // Commit optimista (no mostramos temp; solo sirve para el picker)
+  const notify = (d: Date | null) => {
+    setOptimistic(d);
+    if (onChange) onChange(d);
+    handleClose();
   };
 
-  const onAndroidChange = (e: DateTimePickerEvent, d?: Date) => {
-    if (DEBUG) {
-      console.log("[DTF] onAndroidChange", {
-        mode,
-        type: e.type,
-        nativeEvent: e.nativeEvent,
-        pickLocal: d?.toString?.(),
-        pickISO: d?.toISOString?.(),
-      });
+  // Android: selecciona / cancela
+  const handleAndroidChange = (e: DateTimePickerEvent, d?: Date) => {
+    if (e.type === "set" && d) {
+      notify(d);
+    } else {
+      handleClose();
     }
-    if (e.type === "set" && d) commit(d);
-    else hide();
   };
 
-  // const onIOSChange = (_e: DateTimePickerEvent, d?: Date) => {
-  //   if (d) {
-  //     if (DEBUG) console.log("[DTF] onIOSChange temp←", d.toString());
-  //     setTemp(d);
-  //   }
-  // };
-
-  // Lo que realmente se muestra en el texto
-  const shown = open ? temp : safeValue;
-  const hasValue = !!shown;
-  const text = shown
-    ? mode === "date"
-      ? formatDate(shown)
-      : formatTime(shown)
-    : (placeholder ?? (mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"));
-
-  if (DEBUG) {
-    console.log("[DTF] render", {
-      mode,
-      open,
-      hasValue,
-      safeValueLocal: safeValue?.toString?.(),
-      safeValueISO: safeValue?.toISOString?.(),
-      tempLocal: temp?.toString?.(),
-      tempISO: temp?.toISOString?.(),
-      text,
-    });
-  }
+  // iOS: mueve spinner (preview)
+  const handleIOSChange = (_e: DateTimePickerEvent, d?: Date) => {
+    if (d) setTemp(d);
+  };
 
   return (
     <View style={{ width: "100%" }}>
       <Label frame={frame} text={label} required={required} />
       <Pressable
-        onPress={show}
+        onPress={handleOpen}
         disabled={disabled}
         style={{
           borderColor,
@@ -183,15 +140,18 @@ const DateTimeField: React.FC<Props> = ({
           backgroundColor: disabled ? "#F2F2F2" : colors.neutral0,
           paddingHorizontal: dims.padH,
           paddingVertical: dims.padV,
-          minHeight: clamp(baseFrame.height * 0.06, 44, 62),
+          minHeight: dims.minHeight,
           justifyContent: "center",
         }}
+        accessibilityRole="button"
+        accessibilityLabel={label ?? (mode === "date" ? "Seleccionar fecha" : "Seleccionar hora")}
       >
         <Text
+          testID="DateTimeFieldText"
           allowFontScaling={false}
           style={{
             fontSize: dims.font,
-            color: hasValue ? colors.textPrimary : colors.textSecondary,
+            color: display ? colors.textPrimary : colors.textSecondary,
             includeFontPadding: false,
           }}
         >
@@ -199,10 +159,18 @@ const DateTimeField: React.FC<Props> = ({
         </Text>
       </Pressable>
 
-      {clearable && !!value && !disabled ? (
+      {clearable && !!display && !disabled && (
         <Pressable
-          onPress={() => commit(null)}
-          style={{ alignSelf: "flex-end", marginTop: 6, paddingHorizontal: 6, paddingVertical: 2 }}
+          onPress={() => {
+            setOptimistic(null);
+            notify(null);
+          }}
+          style={{
+            alignSelf: "flex-end",
+            marginTop: dims.errorMt,
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+          }}
           accessibilityRole="button"
           accessibilityLabel="Limpiar fecha/hora"
         >
@@ -210,30 +178,108 @@ const DateTimeField: React.FC<Props> = ({
             Limpiar
           </Body>
         </Pressable>
-      ) : null}
+      )}
 
-      {error ? (
+      {error && (
         <Body size="xs" style={{ color: colors.danger600, marginTop: dims.errorMt }}>
           {error}
         </Body>
-      ) : null}
+      )}
 
-      {open && !isIOS ? (
+      {/* Android: diálogo nativo simple */}
+      {open && !isIOS && (
         <DateTimePicker
           value={temp}
           mode={mode}
           display={mode === "date" ? "calendar" : "clock"}
-          onChange={onAndroidChange}
+          onChange={handleAndroidChange}
           minimumDate={minDate}
           maximumDate={maxDate}
         />
-      ) : null}
+      )}
 
-      {isIOS ? (
-        <Modal visible={open} transparent animationType="fade" onRequestClose={hide}>
-          {/* ... (sin cambios visuales) ... */}
+      {/* iOS: modal con confirmación */}
+      {isIOS && (
+        <Modal visible={open} transparent animationType="fade" onRequestClose={handleClose}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.25)",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: dims.panelPad,
+            }}
+          >
+            <View
+              style={{
+                width: "100%",
+                borderRadius: dims.panelRadius,
+                backgroundColor: colors.neutral0,
+                padding: dims.panelPad,
+                gap: dims.panelGap,
+              }}
+            >
+              <Body weight="semibold">
+                {mode === "date" ? "Selecciona una fecha" : "Selecciona una hora"}
+              </Body>
+
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: dims.radius,
+                  padding: 6,
+                  alignItems: "center",
+                }}
+              >
+                <DateTimePicker
+                  value={temp}
+                  mode={mode}
+                  display="spinner"
+                  onChange={handleIOSChange}
+                  minimumDate={minDate}
+                  maximumDate={maxDate}
+                  style={{ width: "100%", maxHeight: dims.maxPanelH }}
+                />
+              </View>
+
+              <View style={{ flexDirection: "row", gap: dims.panelGap }}>
+                <Pressable
+                  onPress={handleClose}
+                  style={{
+                    flex: 1,
+                    height: dims.btnH,
+                    borderRadius: dims.radius,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.neutral0,
+                  }}
+                >
+                  <Body>Cancelar</Body>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => notify(temp)}
+                  style={{
+                    flex: 1,
+                    height: dims.btnH,
+                    borderRadius: dims.radius,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.primary600,
+                  }}
+                >
+                  <Body color="inverse" weight="semibold">
+                    OK
+                  </Body>
+                </Pressable>
+              </View>
+            </View>
+          </View>
         </Modal>
-      ) : null}
+      )}
     </View>
   );
 };

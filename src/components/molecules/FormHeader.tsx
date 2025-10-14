@@ -1,4 +1,3 @@
-// src/components/molecules/FormHeader.tsx
 import IconButton from "@/components/atoms/IconButton";
 import PaginationDots from "@/components/atoms/PaginationDots";
 import StatusDot from "@/components/atoms/StatusDot";
@@ -6,10 +5,9 @@ import TimestampText from "@/components/atoms/TimestampText";
 import { Body, Title } from "@/components/atoms/Typography";
 import { colors } from "@/theme/tokens";
 import React, { memo, useMemo } from "react";
-import { Pressable, View, useWindowDimensions } from "react-native";
+import { View, useWindowDimensions } from "react-native";
 
 type VariantH = "categories" | "groups" | "form";
-
 type Frame = { width: number; height: number };
 
 type Props = {
@@ -20,12 +18,10 @@ type Props = {
   onBack?: () => void;
   onRefresh?: () => void;
   variant: VariantH;
-  onPrevPage?: () => void; // sólo form
-  onNextPage?: () => void; // sólo form
-  /**
-   * Usa el referenceFrame que te da PageScaffold.
-   * Si no lo pasas, se usará useWindowDimensions() como respaldo.
-   */
+  onPrevPage?: () => void;
+  onNextPage?: () => void;
+  /** si la provees, salta directamente a esa página (1-based) */
+  onGoToPage?: (page1Based: number) => void;
   frame?: Frame;
 };
 
@@ -41,82 +37,45 @@ const FormHeader: React.FC<Props> = ({
   variant,
   onPrevPage,
   onNextPage,
+  onGoToPage,
   frame,
 }) => {
-  // Fallback seguro si no recibimos frame
   const { width: ww, height: hh } = useWindowDimensions();
   const baseFrame = frame ?? { width: ww, height: hh };
 
-  // Escalas/espaciados derivados del frame (lado menor para tipografía/íconos)
   const {
     padX,
     padTop,
-    // gapUnderHeader,
     rowGap,
     titleSize,
     titleSizeCategories,
-    arrowSize,
-    arrowFontSize,
     dotsGap,
     dotsShiftUp,
+    titleCatSize,
   } = useMemo(() => {
     const minSide = Math.min(baseFrame.width, baseFrame.height);
-
-    const _padX = clamp(baseFrame.width * 0.04, 12, 24); // padding horizontal aprox 4% (12–24)
+    const _padX = clamp(baseFrame.width * 0.04, 12, 24);
     const _padTop = variant === "categories" ? baseFrame.height * 0.015 : baseFrame.height * 0.022;
-    const _gapUnderHeader = clamp(baseFrame.height * 0.012, 8, 16);
-
-    const _rowGap = clamp(baseFrame.width * 0.03, 8, 16); // gap fila superior (atrás/título)
-    const _titleSize = minSide * 0.055; // título normal
-    const _titleSizeCategories = minSide * 0.065; // título en "categories"
-
-    const _arrowSize = clamp(minSide * 0.06, 24, 40); // círculo flechas
-    const _arrowFontSize = clamp(_arrowSize * 0.8, 14, 32); // símbolo ‹ ›
-    const _dotsGap = clamp(minSide * 0.012, 6, 12); // separación entre flecha–dots–flecha
-    const _dotsShiftUp = -clamp(minSide * 0.02, 6, 16); // desplazar dots hacia arriba
-
+    const _rowGap = clamp(baseFrame.width * 0.03, 8, 16);
+    const _titleSize = minSide * 0.055;
+    const titleCatSize = minSide * 0.045;
+    const _titleSizeCategories = minSide * 0.065;
+    const _dotsGap = clamp(minSide * 0.012, 6, 12);
+    const _dotsShiftUp = minSide * -0.005;
     return {
       padX: _padX,
       padTop: _padTop,
-      gapUnderHeader: _gapUnderHeader,
       rowGap: _rowGap,
       titleSize: _titleSize,
       titleSizeCategories: _titleSizeCategories,
-      arrowSize: _arrowSize,
-      arrowFontSize: _arrowFontSize,
       dotsGap: _dotsGap,
+      titleCatSize: titleCatSize,
       dotsShiftUp: _dotsShiftUp,
     };
   }, [baseFrame.height, baseFrame.width, variant]);
 
-  const Arrow: React.FC<{ label: string; onPress?: () => void }> = ({ label, onPress }) => (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      disabled={!onPress}
-      style={{
-        height: arrowSize,
-        width: arrowSize,
-        borderRadius: 999,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: onPress ? "#2D8A24" : "#00000022",
-        opacity: onPress ? 1 : 0.6,
-      }}
-    >
-      <Body
-        style={{
-          fontSize: arrowFontSize,
-          color: "white",
-          lineHeight: arrowFontSize,
-          marginTop: -arrowFontSize * 0.08,
-        }}
-      >
-        {label}
-      </Body>
-    </Pressable>
-  );
-
+  const activeIndex = Math.max(0, Math.min(totalPages - 1, page - 1));
+  const showPagination = variant === "form" && totalPages > 1;
   return (
     <View style={{ paddingHorizontal: padX, paddingTop: padTop }}>
       <View style={{ gap: rowGap * 0.5 }}>
@@ -127,6 +86,7 @@ const FormHeader: React.FC<Props> = ({
               accessibilityLabel="Atrás"
               onPress={onBack}
               iconSource={require("../../../assets/images/return.png")}
+              frame={baseFrame}
             />
           )}
           <Title
@@ -139,36 +99,29 @@ const FormHeader: React.FC<Props> = ({
           </Title>
         </View>
 
-        {/* dots + page (solo form) */}
-        {variant === "form" ? (
-          <View
-            style={{
-              alignItems: "center",
-              gap: dotsGap,
-              marginTop: dotsShiftUp,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: dotsGap,
+        {showPagination ? (
+          <View style={{ alignItems: "center", gap: dotsGap, marginTop: dotsShiftUp }}>
+            <PaginationDots
+              total={totalPages}
+              activeIndex={activeIndex}
+              arrows={totalPages > 2}
+              pill
+              onChange={(nextIndex) => {
+                if (onGoToPage) {
+                  onGoToPage(nextIndex + 1);
+                  return;
+                }
+                if (nextIndex < activeIndex) onPrevPage?.();
+                else if (nextIndex > activeIndex) onNextPage?.();
               }}
-            >
-              <Arrow label="‹" onPress={onPrevPage} />
-              <PaginationDots
-                total={totalPages}
-                activeIndex={Math.max(0, Math.min(totalPages - 1, page - 1))}
-              />
-              <Arrow label="›" onPress={onNextPage} />
-            </View>
-            <Body color="secondary" size="xs">
-              Página {page} de {totalPages}
+            />
+            <Body color="secondary" size="xs" style={{ marginTop: dotsShiftUp * 2 }}>
+              Página {activeIndex + 1} de {totalPages}
             </Body>
           </View>
         ) : null}
 
-        {/* separador (no categories) */}
+        {/* separador */}
         {variant !== "categories" ? (
           <View
             style={{
@@ -180,17 +133,11 @@ const FormHeader: React.FC<Props> = ({
           />
         ) : null}
 
-        {/* estado */}
+        {/* estado conexión + sync */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: dotsGap }}>
           <View style={{ flex: 1 }}>
             <TimestampText date={new Date()} />
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: dotsGap * 0.75,
-              }}
-            >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: dotsGap * 0.75 }}>
               <Body color="secondary" size="sm">
                 {connected ? "Conectado" : "Sin conexión"}
               </Body>
@@ -201,9 +148,29 @@ const FormHeader: React.FC<Props> = ({
             accessibilityLabel="Sincronizar"
             onPress={onRefresh}
             iconSource={require("../../../assets/images/sync.png")}
-            frame={frame}
+            frame={baseFrame}
           />
         </View>
+
+        {variant === "categories" ? (
+          <>
+            <View style={{ alignItems: "center", marginTop: rowGap * 0.5 }}>
+              <Body color="primary" size="sm" weight="bold" style={{ fontSize: titleCatSize }}>
+                Categorías de formularios disponibles
+              </Body>
+            </View>
+            <View
+              style={{
+                height: hh * 0.001,
+                backgroundColor: colors.textSecondary,
+                opacity: 1,
+                width: "90%",
+                alignSelf: "center",
+                // marginVertical: rowGap * 0,
+              }}
+            />
+          </>
+        ) : null}
       </View>
     </View>
   );

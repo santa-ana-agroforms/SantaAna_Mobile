@@ -3,7 +3,7 @@ import { colors } from "@/theme/tokens";
 import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import { LayoutChangeEvent, ScrollView, View, useWindowDimensions } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Variant = "categories" | "groups" | "form";
 
@@ -64,16 +64,15 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
     else router.replace("/");
   }, [onBack, router]);
 
+  // Alturas de referencia descontando insets y header
   const layoutHeight = Math.max(0, height - insets.top - insets.bottom - headerH);
   const layoutFrame = { width, height: layoutHeight };
 
   const innerWidth = layoutFrame.width - 2 * padX;
-
   const contentFrame = {
     width: innerWidth,
     height: layoutFrame.height,
   };
-
   const referenceFrame = { ...layoutFrame };
 
   const scaffoldDimensions: ScaffoldDimensions = {
@@ -83,7 +82,13 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.surface,
+        paddingBottom: insets.bottom,
+      }}
+    >
       <View style={{ flex: 1 }}>
         {/* HEADER (estático, medido) */}
         <View onLayout={onHeaderLayout}>
@@ -124,7 +129,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
           </ScrollView>
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

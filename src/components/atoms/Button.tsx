@@ -24,6 +24,8 @@ type Props = {
    * Frame base para escalar internamente (recomendado: referenceFrame).
    * Si no se pasa, el botón usa useWindowDimensions() como fallback.
    */
+  onPressIn?: (e: GestureResponderEvent) => void;
+  onPressOut?: (e: GestureResponderEvent) => void;
   frame?: Frame;
 };
 
@@ -36,7 +38,9 @@ const Button: React.FC<Props> = ({
   size = "md",
   disabled,
   style,
+  onPressIn = () => {},
   textStyle,
+  onPressOut = () => {},
   frame,
 }) => {
   const { width: ww, height: hh } = useWindowDimensions();
@@ -48,7 +52,7 @@ const Button: React.FC<Props> = ({
 
     // Alturas por tamaño (accesibles y proporcionales)
     const hSm = minSide * 0.08;
-    const hMd = minSide * 0.01;
+    const hMd = minSide * 0.1;
     const hLg = minSide * 0.12;
     const _height = size === "sm" ? hSm : size === "lg" ? hLg : hMd;
 
@@ -84,6 +88,8 @@ const Button: React.FC<Props> = ({
     <Pressable
       disabled={disabled}
       onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
       accessibilityRole="button"
       android_ripple={{ color: "rgba(0,0,0,0.08)" }}
       style={[

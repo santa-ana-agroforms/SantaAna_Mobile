@@ -53,14 +53,13 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
     () => [...(page?.campos || [])].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)),
     [page?.campos]
   );
-
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
   const padBottom = clamp(minSide * 0.02, 12, 24);
   const headerGap = clamp(minSide * 0.012, 8, 16);
   const fieldGap = clamp(minSide * 0.016, 10, 22);
 
   return (
-    <View style={{ paddingRight: 0, paddingBottom: padBottom * 0 }}>
+    <View style={{ paddingRight: 0, paddingBottom: padBottom * 1.1 }}>
       <Body weight="bold" size="xl">
         {page?.nombre}
       </Body>

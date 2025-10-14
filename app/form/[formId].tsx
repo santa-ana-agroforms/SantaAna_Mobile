@@ -188,7 +188,7 @@ const FormRoute: React.FC = () => {
           const gapY = contentFrame.height * 0.02;
 
           // cantidad de "campos" ficticios
-          const items = Array.from({ length: 6 });
+          const items = Array.from({ length: 10 });
 
           return (
             <View style={{ flex: 1, paddingHorizontal: 16 }}>

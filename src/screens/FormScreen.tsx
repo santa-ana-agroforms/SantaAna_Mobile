@@ -41,7 +41,7 @@ const FormScreen: React.FC<Props> = ({
   // Páginas estables
   const pages: Pagina[] = useMemo(
     () => (form?.paginas ?? []).slice().sort((a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0)),
-    [form?.id_formulario, form?.paginas]
+    [form?.paginas]
   );
   const pagesCount = pages.length;
 
@@ -124,6 +124,7 @@ const FormScreen: React.FC<Props> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [W, H, pagesCount]);
 
+  // console.log("form", JSON.stringify(form, null, 2));
   return (
     <PagerView
       ref={pagerRef}
