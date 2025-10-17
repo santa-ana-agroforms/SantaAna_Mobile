@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": { "UIBackgroundModes": ["processing"] }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +20,8 @@
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "package": "com.anonymous.SantaAna_Mobile"
     },
@@ -57,7 +59,9 @@
             "javaVersion": "17"
           }
         }
-      ]
+      ],
+      "expo-background-task",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
