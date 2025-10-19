@@ -69,7 +69,7 @@ const StatusPill: React.FC<{ status: EntryStatus; size?: number }> = ({ status, 
       style={{
         paddingHorizontal: size * 0.9,
         paddingVertical: size * 0.45,
-        borderRadius: 999,
+        borderRadius: size * 0.75,
         backgroundColor: bg,
         borderWidth: 1,
         borderColor: colors.border,
@@ -91,7 +91,7 @@ const Chip: React.FC<{ label: string; active?: boolean; onPress?: () => void; si
     style={{
       paddingHorizontal: size * 0.9,
       paddingVertical: size * 0.5,
-      borderRadius: 999,
+      borderRadius: size * 0.75,
       backgroundColor: active ? colors.primary600 : colors.neutral0,
       borderWidth: 1,
       borderColor: active ? colors.primary600 : colors.border,
@@ -277,10 +277,10 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
             <Text style={{ fontWeight: "800", fontSize: titleSize, color: colors.textPrimary }}>
               Registros de {periodLabel}
             </Text>
-            <Text style={{ color: colors.textSecondary, fontSize: subtitleSize }}>
+            {/* <Text style={{ color: colors.textSecondary, fontSize: subtitleSize }}>
               {counts.total} en total • {counts.inProgress} Borrador • {counts.ready} Listo •{" "}
               {counts.submitted} Enviado
-            </Text>
+            </Text> */}
           </View>
 
           {/* chips */}
@@ -306,7 +306,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
               size={chipSize}
             />
             <Chip
-              label={`Listo (${counts.ready})`}
+              label={`En revisión (${counts.ready})`}
               active={filter === "ready_for_submit"}
               onPress={() => setFilter("ready_for_submit")}
               size={chipSize}

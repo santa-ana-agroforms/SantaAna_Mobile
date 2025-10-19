@@ -1,5 +1,4 @@
 // src/components/molecules/FormListItem.tsx
-import IconButton from "@/components/atoms/IconButton";
 import { Body } from "@/components/atoms/Typography";
 import { colors } from "@/theme/tokens";
 import { useFocusEffect } from "@react-navigation/native";
@@ -13,6 +12,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import IconButton from "../atoms/IconButton";
 
 type Frame = { width: number; height: number };
 
@@ -56,18 +56,18 @@ const baseStyles = StyleSheet.create({
   },
 });
 
-const StatusDot: React.FC<{ color?: string; size?: number }> = ({ color = "#888", size = 8 }) => (
-  <View
-    style={{
-      width: size,
-      height: size,
-      borderRadius: 999,
-      backgroundColor: color,
-      marginLeft: 6,
-      marginBottom: 1,
-    }}
-  />
-);
+// const StatusDot: React.FC<{ color?: string; size?: number }> = ({ color = "#888", size = 8 }) => (
+//   <View
+//     style={{
+//       width: size,
+//       height: size,
+//       borderRadius: 999,
+//       backgroundColor: color,
+//       marginLeft: 6,
+//       marginBottom: 1,
+//     }}
+//   />
+// );
 
 const Badge: React.FC<{ label: string; fg: string; bg: string; size?: number }> = ({
   label,
@@ -79,7 +79,7 @@ const Badge: React.FC<{ label: string; fg: string; bg: string; size?: number }> 
     style={{
       paddingHorizontal: size * 0.8,
       paddingVertical: size * 0.35,
-      borderRadius: 999,
+      borderRadius: size * 0.75,
       backgroundColor: bg,
     }}
   >
@@ -89,19 +89,19 @@ const Badge: React.FC<{ label: string; fg: string; bg: string; size?: number }> 
   </View>
 );
 
-const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-const formatFechaCorta = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+// const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+// const formatFechaCorta = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const FormListItem: React.FC<Props> = ({
   title,
 
-  // antiguos (opcionales ahora)
-  statusText,
-  statusColor = "#8A8A8A",
-  assignedAt,
-  availableUntil,
+  // // antiguos (opcionales ahora)
+  // statusText,
+  // statusColor = "#8A8A8A",
+  // assignedAt,
+  // availableUntil,
   onPress,
   onPreload,
 
@@ -114,12 +114,12 @@ const FormListItem: React.FC<Props> = ({
   enterIcon = require("../../../assets/images/enter.png"),
 
   // nuevos
-  periodLabel,
+  // periodLabel,
   draftCount = 0,
   readyCount = 0,
   submittedCount = 0,
-  limit = null,
-  reachedLimit = false,
+  // limit = null,
+  // reachedLimit = false,
   suspended = false,
 
   style,
@@ -130,7 +130,7 @@ const FormListItem: React.FC<Props> = ({
     minCardHeight,
     rowGap,
     iconSize,
-    statusDotSize,
+    // statusDotSize,
     enterBtnSize,
     titleSize,
     badgeGap,
@@ -213,7 +213,7 @@ const FormListItem: React.FC<Props> = ({
   }, [overlay, scale]);
 
   const total = draftCount + readyCount + submittedCount;
-  const limitText = limit == null ? "Sin límite" : `${Math.min(total, limit)}/${limit}`;
+  // const limitText = limit == null ? "Sin límite" : `${Math.min(total, limit)}/${limit}`;
 
   const handlePressIn = () => {
     if (!preloadedRef.current && onPreload) {
@@ -328,7 +328,7 @@ const FormListItem: React.FC<Props> = ({
       </View>
 
       {/* Línea “estado corto” (retro-compat si no usas counts) */}
-      {statusText ? (
+      {/* {statusText ? (
         <View
           style={{
             flexDirection: "row",
@@ -349,7 +349,7 @@ const FormListItem: React.FC<Props> = ({
             </Body>
           ) : null}
         </View>
-      ) : null}
+      ) : null} */}
 
       {/* NUEVA línea con badges y cupo */}
       <View style={{ gap: rowGap * 0.5 }}>
@@ -364,7 +364,7 @@ const FormListItem: React.FC<Props> = ({
         </View>
 
         {/* Período y cupo */}
-        <View
+        {/* <View
           style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
         >
           <Body frame={referenceFrame} color="secondary" size="xs">
@@ -379,7 +379,7 @@ const FormListItem: React.FC<Props> = ({
             {limitText}
             {reachedLimit ? " • Límite alcanzado" : ""}
           </Body>
-        </View>
+        </View> */}
       </View>
 
       {/* Icono decorativo */}

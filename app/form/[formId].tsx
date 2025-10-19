@@ -6,11 +6,12 @@ import { FormJSON, getEntryById, toFieldConfig } from "@/db/form-entries";
 import { DB } from "@/db/sqlite";
 import type { Formulario } from "@/screens/FormPage";
 import FormScreen from "@/screens/FormScreen";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { View } from "react-native";
 
 // Redux
+import FormStickyActions from "@/components/molecules/FormStickyActions";
 import {
   initSession,
   initSessionFromSaved,
@@ -18,13 +19,12 @@ import {
   persistCursorIndex,
   prevPage,
   selectCanGoNext,
+  selectCanSendForReview,
   selectCurrentSession,
   selectCurrentSessionId,
 } from "@/forms/state/formSessionSlice";
 import { useFormPersistence } from "@/forms/state/useFormPersistence";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-
-// ────────────────────────────────────────────────────────────────────────────
 
 const FormRoute: React.FC = () => {
   const { formId, versionId, restored } = useLocalSearchParams<{
@@ -33,6 +33,24 @@ const FormRoute: React.FC = () => {
     restored?: string; // abre desde guardado local (reanuda página)
   }>();
 
+  const useDebouncedSave = (saveFn: () => Promise<void>, delay = 600) => {
+    const tRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const run = useCallback(() => {
+      if (tRef.current) clearTimeout(tRef.current);
+      tRef.current = setTimeout(() => {
+        saveFn().catch(() => {});
+      }, delay);
+    }, [saveFn, delay]);
+    useEffect(() => {
+      return () => {
+        if (tRef.current !== null) {
+          clearTimeout(tRef.current);
+        }
+      };
+    }, []);
+    return run;
+  };
+
   const dispatch = useAppDispatch();
   const { saveNow } = useFormPersistence();
 
@@ -40,11 +58,56 @@ const FormRoute: React.FC = () => {
   const currentSession = useAppSelector(selectCurrentSession);
   const canGoNext = useAppSelector(sessionId ? selectCanGoNext(sessionId) : () => false);
 
+  const canSendForReview = useAppSelector(
+    sessionId ? selectCanSendForReview(sessionId) : () => false
+  );
+
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Formulario | null>(null);
 
   const serverFormRef = useRef<FormJSON | null>(null);
+  const [footerInfo, setFooterInfo] = useState<{
+    type: "info" | "success" | "error";
+    text: string;
+    actionLabel?: string;
+    onAction?: () => void;
+  } | null>(null);
+  const [footerLoading, setFooterLoading] = useState(false);
 
+  const handleHeaderBack = useCallback(async () => {
+    try {
+      await saveNow(); // guarda borrador + cursor
+    } catch {}
+    if (router.canGoBack()) router.back();
+    else router.replace("/"); // fallback
+  }, [saveNow]);
+  const debouncedSave = useDebouncedSave(async () => {
+    await saveNow();
+  }, 500);
+
+  const handlePrev = () => {
+    if (!sessionId) return;
+    dispatch(prevPage({ sessionId }));
+    dispatch(persistCursorIndex({ sessionId })).finally(() => debouncedSave());
+  };
+
+  const handleNext = () => {
+    if (!sessionId || !canGoNext) return;
+    dispatch(nextPage({ sessionId }));
+    dispatch(persistCursorIndex({ sessionId })).finally(() => debouncedSave());
+  };
+
+  const handlePageChange = useCallback(() => {
+    if (!sessionId) return;
+    dispatch(persistCursorIndex({ sessionId })).finally(() => debouncedSave());
+  }, [dispatch, sessionId, debouncedSave]);
+
+  // auto-ocultar mensajes (p.ej. a los 3.5s) si no traen acción
+  useEffect(() => {
+    if (!footerInfo || footerInfo.actionLabel) return;
+    const t = setTimeout(() => setFooterInfo(null), 2000);
+    return () => clearTimeout(t);
+  }, [footerInfo]);
   // Cargar form (desde saved o desde server)
   useEffect(() => {
     (async () => {
@@ -152,38 +215,17 @@ const FormRoute: React.FC = () => {
   const pagesCount = form?.paginas.length ?? 0;
   const currentPage = currentSession?.currentPageIndex ?? 0;
 
-  const handlePrev = () => {
-    if (!sessionId) return;
-    dispatch(prevPage({ sessionId }));
-    dispatch(persistCursorIndex({ sessionId })).catch(() => {});
-  };
-
-  const handleNext = () => {
-    if (!sessionId) return;
-    if (!canGoNext) return;
-    dispatch(nextPage({ sessionId }));
-    dispatch(persistCursorIndex({ sessionId })).catch(() => {});
-  };
-
-  const handlePageChange = useCallback(() => {
-    if (!sessionId) return;
-    dispatch(persistCursorIndex({ sessionId })).catch(() => {});
-  }, [dispatch, sessionId]);
-
-  const handleSaveLocal = async () => {
-    try {
-      const sid = await saveNow();
-      console.log("Guardado local:", sid);
-    } catch (e) {
-      console.warn("Error al guardar:", e);
-    }
-  };
-
-  // ─────────────────────────────────────────────────────────────────────
-  // SKELETON LOADER mientras carga el formulario
   if (loading) {
     return (
-      <PageScaffold title="Cargando…" variant="form">
+      <PageScaffold
+        title="Cargando…"
+        variant="form"
+        page={currentPage + 1}
+        totalPages={pagesCount}
+        onPrevPage={handlePrev} // tus handlers ya hacen autosave debounced
+        onNextPage={handleNext}
+        onBack={handleHeaderBack}
+      >
         {({ referenceFrame, contentFrame }) => {
           const gapY = contentFrame.height * 0.02;
 
@@ -233,6 +275,30 @@ const FormRoute: React.FC = () => {
     );
   }
 
+  // handler de enviar a revisión con guard
+
+  const handleSendForReview = async () => {
+    if (!sessionId) return;
+    if (!canSendForReview) {
+      setFooterInfo({ type: "error", text: "Faltan campos requeridos para enviar a revisión." });
+      return;
+    }
+    try {
+      setFooterLoading(true);
+      await saveNow(); // ya persiste fill_json + cursor
+      setFooterInfo({
+        type: "success",
+        text: "¡Enviado a revisión!",
+        actionLabel: "Volver",
+        onAction: () => router.back(),
+      });
+      // o directamente router.back();
+    } catch {
+      setFooterInfo({ type: "error", text: "No se pudo enviar. Intenta nuevamente." });
+    } finally {
+      setFooterLoading(false);
+    }
+  };
   return (
     <PageScaffold
       title={form.nombre}
@@ -245,23 +311,6 @@ const FormRoute: React.FC = () => {
     >
       {({ referenceFrame, contentFrame, layoutFrame }) => (
         <View style={{ flex: 1 }}>
-          {/* Barra simple para guardar local */}
-          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-            <TouchableOpacity
-              onPress={handleSaveLocal}
-              style={{
-                alignSelf: "flex-end",
-                backgroundColor: "#0A84FF",
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 8,
-              }}
-            >
-              <Text allowFontScaling={false} style={{ color: "white", fontWeight: "700" }}>
-                Guardar local
-              </Text>
-            </TouchableOpacity>
-          </View>
           <FormScreen
             form={form}
             referenceFrame={referenceFrame}
@@ -269,6 +318,14 @@ const FormRoute: React.FC = () => {
             layoutFrame={layoutFrame}
             page={currentPage}
             onPageChange={handlePageChange}
+          />
+          <FormStickyActions
+            referenceFrame={referenceFrame}
+            contentFrame={contentFrame}
+            disabledSend={!canSendForReview}
+            loading={footerLoading}
+            infoMessage={footerInfo}
+            onSendForReview={handleSendForReview}
           />
         </View>
       )}

@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": { "UIBackgroundModes": ["processing"] }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,9 +19,7 @@
       },
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "pan",
-      "permissions": [
-        "android.permission.CAMERA"
-      ],
+      "permissions": ["android.permission.CAMERA", "android.permission.POST_NOTIFICATIONS"],
       "package": "com.anonymous.SantaAna_Mobile"
     },
     "web": {
@@ -40,12 +39,8 @@
         }
       ],
       "expo-font",
-      [
-        "expo-secure-store"
-      ],
-      [
-        "expo-sqlite"
-      ],
+      ["expo-secure-store"],
+      ["expo-sqlite"],
       [
         "expo-build-properties",
         {
@@ -58,7 +53,8 @@
           }
         }
       ],
-      "expo-background-task"
+      "expo-background-task",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

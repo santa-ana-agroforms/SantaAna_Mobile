@@ -116,7 +116,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
               backgroundColor: colors.surface,
             }}
           >
-            <View style={{ marginBottom: gapBelowHeader }} />
+            {/* <View style={{ marginBottom: gapBelowHeader }} /> */}
             {typeof children === "function" ? children(scaffoldDimensions) : children}
           </View>
         ) : (

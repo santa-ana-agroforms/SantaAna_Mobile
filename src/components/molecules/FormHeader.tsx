@@ -128,33 +128,35 @@ const FormHeader: React.FC<Props> = ({
               height: hh * 0.001,
               backgroundColor: colors.textPrimary,
               opacity: 1,
-              marginVertical: rowGap * 0.5,
+              marginVertical: rowGap * 0.4,
             }}
           />
         ) : null}
 
-        {/* estado conexión + sync */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: dotsGap }}>
-          <View style={{ flex: 1 }}>
-            <TimestampText date={new Date()} />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: dotsGap * 0.75 }}>
-              <Body color="secondary" size="sm">
-                {connected ? "Conectado" : "Sin conexión"}
-              </Body>
-              <StatusDot status={connected ? "online" : "offline"} />
+        {variant !== "form" ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: dotsGap }}>
+            <View style={{ flex: 1 }}>
+              <TimestampText date={new Date()} />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: dotsGap * 0.75 }}>
+                <Body color="secondary" size="sm">
+                  {connected ? "Conectado" : "Sin conexión"}
+                </Body>
+                <StatusDot status={connected ? "online" : "offline"} />
+              </View>
             </View>
+            <IconButton
+              accessibilityLabel="Sincronizar"
+              onPress={onRefresh}
+              iconSource={require("../../../assets/images/sync.png")}
+              frame={baseFrame}
+            />
           </View>
-          <IconButton
-            accessibilityLabel="Sincronizar"
-            onPress={onRefresh}
-            iconSource={require("../../../assets/images/sync.png")}
-            frame={baseFrame}
-          />
-        </View>
+        ) : null}
+        {/* estado conexión + sync */}
 
         {variant === "categories" ? (
           <>
-            <View style={{ alignItems: "center", marginTop: rowGap * 0.5 }}>
+            <View style={{ alignItems: "center", marginTop: rowGap * 0.1 }}>
               <Body color="primary" size="sm" weight="bold" style={{ fontSize: titleCatSize }}>
                 Categorías de formularios disponibles
               </Body>
