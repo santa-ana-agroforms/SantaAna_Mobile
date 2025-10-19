@@ -1,5 +1,6 @@
 // src/screens/forms/useInstanceSelectorState.ts
 import type { EntryPreview } from "@/components/molecules/InstanceSelector";
+import { getEntriesByFormId, SavedEntry } from "@/db/form-entries";
 import { useCallback, useState } from "react";
 
 type Frequency = "none" | "daily" | "weekly" | "monthly";
@@ -41,51 +42,24 @@ export const useInstanceSelectorState = () => {
     };
   }, []);
 
-  const openForForm = useCallback((formId: string) => {
-    setEntries([
-      {
-        id: `${formId}-1`,
-        instanceName: "Registro 1",
-        status: "in_progress",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-      {
-        id: `${formId}-2`,
-        instanceName: "Registro 2",
-        status: "ready_for_submit",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-      {
-        id: `${formId}-3`,
-        instanceName: "Registro 3",
-        status: "submitted",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-      {
-        id: `${formId}-4`,
-        instanceName: "Registro 4",
-        status: "submitted",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-      {
-        id: `${formId}-5`,
-        instanceName: "Registro 5",
-        status: "submitted",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-      {
-        id: `${formId}-6`,
-        instanceName: "Registro 6",
-        status: "submitted",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-    ]);
+  const openForForm = useCallback(async (formId: string) => {
+    // Obtain entries from db/backend según formId
+    const mockEntries: SavedEntry[] = (await getEntriesByFormId(formId)) || [];
+
+    const previews: EntryPreview[] = mockEntries.map((e) => ({
+      id: e.local_id,
+      instanceName: e.form_name,
+      createdAt: new Date(e.filled_at_local).getTime(),
+      updatedAt: new Date(e.filled_at_local).getTime(),
+      status:
+        e.status === "pending"
+          ? "in_progress"
+          : e.status === "synced"
+            ? "submitted"
+            : "ready_for_submit",
+    }));
+
+    setEntries(previews);
     setAllowNew(true);
     setPeriodLabel("hoy");
     setVisible(true);
