@@ -1,5 +1,6 @@
 // app/index.tsx
 import { clearTokens } from "@/api/client";
+import { getDatasetRowsLocal, syncAllDatasets } from "@/api/datasets";
 import { fetchAndSaveForms } from "@/api/forms";
 import type { FormCategoryGroup } from "@/api/forms/types";
 import { pullAndCacheGroups } from "@/api/groups";
@@ -51,6 +52,7 @@ const Home: React.FC = () => {
     try {
       await fetchAndSaveForms(); // /forms/tree -> SQLite
       await pullAndCacheGroups(); // /groups     -> SQLite (si aplica)
+      await syncAllDatasets();
     } catch (e: any) {
       console.log("[home/revalidate] fallo:", e?.message ?? e);
     } finally {
@@ -193,6 +195,16 @@ const Home: React.FC = () => {
                   const entries = await listEntriesSummary();
                   console.log("Entries:", entries);
                   router.push("/form/saved");
+                }}
+              />
+            </View>
+            <View style={{ alignItems: "flex-end", marginTop: gap }}>
+              <Button
+                title="Pruebas"
+                size="sm"
+                onPress={async () => {
+                  const entries = await getDatasetRowsLocal("f96d3af1-ec34-4209-8c2c-d806306a12fe");
+                  console.log("Dataset rows:", entries);
                 }}
               />
             </View>

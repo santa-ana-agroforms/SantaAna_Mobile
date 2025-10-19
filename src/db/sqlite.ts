@@ -541,6 +541,259 @@ export const selectFormFromGroupedById = async (formId: string) => {
   return null;
 };
 
+// ===== Esquema local para DATASETS (por campo) =====
+const ensureDatasetsTables = async () => {
+  // Tabla de metadatos del dataset por campo
+  await run(`
+    CREATE TABLE IF NOT EXISTS local_dataset_field (
+      campo_id        TEXT PRIMARY KEY,
+      nombre_interno  TEXT NOT NULL,
+      etiqueta        TEXT,
+      fuente_id       TEXT,
+      version         INTEGER,
+      columna         TEXT,
+      mode            TEXT,
+      total_items     INTEGER
+    )
+  `);
+
+  // Valores del dataset (opciones). Usamos key_text normalizado para permitir NULL como ''.
+  await run(`
+    CREATE TABLE IF NOT EXISTS local_dataset_value (
+      campo_id      TEXT NOT NULL,
+      key_text      TEXT NOT NULL DEFAULT '',
+      label         TEXT NOT NULL,
+      valor_raw_json TEXT,
+      extras_json    TEXT,
+      PRIMARY KEY (campo_id, key_text, label),
+      FOREIGN KEY (campo_id) REFERENCES local_dataset_field(campo_id) ON DELETE CASCADE
+    )
+  `);
+
+  await run(
+    `CREATE INDEX IF NOT EXISTS idx_ldv_field_label ON local_dataset_value (campo_id, label COLLATE NOCASE)`
+  );
+  await run(
+    `CREATE INDEX IF NOT EXISTS idx_ldv_field_key ON local_dataset_value (campo_id, key_text)`
+  );
+};
+
+// Tipos (alineados al backend)
+export type DatasetTableRow = {
+  key: string | null;
+  label: string;
+  valor_raw: unknown;
+  extras: unknown;
+};
+
+export type DatasetTable = {
+  campo_id: string;
+  nombre_interno: string;
+  etiqueta: string;
+  fuente_id: string | null;
+  version: number | null;
+  columna: string | null;
+  mode: string | null;
+  total_items: number;
+  rows: DatasetTableRow[];
+};
+
+// Serializadores
+const serializeDatasetValue = (campo_id: string, r: DatasetTableRow) => {
+  const key_text = r.key ?? "";
+  return [
+    campo_id,
+    key_text,
+    r.label,
+    r.valor_raw == null ? null : JSON.stringify(r.valor_raw),
+    r.extras == null ? null : JSON.stringify(r.extras),
+  ];
+};
+
+const rowToDatasetValue = (r: any): DatasetTableRow => ({
+  key: r.key_text === "" ? null : r.key_text,
+  label: r.label,
+  valor_raw: r.valor_raw_json ? JSON.parse(r.valor_raw_json) : null,
+  extras: r.extras_json ? JSON.parse(r.extras_json) : null,
+});
+
+// ------------ Descarga/Upsert (reemplazo completo por campo) -------------
+/**
+ * Reemplaza por completo el contenido local de cada dataset por campo.
+ * - Si el campo no existe, lo crea.
+ * - Elimina las filas anteriores del campo y carga las nuevas.
+ */
+export const upsertDatasets = async (tables: DatasetTable[]) => {
+  if (!tables?.length) return;
+  await ensureDatasetsTables();
+  const db = await getDb();
+
+  await db.withTransactionAsync(async () => {
+    for (const t of tables) {
+      // Upsert metadatos del campo
+      await db.runAsync(
+        `INSERT INTO local_dataset_field
+          (campo_id, nombre_interno, etiqueta, fuente_id, version, columna, mode, total_items)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(campo_id) DO UPDATE SET
+           nombre_interno = excluded.nombre_interno,
+           etiqueta       = excluded.etiqueta,
+           fuente_id      = excluded.fuente_id,
+           version        = excluded.version,
+           columna        = excluded.columna,
+           mode           = excluded.mode,
+           total_items    = excluded.total_items`,
+        [
+          t.campo_id,
+          t.nombre_interno,
+          t.etiqueta ?? null,
+          t.fuente_id ?? null,
+          t.version ?? null,
+          t.columna ?? null,
+          t.mode ?? null,
+          Number.isFinite(t.total_items) ? t.total_items : (t.rows?.length ?? 0),
+        ]
+      );
+
+      // Reemplazar filas del dataset para ese campo
+      await db.runAsync(`DELETE FROM local_dataset_value WHERE campo_id = ?`, [t.campo_id]);
+
+      if (Array.isArray(t.rows) && t.rows.length) {
+        const sql = `INSERT INTO local_dataset_value
+          (campo_id, key_text, label, valor_raw_json, extras_json)
+          VALUES (?, ?, ?, ?, ?)`;
+        for (const r of t.rows) {
+          const params = serializeDatasetValue(t.campo_id, r);
+          await db.runAsync(sql, params);
+        }
+      }
+    }
+  });
+};
+
+// ------------- Selects/lecturas -------------
+/**
+ * Devuelve el dataset completo de un campo (metadatos + filas).
+ */
+export const selectDatasetTableByFieldId = async (
+  campo_id: string
+): Promise<DatasetTable | null> => {
+  await ensureDatasetsTables();
+  const meta = await all<any>(
+    `SELECT campo_id, nombre_interno, etiqueta, fuente_id, version, columna, mode, total_items
+       FROM local_dataset_field WHERE campo_id = ? LIMIT 1`,
+    [campo_id]
+  );
+  if (!meta.length) return null;
+
+  const rows = await all<any>(
+    `SELECT campo_id, key_text, label, valor_raw_json, extras_json
+       FROM local_dataset_value
+      WHERE campo_id = ?
+      ORDER BY label COLLATE NOCASE ASC`,
+    [campo_id]
+  );
+
+  const m = meta[0];
+  return {
+    campo_id: m.campo_id,
+    nombre_interno: m.nombre_interno,
+    etiqueta: m.etiqueta ?? null,
+    fuente_id: m.fuente_id ?? null,
+    version: m.version == null ? null : Number(m.version),
+    columna: m.columna ?? null,
+    mode: m.mode ?? null,
+    total_items: m.total_items == null ? rows.length : Number(m.total_items),
+    rows: rows.map(rowToDatasetValue),
+  };
+};
+
+/**
+ * Busca filas del dataset por campo. Admite:
+ * - q: filtro por label (LIKE, case-insensitive)
+ * - limit/offset: paginación simple
+ */
+export const selectDatasetRowsByFieldId = async (
+  campo_id: string,
+  opts?: { q?: string; limit?: number; offset?: number }
+): Promise<DatasetTableRow[]> => {
+  await ensureDatasetsTables();
+
+  const q = (opts?.q ?? "").trim();
+  const limit = Math.max(0, Math.floor(opts?.limit ?? 0));
+  const offset = Math.max(0, Math.floor(opts?.offset ?? 0));
+
+  const params: any[] = [campo_id];
+  let where = `WHERE campo_id = ?`;
+  if (q) {
+    where += ` AND label LIKE ? COLLATE NOCASE`;
+    params.push(`%${q}%`);
+  }
+
+  let tail = ` ORDER BY label COLLATE NOCASE ASC`;
+  if (limit > 0) {
+    tail += ` LIMIT ${limit}`;
+    if (offset > 0) tail += ` OFFSET ${offset}`;
+  }
+
+  const rows = await all<any>(
+    `SELECT key_text, label, valor_raw_json, extras_json
+       FROM local_dataset_value
+       ${where}
+       ${tail}`,
+    params
+  );
+  return rows.map(rowToDatasetValue);
+};
+
+/**
+ * Devuelve un arreglo value/label (útil para <Select/>), mapeando key->value.
+ */
+export const selectDatasetPairOptions = async (
+  campo_id: string,
+  opts?: { q?: string; limit?: number; offset?: number }
+): Promise<{ value: string; label: string }[]> => {
+  const items = await selectDatasetRowsByFieldId(campo_id, opts);
+  return items.map((r) => ({ value: (r.key ?? "").toString(), label: r.label }));
+};
+
+/**
+ * Obtiene el label de una key específica del dataset de un campo.
+ */
+export const selectDatasetLabelByKey = async (campo_id: string, key: string | null) => {
+  await ensureDatasetsTables();
+  const key_text = key ?? "";
+  const rows = await all<{ label: string }>(
+    `SELECT label
+       FROM local_dataset_value
+      WHERE campo_id = ? AND key_text = ?
+      LIMIT 1`,
+    [campo_id, key_text]
+  );
+  return rows.length ? rows[0].label : null;
+};
+
+/**
+ * Variante estricta “por columna”:
+ * Útil si querés asegurarte de usar el dataset correcto cuando el campo tiene columna específica.
+ * Si la columna no coincide, devuelve [].
+ */
+export const selectDatasetByFieldAndColumn = async (
+  campo_id: string,
+  columna: string | null,
+  opts?: { q?: string; limit?: number; offset?: number }
+) => {
+  await ensureDatasetsTables();
+  const meta = await all<{ columna: string | null }>(
+    `SELECT columna FROM local_dataset_field WHERE campo_id = ? LIMIT 1`,
+    [campo_id]
+  );
+  if (!meta.length) return [];
+  const col = meta[0].columna ?? null;
+  if ((col ?? null) !== (columna ?? null)) return []; // no coincide
+  return selectDatasetRowsByFieldId(campo_id, opts);
+};
+
 // API pública mínima anterior (por compatibilidad)
 export const DB = {
   run,
@@ -555,4 +808,10 @@ export const DB = {
   upsertGroups,
   selectGroups,
   selectGroupById,
+  upsertDatasets,
+  selectDatasetTableByFieldId,
+  selectDatasetRowsByFieldId,
+  selectDatasetPairOptions,
+  selectDatasetLabelByKey,
+  selectDatasetByFieldAndColumn,
 };
