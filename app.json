@@ -57,7 +57,8 @@
             "javaVersion": "17"
           }
         }
-      ]
+      ],
+      "expo-background-task"
     ],
     "experiments": {
       "typedRoutes": true
