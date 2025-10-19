@@ -615,3 +615,47 @@ export const selectCanGoNext = (sessionId: string) =>
     }
     return true;
   });
+
+// ─────────────────────────────────────────────────────────
+// Selectores adicionales (pegar al final de formSessionSlice.ts)
+// ─────────────────────────────────────────────────────────
+const hasValue = (v: unknown): boolean => {
+  if (v === null || v === undefined) return false;
+  if (typeof v === "string") return v.trim().length > 0;
+  if (Array.isArray(v)) return v.length > 0;
+  return true; // números/boolean/objetos simples cuentan
+};
+
+/**
+ * Valida TODO el formulario: true solo si todos los campos requeridos de todas
+ * las páginas tienen valor válido. (Ignora visibilidad condicional por ahora.)
+ */
+export const selectCanSendForReview = (sessionId: string) =>
+  createSelector(selectSessionById(sessionId), (sess) => {
+    if (!sess?.form?.paginas?.length) return false;
+    const filledByPage = sess.state; // tus valores viven aquí
+
+    for (let idx = 0; idx < sess.form.paginas.length; idx++) {
+      const p = sess.form.paginas[idx];
+      const pk = p.id_pagina || `pagina_${p.secuencia ?? p.sequence ?? idx + 1}`; // mismo cálculo que pageKey
+      const pageVals = (filledByPage as any)[pk] ?? {};
+
+      for (const c of p.campos ?? []) {
+        // Grupos requeridos: al menos 1 fila no vacía
+        const isGroup = !!(c as any)?.config?.id_grupo;
+        if (isGroup && c.requerido) {
+          const rows = pageVals[c.nombre_interno];
+          const nFilled = Array.isArray(rows)
+            ? rows.filter((r: any) => !rowIsEmptyGeneric(r)).length
+            : 0;
+          if (nFilled < 1) return false;
+          continue;
+        }
+
+        if (!c?.requerido) continue;
+        const v = pageVals[c.nombre_interno];
+        if (!hasValue(v)) return false;
+      }
+    }
+    return true;
+  });
