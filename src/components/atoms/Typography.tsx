@@ -13,7 +13,7 @@ type BaseProps = TextProps & {
   frame?: Frame;
 };
 
-type BodySize = "xs" | "sm" | "md" | "lg" | "xl";
+type BodySize = "xxs" | "xs" | "sm" | "md" | "lg" | "xl";
 type BodyProps = BaseProps & { size?: BodySize };
 
 const font = (weight: NonNullable<BaseProps["weight"]>) => {
@@ -37,6 +37,7 @@ const getBaseRem = (frame: Frame) => {
 };
 
 const bodyFactor: Record<BodySize, number> = {
+  xxs: 0.7,
   xs: 0.85,
   sm: 0.9,
   md: 1.1, // default previo

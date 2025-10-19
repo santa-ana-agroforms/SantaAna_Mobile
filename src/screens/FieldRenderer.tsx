@@ -22,6 +22,7 @@ import {
   setFieldValue,
 } from "@/forms/state/formSessionSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import DatasetField from "@/components/molecules/DatasetField";
 
 type Frame = { width: number; height: number };
 type GroupTreeLite = { fields?: Campo[]; campos?: Campo[]; nombre?: string; name?: string };
@@ -121,14 +122,17 @@ const FieldRenderer: React.FC<Props> = ({
   // Commit → si hay external, usarlo; si no, dispatch al slice (+ evento opcional al padre)
   const onCommit = useCallback(
     (v: any) => {
+      console.warn("[FR] onCommit", v);
       if (external) {
         external.onChange(v);
         onChangeValue?.(campo.nombre_interno, v);
         return;
       }
       if (!sessionId) {
+        console.error("[FR] onCommit: no sessionId available");
         return;
       }
+      console.error("[FR] onCommit: dispatching to Redux");
       dispatch(
         setFieldValue({
           sessionId,
@@ -249,20 +253,15 @@ const FieldRenderer: React.FC<Props> = ({
   const renderDataset = () => (
     <>
       {LabelBlock}
-      <DatasetSelect
-        frame={referenceFrame}
-        value={value}
+      <DatasetField
+        campoId={campo.id_campo}
+        value={value as any}
         onChange={(v) => onCommit(v)}
+        frame={referenceFrame}
         placeholder="Selecciona un valor…"
       />
-      <Body frame={referenceFrame} color="secondary" size="xs" style={{ marginTop: 6 }}>
-        Fuente externa (CSV)
-        {"\n"}archivo: {campo.config?.file || "—"}
-        {"\n"}columna: {campo.config?.column || "—"}
-      </Body>
     </>
   );
-
   // ────────────────────────── Date / Hour ──────────────────────────
   const renderDate = (kind: "date" | "hour") => {
     const toUiDate = (raw?: unknown): Date | null => {

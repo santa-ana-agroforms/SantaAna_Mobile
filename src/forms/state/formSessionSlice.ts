@@ -342,6 +342,7 @@ const slice = createSlice({
       }>
     ) {
       const { sessionId, nombreInterno, value } = action.payload;
+      console.warn(`[formSessionSlice] setFieldValue: ${nombreInterno} =`, value);
       const sess = state.sessions[sessionId];
       if (!sess) return;
       const idx = action.payload.pageIndex ?? sess.currentPageIndex;
@@ -619,12 +620,12 @@ export const selectCanGoNext = (sessionId: string) =>
 // ─────────────────────────────────────────────────────────
 // Selectores adicionales (pegar al final de formSessionSlice.ts)
 // ─────────────────────────────────────────────────────────
-const hasValue = (v: unknown): boolean => {
-  if (v === null || v === undefined) return false;
-  if (typeof v === "string") return v.trim().length > 0;
-  if (Array.isArray(v)) return v.length > 0;
-  return true; // números/boolean/objetos simples cuentan
-};
+// const hasValue = (v: unknown): boolean => {
+//   if (v === null || v === undefined) return false;
+//   if (typeof v === "string") return v.trim().length > 0;
+//   if (Array.isArray(v)) return v.length > 0;
+//   return true; // números/boolean/objetos simples cuentan
+// };
 
 /**
  * Valida TODO el formulario: true solo si todos los campos requeridos de todas
@@ -633,16 +634,16 @@ const hasValue = (v: unknown): boolean => {
 export const selectCanSendForReview = (sessionId: string) =>
   createSelector(selectSessionById(sessionId), (sess) => {
     if (!sess?.form?.paginas?.length) return false;
-    const filledByPage = sess.state; // tus valores viven aquí
 
     for (let idx = 0; idx < sess.form.paginas.length; idx++) {
       const p = sess.form.paginas[idx];
-      const pk = p.id_pagina || `pagina_${p.secuencia ?? p.sequence ?? idx + 1}`; // mismo cálculo que pageKey
-      const pageVals = (filledByPage as any)[pk] ?? {};
+      const pk = p.id_pagina || `pagina_${p.secuencia ?? p.sequence ?? idx + 1}`;
+      const pageVals = (sess.state as any)[pk] ?? {};
 
       for (const c of p.campos ?? []) {
-        // Grupos requeridos: al menos 1 fila no vacía
         const isGroup = !!(c as any)?.config?.id_grupo;
+
+        // Grupos requeridos: al menos 1 fila no vacía
         if (isGroup && c.requerido) {
           const rows = pageVals[c.nombre_interno];
           const nFilled = Array.isArray(rows)
@@ -653,8 +654,25 @@ export const selectCanSendForReview = (sessionId: string) =>
         }
 
         if (!c?.requerido) continue;
-        const v = pageVals[c.nombre_interno];
-        if (!hasValue(v)) return false;
+
+        const k = keyOf(c.tipo, c.clase);
+        const val = pageVals[c.nombre_interno];
+
+        if (!k) {
+          // Sin mapeo: usar fallback simple (el antiguo hasValue)
+          const fallbackHasValue = (v: unknown): boolean => {
+            if (v === null || v === undefined) return false;
+            if (typeof v === "string") return v.trim().length > 0;
+            if (Array.isArray(v)) return v.length > 0;
+            return true;
+          };
+          if (!fallbackHasValue(val)) return false;
+          continue;
+        }
+
+        // Usa el validador real del tipo
+        const errs = validators[k](val, true, c.config);
+        if (errs.length) return false;
       }
     }
     return true;
