@@ -4,17 +4,20 @@ import { getDatasetRowsLocal, syncAllDatasets } from "@/api/datasets";
 import { fetchAndSaveForms } from "@/api/forms";
 import type { FormCategoryGroup } from "@/api/forms/types";
 import { pullAndCacheGroups } from "@/api/groups";
+import { registerCheckReleasesTaskAsync } from "@/background/checkReleases";
 import Button from "@/components/atoms/Button";
 import SkeletonLoader from "@/components/atoms/SkeletonLoader";
 import CategoryCard from "@/components/molecules/CategoryCard";
 import PageScaffold from "@/components/templates/PageScaffold";
 import { listEntriesSummary } from "@/db/form-entries";
 import { DB } from "@/db/sqlite";
+import { ensureNotificationPermissionsAsync, scheduleDailyAt } from "@/notifications";
 import { onActiveWithInternet } from "@/utils/appstate";
 import { isOnline, onReconnectOnce } from "@/utils/network";
+import * as Notifications from "expo-notifications";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { Alert, View } from "react-native";
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -107,6 +110,35 @@ const Home: React.FC = () => {
   const handleRefresh = useCallback(async () => {
     await revalidateFromServer();
   }, [revalidateFromServer]);
+
+  useEffect(() => {
+    (async () => {
+      const ok = await ensureNotificationPermissionsAsync();
+      if (!ok) {
+        Alert.alert("Permisos", "Activa las notificaciones para recibir alertas.");
+        return;
+      }
+      console.log("Notificaciones OK");
+      // Recordatorio diario 10:00 PM
+      await scheduleDailyAt(22, 0, {
+        title: "Recordatorio",
+        body: "Revisá si hay nuevas liberaciones hoy.",
+      });
+
+      await Notifications.scheduleNotificationAsync({
+        content: { title: "Prueba", body: "Debería salir en ~10s" },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: 10,
+          repeats: false,
+          channelId: "default",
+        },
+      });
+
+      // Tarea de chequeo backend cada 15 min (Android), iOS lo ejecuta cuando pueda
+      await registerCheckReleasesTaskAsync(15);
+    })();
+  }, []);
 
   return (
     <PageScaffold title="Mis formularios" variant="categories" onRefresh={handleRefresh}>

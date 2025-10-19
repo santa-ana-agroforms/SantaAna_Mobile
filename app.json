@@ -19,10 +19,7 @@
       },
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "pan",
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.POST_NOTIFICATIONS"
-      ],
+      "permissions": ["android.permission.CAMERA", "android.permission.POST_NOTIFICATIONS"],
       "package": "com.anonymous.SantaAna_Mobile"
     },
     "web": {
@@ -42,12 +39,8 @@
         }
       ],
       "expo-font",
-      [
-        "expo-secure-store"
-      ],
-      [
-        "expo-sqlite"
-      ],
+      ["expo-secure-store"],
+      ["expo-sqlite"],
       [
         "expo-build-properties",
         {

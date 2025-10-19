@@ -41,8 +41,7 @@ export type SavePayload = {
   filled_at_local: string; // ISO local del teléfono
   fill_json: FilledState;
   form_json: FormJSON;
-  status: "pending" | "synced" | "cancelled";
-  /** NUEVO: página actual para reanudar */
+  status: "pending" | "synced" | "ready_to_submit";
   cursor_page_index?: number;
 };
 
@@ -59,7 +58,7 @@ export type SavedEntry = {
   form_name: string;
   index_version_id: string;
   filled_at_local: string;
-  status: "pending" | "synced" | "cancelled";
+  status: "pending" | "synced" | "ready_to_submit";
   fill_json: FilledState;
   form_json: FormJSON;
   /** NUEVO: página actual guardada (default 0 si no existe) */
@@ -161,6 +160,29 @@ export const getEntryById = async (local_id: string): Promise<SavedEntry | null>
     form_json: JSON.parse(r.form_json),
     cursor_page_index: Number.isFinite(r.cursor_page_index) ? Number(r.cursor_page_index) : 0,
   };
+};
+
+export const getEntriesByFormId = async (form_id: string): Promise<SavedEntry[]> => {
+  await ensureFormEntriesTables();
+  const rows = await all<any>(
+    `SELECT *
+       FROM form_entries
+      WHERE form_id = ?`,
+    [form_id]
+  );
+  return (
+    rows?.map((r) => ({
+      local_id: r.local_id,
+      form_id: r.form_id,
+      form_name: r.form_name,
+      index_version_id: r.index_version_id,
+      filled_at_local: r.filled_at_local,
+      status: (r.status as SavedEntry["status"]) ?? "pending",
+      fill_json: JSON.parse(r.fill_json),
+      form_json: JSON.parse(r.form_json),
+      cursor_page_index: Number.isFinite(r.cursor_page_index) ? Number(r.cursor_page_index) : 0,
+    })) ?? []
+  );
 };
 
 export const markSynced = async (local_id: string) => {

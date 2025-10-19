@@ -6,6 +6,7 @@ import {
   getEntryById,
   listEntriesSummary,
   saveEntry,
+  SavePayload,
   updateCursor, // 👈 NUEVO
   type EntrySummary,
 } from "@/db/form-entries";
@@ -55,7 +56,7 @@ export type GrupoDefinition = {
 
 export type PageState = Record<string, any>;
 export type FilledState = Record<string, PageState>;
-type FormStatus = "pending" | "synced" | "cancelled";
+type FormStatus = "pending" | "synced" | "ready_to_submit";
 
 // ─────────────────────────────────────────────────────────
 // Estado por sesión de formulario
@@ -184,6 +185,18 @@ export const initSession = createAsyncThunk<
       errors: {},
       groups: {},
     };
+    const payload: SavePayload = {
+      form_id: form.id_formulario,
+      form_name: form.nombre,
+      index_version_id: form.version_vigente.id_index_version,
+      filled_at_local: new Date().toISOString(),
+      fill_json: filled,
+      form_json: form,
+      status: "pending",
+    };
+
+    // Persist new session immediately
+    await saveEntry(sid, payload);
     return { session };
   } catch (e: any) {
     return rejectWithValue(e?.message ?? "No se pudo iniciar la sesión del formulario");
@@ -231,7 +244,7 @@ export const persistCurrentSession = createAsyncThunk<
   try {
     const st = getState().formSession.sessions[sessionId];
     if (!st) throw new Error("Sesión no encontrada");
-    const payload = {
+    const payload: SavePayload = {
       form_id: st.form.id_formulario,
       form_name: st.form.nombre,
       index_version_id: st.form.version_vigente.id_index_version,
@@ -239,7 +252,7 @@ export const persistCurrentSession = createAsyncThunk<
       fill_json: st.state,
       form_json: st.form,
       status: st.status,
-      cursor_page_index: st.currentPageIndex, // 👈 NUEVO
+      cursor_page_index: st.currentPageIndex,
     };
     await saveEntry(sessionId, payload);
     return { local_id: sessionId };
@@ -259,9 +272,7 @@ export const fetchEntriesSummary = createAsyncThunk<EntrySummary[], void, { reje
   }
 );
 
-// Placeholder: traé la definición real desde tu API/SQLite
 const fetchGroupDefinition = async (id_grupo: string): Promise<GrupoDefinition> => {
-  // TODO: cambia por tu client real
   return { id_grupo, campos: [] };
 };
 
@@ -286,7 +297,6 @@ export const ensureGroupLoaded = createAsyncThunk<
   }
 );
 
-/** NUEVO: persistir solo el cursor de página (ligero, para cada cambio de página) */
 export const persistCursorIndex = createAsyncThunk<
   void,
   { sessionId: string },
@@ -385,6 +395,19 @@ const slice = createSlice({
       else delete sess.errors[nombreInterno];
 
       recomputeAllCalcs(sess.form, sess.state);
+      // Evaluete if complete all obligatory fields in current page
+      const pageFields = sess.form.paginas[idx].campos;
+      const allFilled = pageFields.every((field) => {
+        const value = (sess.state as any)[pk][field.nombre_interno];
+        return !!value;
+      });
+
+      console.log("All filled for page", idx, ":", allFilled);
+      if (allFilled) {
+        sess.status = "ready_to_submit";
+      } else {
+        sess.status = "pending";
+      }
     },
     clearField(
       state,
@@ -539,8 +562,6 @@ const slice = createSlice({
       if (!sess) return;
       sess.groups[payload.def.id_grupo] = payload.def;
     });
-
-    // persistCursorIndex no necesita mutar estado
   },
 });
 

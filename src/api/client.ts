@@ -89,7 +89,7 @@ export type CreateEntryResponse = {
   id: string;
   created_at: string;
   updated_at: string;
-  status: "pending" | "synced" | "cancelled";
+  status: "pending" | "synced" | "ready_to_submit";
 };
 
 export const sendFormEntry = async (

@@ -1,7 +1,8 @@
 // app/_layout.tsx
 /* eslint-disable react-hooks/rules-of-hooks */
 import { getAccessToken, setApiBase } from "@/api/client";
-import { persistor, store } from "@/store";
+import { registerFormSessionListeners } from "@/forms/state/registerFormSessionListeners";
+import { persistor, startAppListening, store } from "@/store";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -29,6 +30,8 @@ const DrizzleStudioBinder: React.FC = () => {
   useDrizzleStudio(db);
   return null;
 };
+
+registerFormSessionListeners(startAppListening);
 
 const RootLayout = () => {
   const [loaded] = useFonts({

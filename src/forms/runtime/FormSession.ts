@@ -50,7 +50,7 @@ export class FormSession {
   readonly sessionId: string; // uuid de esta sesión
   private currentPageIndex = 0;
   private state: FilledState = {};
-  private status: "pending" | "synced" | "cancelled" = "pending";
+  private status: "pending" | "synced" | "ready_to_submit" = "pending";
   private errors: Record<string, string[]> = {}; // clave campo -> errores
   private groupsCache = new Map<string, GrupoDefinition>(); // id_grupo -> def
 
@@ -316,7 +316,7 @@ export class FormSession {
     return { local_id: this.sessionId };
   }
 
-  setStatus(newStatus: "pending" | "synced" | "cancelled") {
+  setStatus(newStatus: "pending" | "synced" | "ready_to_submit") {
     this.status = newStatus;
   }
 

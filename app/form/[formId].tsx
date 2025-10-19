@@ -27,11 +27,13 @@ import { useFormPersistence } from "@/forms/state/useFormPersistence";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 const FormRoute: React.FC = () => {
-  const { formId, versionId, restored } = useLocalSearchParams<{
+  const { formId, versionId, restored, entryId } = useLocalSearchParams<{
     formId: string;
     versionId?: string;
     restored?: string; // abre desde guardado local (reanuda página)
+    entryId?: string;
   }>();
+  console.log("FormRoute params:", { formId, versionId, restored, entryId });
 
   const useDebouncedSave = (saveFn: () => Promise<void>, delay = 600) => {
     const tRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,9 +115,9 @@ const FormRoute: React.FC = () => {
     (async () => {
       setLoading(true);
       try {
-        if (restored) {
-          await dispatch(initSessionFromSaved({ local_id: restored })).unwrap();
-          const saved = await getEntryById(restored);
+        if (entryId) {
+          await dispatch(initSessionFromSaved({ local_id: entryId })).unwrap();
+          const saved = await getEntryById(entryId);
           if (saved) {
             const savedForm = saved.form_json as FormJSON;
             serverFormRef.current = savedForm;
