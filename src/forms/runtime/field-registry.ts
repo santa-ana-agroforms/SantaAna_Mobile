@@ -7,7 +7,8 @@ export type FieldKey =
   | "numerico:calc"
   | "booleano:boolean"
   | "imagen:firm"
-  | "grupo:group"; // virtual (repetible)
+  | "grupo:group"
+  | "texto:dataset";
 
 export type FieldConfig = Record<string, unknown>; // libre según backend
 export type Normalizer = (value: unknown, config?: FieldConfig) => any;
@@ -93,6 +94,7 @@ export const emptyByField: Record<FieldKey, any> = {
   "booleano:boolean": false,
   "imagen:firm": "", // base64
   "grupo:group": [], // lista de objetos
+  "texto:dataset": "",
 };
 
 export const normalizers: Record<FieldKey, Normalizer> = {
@@ -104,6 +106,7 @@ export const normalizers: Record<FieldKey, Normalizer> = {
   "booleano:boolean": normalizeBoolean,
   "imagen:firm": normalizeFirm,
   "grupo:group": normalizeGroup,
+  "texto:dataset": normalizeString,
 };
 
 export const validators: Record<FieldKey, Validator> = {
@@ -115,6 +118,7 @@ export const validators: Record<FieldKey, Validator> = {
   "booleano:boolean": validateBoolean,
   "imagen:firm": validateFirm,
   "grupo:group": validateGroup,
+  "texto:dataset": validateString,
 };
 
 export const keyOf = (tipo?: string, clase?: string): FieldKey | null => {
@@ -128,6 +132,7 @@ export const keyOf = (tipo?: string, clase?: string): FieldKey | null => {
     "booleano:boolean",
     "imagen:firm",
     "grupo:group",
+    "texto:dataset",
   ];
   return (known as string[]).includes(k) ? (k as FieldKey) : null;
 };

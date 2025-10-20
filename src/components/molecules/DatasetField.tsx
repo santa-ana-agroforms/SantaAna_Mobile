@@ -48,6 +48,7 @@ const DatasetField: React.FC<Props> = ({
   // pageSize = 50, // ← sin uso
   showSearch = false,
 }) => {
+  // console.debug(`[DatasetField] Render para campoId=${campoId} con value=${value}`);
   const [q, setQ] = useState<string>("");
   const [items, setItems] = useState<{ label: string; value: Primitive }[]>([]);
   const [loading, setLoading] = useState(false);

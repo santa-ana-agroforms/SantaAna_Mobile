@@ -67,7 +67,17 @@ const normalize = (
   return out;
 };
 
-const eqValue = (a: Primitive | undefined, b: Primitive | undefined) => String(a) === String(b);
+const eqValue = (a: Primitive | undefined, b: Primitive | undefined) => {
+  // console.log("➡️ eqValue() llamada con:");
+  // console.log("   a:", a, "(", typeof a, ")");
+  // console.log("   b:", b, "(", typeof b, ")");
+
+  const result = String(a) === String(b);
+  // console.log("🟢 Resultado:", result ? "IGUALES" : "DIFERENTES");
+  // console.log("---------------------------");
+
+  return result;
+};
 
 const DatasetSelect: React.FC<Props> = (props) => {
   const {
@@ -85,7 +95,7 @@ const DatasetSelect: React.FC<Props> = (props) => {
     noneLabel = "Ninguno",
     formatLabel,
   } = props;
-
+  console.log("DatasetSelect props.value:", value);
   const { width: ww, height: hh } = useWindowDimensions();
   const baseFrame = frame ?? { width: ww, height: hh };
 
@@ -120,7 +130,7 @@ const DatasetSelect: React.FC<Props> = (props) => {
   const borderColor = error ? colors.danger600 : open ? colors.primary600 : colors.border;
 
   const selected = useMemo(
-    () => list.find((it) => eqValue(it.value, currentValue)),
+    () => list.find((it) => eqValue(it.label, currentValue)),
     [list, currentValue]
   );
 
@@ -141,7 +151,7 @@ const DatasetSelect: React.FC<Props> = (props) => {
   const selectValue = (v: Primitive) => {
     console.log("DatasetSelect selectValue:", v);
     if (allowDeselect && eqValue(v, currentValue)) {
-      setValue(undefined);
+      // setValue(undefined);
       setOpen(false);
       return;
     }
@@ -257,7 +267,7 @@ const DatasetSelect: React.FC<Props> = (props) => {
             ) : null}
 
             {list.map((it) => {
-              const active = eqValue(it.value, currentValue);
+              const active = eqValue(it.label, currentValue);
               return (
                 <Pressable
                   key={`${typeof it.value}:${String(it.value)}`}

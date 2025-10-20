@@ -15,6 +15,7 @@ import { getGroupOrFetch } from "@/api/groups";
 import type { Campo } from "./FormPage";
 
 // ⬇️ Redux
+import DatasetField from "@/components/molecules/DatasetField";
 import {
   selectCurrentSession,
   selectCurrentSessionId,
@@ -22,7 +23,6 @@ import {
   setFieldValue,
 } from "@/forms/state/formSessionSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import DatasetField from "@/components/molecules/DatasetField";
 
 type Frame = { width: number; height: number };
 type GroupTreeLite = { fields?: Campo[]; campos?: Campo[]; nombre?: string; name?: string };
@@ -117,6 +117,13 @@ const FieldRenderer: React.FC<Props> = ({
   const valueFromRedux = useAppSelector((state: any) => {
     if (!sessionId) return undefined;
     const sel = selectFieldValue(sessionId, campo.nombre_interno, effectivePage);
+    // console.warn("[FR] valueFromRedux selector", {
+    //   sessionId,
+    //   field: campo.nombre_interno,
+    //   page: effectivePage,
+    //   sel,
+    // });
+    // console.warn("[FR] valueFromRedux selector result:", sel(state));
     return sel(state);
   });
   const value = external ? external.value : valueFromRedux;
@@ -257,7 +264,7 @@ const FieldRenderer: React.FC<Props> = ({
       {LabelBlock}
       <DatasetField
         campoId={campo.id_campo}
-        value={value as any}
+        value={value}
         onChange={(v) => onCommit(v)}
         frame={referenceFrame}
         placeholder="Selecciona un valor…"

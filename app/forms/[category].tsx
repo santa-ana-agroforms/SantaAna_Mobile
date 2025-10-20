@@ -4,6 +4,7 @@ import { Body } from "@/components/atoms/Typography";
 import FormListItem from "@/components/molecules/FormListItem";
 import PageScaffold, { type ScaffoldDimensions } from "@/components/templates/PageScaffold";
 import { DB } from "@/db/sqlite";
+import { useFocusEffect } from "@react-navigation/native"; // ⬅️ NUEVO
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { InteractionManager, View } from "react-native";
@@ -134,7 +135,7 @@ const FormsByCategoryScreen: React.FC = () => {
   const [selectedForm, setSelectedForm] = useState<{ formId: string; versionId: string } | null>(
     null
   );
-  // dentro del map de grupo!.formularios
+
   const [countsByForm, setCountsByForm] = useState<
     Record<
       string,
@@ -147,22 +148,53 @@ const FormsByCategoryScreen: React.FC = () => {
     >
   >({});
 
-  const loadLocal = useCallback(async () => {
+  /** Carga el grupo actual y lo retorna */
+  const loadLocal = useCallback(async (): Promise<FormCategoryGroup | null> => {
     const groups = await DB.selectFormsGroupedByCategory();
-    const found = (groups ?? []).find((g) => g.nombre_categoria === category);
-    setGrupo(found ?? null);
+    const found = (groups ?? []).find((g) => g.nombre_categoria === category) ?? null;
+    setGrupo(found);
+    return found;
   }, [category]);
 
+  /** Recalcula contadores para todos los formularios del grupo dado */
+  const recomputeCounts = useCallback(
+    async (targetGroup: FormCategoryGroup | null) => {
+      if (!targetGroup?.formularios?.length) {
+        setCountsByForm({});
+        return;
+      }
+      const acc: Record<string, any> = {};
+      await Promise.all(
+        targetGroup.formularios.map(async (f) => {
+          const formId = f.id_formulario;
+          const deco = await computeDecorators(formId, "daily"); // mismo periodo que muestras
+          acc[formId] = deco;
+        })
+      );
+      setCountsByForm(acc);
+    },
+    [computeDecorators]
+  );
+
+  /** Hace reload del grupo y luego recomputa los contadores */
+  const refreshScreen = useCallback(async () => {
+    const freshGroup = await loadLocal();
+    await recomputeCounts(freshGroup);
+  }, [loadLocal, recomputeCounts]);
+
+  // Primer load (skeletons, etc.)
   useEffect(() => {
     (async () => {
       try {
-        await loadLocal();
+        const fresh = await loadLocal();
+        await recomputeCounts(fresh);
       } finally {
         setLoading(false);
       }
     })();
-  }, [loadLocal]);
+  }, [loadLocal, recomputeCounts]);
 
+  // Limpieza de debounces
   useEffect(() => {
     return () => {
       for (const t of debounceTimers.values()) clearTimeout(t);
@@ -170,21 +202,19 @@ const FormsByCategoryScreen: React.FC = () => {
     };
   }, []);
 
-  // (por ejemplo en un useEffect cuando tengas `grupo`)
-  useEffect(() => {
-    (async () => {
-      if (!grupo?.formularios?.length) return;
-      const acc: Record<string, any> = {};
-      await Promise.all(
-        grupo.formularios.map(async (f) => {
-          const formId = f.id_formulario;
-          const deco = await computeDecorators(formId, "daily"); // ⬅️ ahora requiere formId
-          acc[formId] = deco;
-        })
-      );
-      setCountsByForm(acc);
-    })();
-  }, [grupo, computeDecorators]);
+  // ⬇️ Refresco cada vez que la pantalla gana foco
+  useFocusEffect(
+    React.useCallback(() => {
+      let active = true;
+      (async () => {
+        if (!active) return;
+        await refreshScreen();
+      })();
+      return () => {
+        active = false;
+      };
+    }, [refreshScreen])
+  );
 
   const headerTitle = String(category);
 
@@ -279,9 +309,6 @@ const FormsByCategoryScreen: React.FC = () => {
                     draftCount={deco.draftCount ?? 0}
                     readyCount={deco.readyCount ?? 0}
                     submittedCount={deco.submittedCount ?? 0}
-                    // limit={deco.limit}
-                    // reachedLimit={!!deco.reachedLimit}
-                    // suspended={!!deco.suspended}
                   />
                 );
               })}

@@ -212,8 +212,8 @@ const FormListItem: React.FC<Props> = ({
     };
   }, [overlay, scale]);
 
-  const total = draftCount + readyCount + submittedCount;
-  // const limitText = limit == null ? "Sin límite" : `${Math.min(total, limit)}/${limit}`;
+  // const total = draftCount + readyCount + submittedCount;
+  // // const limitText = limit == null ? "Sin límite" : `${Math.min(total, limit)}/${limit}`;
 
   const handlePressIn = () => {
     if (!preloadedRef.current && onPreload) {

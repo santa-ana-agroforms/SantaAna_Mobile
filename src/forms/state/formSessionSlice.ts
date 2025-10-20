@@ -374,13 +374,13 @@ const slice = createSlice({
       }>
     ) {
       const { sessionId, nombreInterno, value } = action.payload;
-      console.warn(`[formSessionSlice] setFieldValue: ${nombreInterno} =`, value);
       const sess = state.sessions[sessionId];
       if (!sess) return;
       const idx = action.payload.pageIndex ?? sess.currentPageIndex;
       const p = sess.form.paginas[idx];
       const pk = pageKey(p, idx);
       const campo = p.campos.find((c) => c.nombre_interno === nombreInterno);
+      console.warn(`[🎒] campo: ${campo?.tipo} =`, campo?.clase);
       if (!campo) return;
       const k = keyOf(campo.tipo, campo.clase);
       if (!k) return;
