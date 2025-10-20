@@ -83,7 +83,7 @@ const Badge: React.FC<{ label: string; fg: string; bg: string; size?: number }> 
       backgroundColor: bg,
     }}
   >
-    <Body size="xs" style={{ color: fg, fontWeight: "700" }}>
+    <Body size="xxs" style={{ color: fg, fontWeight: "700" }}>
       {label}
     </Body>
   </View>
@@ -354,13 +354,29 @@ const FormListItem: React.FC<Props> = ({
       {/* NUEVA línea con badges y cupo */}
       <View style={{ gap: rowGap * 0.5 }}>
         {/* Badges por estado */}
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: badgeGap }}>
-          {draftCount > 0 && <Badge label={`Borradores ${draftCount}`} fg="#1E51B8" bg="#E8F0FF" />}
-          {readyCount > 0 && <Badge label={`Listos ${readyCount}`} fg="#8A5A00" bg="#FFF4D6" />}
-          {submittedCount > 0 && (
-            <Badge label={`Enviados ${submittedCount}`} fg="#1E7D2B" bg="#EAF7EA" />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: badgeGap * 1.8 }}>
+          {draftCount > 0 ? (
+            <Badge label={`Borradores ${draftCount}`} fg="#1E51B8" bg="#E8F0FF" />
+          ) : (
+            <Badge label="Borradores 0" fg="#666" bg="#F0F0F0" />
           )}
-          {total === 0 && <Badge label="Sin registros" fg="#666" bg="#F0F0F0" />}
+          {readyCount > 0 ? (
+            <Badge label={`En revisión ${readyCount}`} fg="#8A5A00" bg="#FFF4D6" />
+          ) : (
+            <Badge label="En revisión 0" fg="#666" bg="#F0F0F0" />
+          )}
+          {submittedCount > 0 ? (
+            <Badge label={`Enviados ${submittedCount}`} fg="#1E7D2B" bg="#EAF7EA" />
+          ) : (
+            <Badge label="Enviados 0" fg="#666" bg="#F0F0F0" />
+          )}
+          {/* {total === 0 && (
+            <>
+              <Badge label="Borradores 0" fg="#666" bg="#F0F0F0" />
+              <Badge label="En revisión 0" fg="#666" bg="#F0F0F0" />
+              <Badge label="Enviados 0" fg="#666" bg="#F0F0F0" />
+            </>
+          )} */}
         </View>
 
         {/* Período y cupo */}

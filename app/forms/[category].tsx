@@ -134,6 +134,18 @@ const FormsByCategoryScreen: React.FC = () => {
   const [selectedForm, setSelectedForm] = useState<{ formId: string; versionId: string } | null>(
     null
   );
+  // dentro del map de grupo!.formularios
+  const [countsByForm, setCountsByForm] = useState<
+    Record<
+      string,
+      {
+        draftCount: number;
+        readyCount: number;
+        submittedCount: number;
+        periodLabel?: string;
+      }
+    >
+  >({});
 
   const loadLocal = useCallback(async () => {
     const groups = await DB.selectFormsGroupedByCategory();
@@ -157,6 +169,22 @@ const FormsByCategoryScreen: React.FC = () => {
       debounceTimers.clear();
     };
   }, []);
+
+  // (por ejemplo en un useEffect cuando tengas `grupo`)
+  useEffect(() => {
+    (async () => {
+      if (!grupo?.formularios?.length) return;
+      const acc: Record<string, any> = {};
+      await Promise.all(
+        grupo.formularios.map(async (f) => {
+          const formId = f.id_formulario;
+          const deco = await computeDecorators(formId, "daily"); // ⬅️ ahora requiere formId
+          acc[formId] = deco;
+        })
+      );
+      setCountsByForm(acc);
+    })();
+  }, [grupo, computeDecorators]);
 
   const headerTitle = String(category);
 
@@ -231,9 +259,7 @@ const FormsByCategoryScreen: React.FC = () => {
 
                 const formId = f.id_formulario;
                 const versionId = f.version_vigente?.id_index_version ?? "";
-
-                const deco = computeDecorators("daily");
-
+                const deco = countsByForm[formId] ?? {};
                 return (
                   <FormListItem
                     key={formId}
@@ -250,12 +276,12 @@ const FormsByCategoryScreen: React.FC = () => {
                     referenceFrame={referenceFrame}
                     contentFrame={contentFrame}
                     periodLabel={deco.periodLabel}
-                    draftCount={deco.draftCount}
-                    readyCount={deco.readyCount}
-                    submittedCount={deco.submittedCount}
-                    limit={deco.limit}
-                    reachedLimit={!!deco.reachedLimit}
-                    suspended={!!deco.suspended}
+                    draftCount={deco.draftCount ?? 0}
+                    readyCount={deco.readyCount ?? 0}
+                    submittedCount={deco.submittedCount ?? 0}
+                    // limit={deco.limit}
+                    // reachedLimit={!!deco.reachedLimit}
+                    // suspended={!!deco.suspended}
                   />
                 );
               })}

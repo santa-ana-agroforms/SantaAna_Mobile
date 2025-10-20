@@ -1,6 +1,6 @@
 // src/components/molecules/InstanceSelector.tsx
 import { colors } from "@/theme/tokens";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -138,7 +138,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   const overlayA = useRef(new Animated.Value(0)).current;
   const sheetA = useRef(new Animated.Value(0)).current;
 
-  const playIn = () =>
+  const playIn = useCallback(() => {
     Animated.parallel([
       Animated.timing(overlayA, {
         toValue: 1,
@@ -153,29 +153,34 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
         useNativeDriver: true,
       }),
     ]).start();
+  }, [overlayA, sheetA]);
 
-  const playOut = (after?: () => void) =>
-    Animated.parallel([
-      Animated.timing(overlayA, {
-        toValue: 0,
-        duration: 140,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(sheetA, {
-        toValue: 0,
-        duration: 160,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (finished) onClose();
-      if (after) after();
-    });
+  const playOut = useCallback(
+    (after?: () => void) => {
+      Animated.parallel([
+        Animated.timing(overlayA, {
+          toValue: 0,
+          duration: 140,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetA, {
+          toValue: 0,
+          duration: 160,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) onClose();
+        if (after) after();
+      });
+    },
+    [overlayA, sheetA, onClose]
+  );
 
   useEffect(() => {
     if (visible) playIn();
-  }, [visible]);
+  }, [visible, playIn]);
 
   // filtro
   type FilterKey = "all" | EntryStatus;

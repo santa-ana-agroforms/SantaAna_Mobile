@@ -102,8 +102,9 @@ const FieldRenderer: React.FC<Props> = ({
   external,
 }) => {
   const dispatch = useAppDispatch();
-  const sessionId = useAppSelector(selectCurrentSessionId);
-  const currentSession = useAppSelector(selectCurrentSession);
+  // useAppSelector expects a selector with a different state signature; forward the store state as `any`
+  const sessionId = useAppSelector((state: any) => selectCurrentSessionId(state));
+  const currentSession = useAppSelector((state: any) => selectCurrentSession(state));
   const currentIndex = currentSession?.currentPageIndex ?? 0;
   const effectivePage = pageIndex ?? currentIndex;
 
@@ -113,10 +114,11 @@ const FieldRenderer: React.FC<Props> = ({
   const dbg = useDebugLogger(`${campo.nombre_interno}@p${effectivePage}`);
 
   // Valor: si hay 'external', úsalo; si no, Redux
-  const valueSelector = sessionId
-    ? selectFieldValue(sessionId, campo.nombre_interno, effectivePage)
-    : () => undefined as any;
-  const valueFromRedux = useAppSelector(valueSelector);
+  const valueFromRedux = useAppSelector((state: any) => {
+    if (!sessionId) return undefined;
+    const sel = selectFieldValue(sessionId, campo.nombre_interno, effectivePage);
+    return sel(state);
+  });
   const value = external ? external.value : valueFromRedux;
 
   // Commit → si hay external, usarlo; si no, dispatch al slice (+ evento opcional al padre)
@@ -132,7 +134,7 @@ const FieldRenderer: React.FC<Props> = ({
         console.error("[FR] onCommit: no sessionId available");
         return;
       }
-      console.error("[FR] onCommit: dispatching to Redux");
+      // console.error("[FR] onCommit: dispatching to Redux");
       dispatch(
         setFieldValue({
           sessionId,
