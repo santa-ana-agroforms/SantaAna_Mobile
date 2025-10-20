@@ -139,7 +139,9 @@ const DatasetSelect: React.FC<Props> = (props) => {
     : currentValue != null && currentValue !== undefined
       ? formatLabel
         ? formatLabel(currentValue)
-        : defaultLabel(currentValue) === "" ? placeholder : defaultLabel(currentValue)
+        : defaultLabel(currentValue) === ""
+          ? placeholder
+          : defaultLabel(currentValue)
       : placeholder;
   console.log("DatasetSelect headerLabel:", headerLabel);
   const setValue = (v: Primitive | undefined) => {
