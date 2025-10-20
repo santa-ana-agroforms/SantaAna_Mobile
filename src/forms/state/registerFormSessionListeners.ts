@@ -7,6 +7,7 @@ import {
   persistCurrentSession,
   persistCursorIndex,
   setFieldValue,
+  setStatus,
 } from "@/forms/state/formSessionSlice";
 import type { AppStartListening } from "@/store/listener";
 
@@ -68,6 +69,17 @@ export const registerFormSessionListeners = (startAppListening: AppStartListenin
       api.cancelActiveListeners();
       await api.delay(CURSOR_DEBOUNCE_MS);
       await api.dispatch(persistCursorIndex({ sessionId }));
+    },
+  });
+
+  // 5) Cambiar estado del formulario
+  startAppListening({
+    actionCreator: setStatus,
+    effect: async (action, api) => {
+      const { sessionId } = action.payload;
+      api.cancelActiveListeners();
+      await api.delay(AUTOSAVE_DEBOUNCE_MS);
+      await api.dispatch(persistCurrentSession({ sessionId }));
     },
   });
 };

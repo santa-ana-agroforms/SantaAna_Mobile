@@ -5,6 +5,7 @@ import uuid from "react-native-uuid";
 import {
   getEntryById,
   listEntriesSummary,
+  SavedEntry,
   saveEntry,
   SavePayload,
   updateCursor, // 👈 NUEVO
@@ -77,6 +78,7 @@ export type FormSessionsState = {
   loading: boolean;
   error: string | null;
   entriesSummary: EntrySummary[];
+  isLastPage: boolean;
 };
 
 const initialState: FormSessionsState = {
@@ -85,6 +87,7 @@ const initialState: FormSessionsState = {
   loading: false,
   error: null,
   entriesSummary: [],
+  isLastPage: false,
 };
 
 // ─────────────────────────────────────────────────────────
@@ -311,6 +314,22 @@ export const persistCursorIndex = createAsyncThunk<
   }
 });
 
+export const getJSONForm = createAsyncThunk<
+  SavedEntry | undefined,
+  { sessionId: string },
+  { state: { formSession: FormSessionsState }; rejectValue: string }
+>("formSession/getJSONForm", async ({ sessionId }, { getState, rejectWithValue }) => {
+  const state = getState().formSession;
+  const sess = state.sessions[sessionId];
+  if (!sess) return rejectWithValue("Sesión no encontrada");
+  try {
+    const saved = await getEntryById(sessionId);
+    return saved ?? undefined;
+  } catch (e: any) {
+    return rejectWithValue(e?.message ?? "No se pudo obtener el formulario guardado");
+  }
+});
+
 // ─────────────────────────────────────────────────────────
 // Slice
 // ─────────────────────────────────────────────────────────
@@ -327,6 +346,7 @@ const slice = createSlice({
       const i = action.payload.index;
       if (i < 0 || i >= sess.form.paginas.length) return;
       sess.currentPageIndex = i;
+      state.isLastPage = sess.currentPageIndex === sess.form.paginas.length - 1;
     },
     nextPage(state, action: PayloadAction<{ sessionId: string }>) {
       const sess = state.sessions[action.payload.sessionId];
@@ -334,6 +354,7 @@ const slice = createSlice({
       if (sess.currentPageIndex < sess.form.paginas.length - 1) {
         sess.currentPageIndex += 1;
       }
+      state.isLastPage = sess.currentPageIndex === sess.form.paginas.length - 1;
     },
     prevPage(state, action: PayloadAction<{ sessionId: string }>) {
       const sess = state.sessions[action.payload.sessionId];
@@ -341,6 +362,7 @@ const slice = createSlice({
       if (sess.currentPageIndex > 0) {
         sess.currentPageIndex -= 1;
       }
+      state.isLastPage = sess.currentPageIndex === sess.form.paginas.length - 1;
     },
     setFieldValue(
       state,
@@ -637,6 +659,8 @@ export const selectCanGoNext = (sessionId: string) =>
     }
     return true;
   });
+
+export const selectIsLastPage = createSelector(base, (s) => s.isLastPage);
 
 // ─────────────────────────────────────────────────────────
 // Selectores adicionales (pegar al final de formSessionSlice.ts)

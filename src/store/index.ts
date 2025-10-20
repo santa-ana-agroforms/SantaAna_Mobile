@@ -1,6 +1,6 @@
-import formSessionReducer from "@/forms/state/formSessionSlice";
+import formSessionReducer, { FormSessionsState } from "@/forms/state/formSessionSlice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { combineReducers, configureStore } from "@reduxjs/toolkit";
+import { combineReducers, configureStore, ThunkDispatch, UnknownAction } from "@reduxjs/toolkit";
 import {
   FLUSH,
   PAUSE,
@@ -35,7 +35,13 @@ export const persistor = persistStore(store);
 
 // Tipos del store real
 export type RootState = ReturnType<typeof store.getState>;
-export type AppDispatch = typeof store.dispatch;
+export type AppDispatch = ThunkDispatch<
+  {
+    formSession: FormSessionsState;
+  },
+  unknown,
+  UnknownAction
+>;
 
 // Exportá startAppListening DESDE listener.ts (no acá) para evitar el ciclo
 export { startAppListening } from "./listener";
