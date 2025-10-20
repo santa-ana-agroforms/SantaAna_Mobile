@@ -659,6 +659,8 @@ export const selectCanGoNext = (sessionId: string) =>
     return true;
   });
 
+export const selectIsLastPage = createSelector(base, (s) => s.isLastPage);
+
 // ─────────────────────────────────────────────────────────
 // Selectores adicionales (pegar al final de formSessionSlice.ts)
 // ─────────────────────────────────────────────────────────

@@ -24,6 +24,7 @@ import {
   selectCanSendForReview,
   selectCurrentSession,
   selectCurrentSessionId,
+  selectIsLastPage,
   setStatus,
 } from "@/forms/state/formSessionSlice";
 import { useFormPersistence } from "@/forms/state/useFormPersistence";
@@ -62,6 +63,7 @@ const FormRoute: React.FC = () => {
 
   const sessionId = useAppSelector(selectCurrentSessionId);
   const currentSession = useAppSelector(selectCurrentSession);
+  const isLastPage = useAppSelector(selectIsLastPage);
   const canGoNext = useAppSelector((state) =>
     sessionId ? selectCanGoNext(sessionId)(state) : false
   );
