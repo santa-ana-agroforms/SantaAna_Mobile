@@ -659,8 +659,18 @@ export const selectCanGoNext = (sessionId: string) =>
     }
     return true;
   });
+type RootState = any;
 
-export const selectIsLastPage = createSelector(base, (s) => s.isLastPage);
+export const selectIsLastPage =
+  (sessionId: string) =>
+  (state: RootState): boolean => {
+    const sess = state.formSession?.sessions?.[sessionId];
+    if (!sess) return false; // si no hay sesión, no estás en la última
+    const idx = Number(sess.currentPageIndex ?? 0);
+    const total = Number(sess.form?.paginas?.length ?? 0);
+    if (total <= 0) return true; // sin páginas => trátalo como última (no bloquees)
+    return idx >= total - 1; // última página si idx == total-1
+  };
 
 // ─────────────────────────────────────────────────────────
 // Selectores adicionales (pegar al final de formSessionSlice.ts)

@@ -1,4 +1,3 @@
-// app/form/[formId].tsx
 import SkeletonLoader from "@/components/atoms/SkeletonLoader";
 import { Body } from "@/components/atoms/Typography";
 import PageScaffold from "@/components/templates/PageScaffold";
@@ -32,14 +31,16 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { isOnline } from "@/utils/network";
 
 const FormRoute: React.FC = () => {
-  const { formId, versionId, restored, entryId } = useLocalSearchParams<{
+  const { formId, versionId, restored, entryId, mode } = useLocalSearchParams<{
     formId: string;
     versionId?: string;
-    restored?: string; // abre desde guardado local (reanuda página)
+    restored?: string;
     entryId?: string;
+    mode?: "edit" | "review" | "view";
   }>();
-  console.log("FormRoute params:", { formId, versionId, restored, entryId });
+  console.log("FormRoute params:", { formId, versionId, restored, entryId, mode });
 
+  // Debounce util
   const useDebouncedSave = (saveFn: () => Promise<void>, delay = 600) => {
     const tRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const run = useCallback(() => {
@@ -50,9 +51,7 @@ const FormRoute: React.FC = () => {
     }, [saveFn, delay]);
     useEffect(() => {
       return () => {
-        if (tRef.current !== null) {
-          clearTimeout(tRef.current);
-        }
+        if (tRef.current !== null) clearTimeout(tRef.current);
       };
     }, []);
     return run;
@@ -63,14 +62,17 @@ const FormRoute: React.FC = () => {
 
   const sessionId = useAppSelector(selectCurrentSessionId);
   const currentSession = useAppSelector(selectCurrentSession);
-  const isLastPage = useAppSelector(selectIsLastPage);
+  const isLastPage = useAppSelector((state) =>
+    sessionId ? selectIsLastPage(sessionId)(state) : false
+  );
   const canGoNext = useAppSelector((state) =>
     sessionId ? selectCanGoNext(sessionId)(state) : false
   );
-
   const canSendForReview = useAppSelector(
     sessionId ? selectCanSendForReview(sessionId) : () => false
   );
+
+  const isReviewMode = mode === "review";
 
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Formulario | null>(null);
@@ -89,8 +91,9 @@ const FormRoute: React.FC = () => {
       await saveNow(); // guarda borrador + cursor
     } catch {}
     if (router.canGoBack()) router.back();
-    else router.replace("/"); // fallback
+    else router.replace("/");
   }, [saveNow]);
+
   const debouncedSave = useDebouncedSave(async () => {
     await saveNow();
   }, 500);
@@ -112,51 +115,71 @@ const FormRoute: React.FC = () => {
     dispatch(persistCursorIndex({ sessionId })).finally(() => debouncedSave());
   }, [dispatch, sessionId, debouncedSave]);
 
+  /** Helpers de tiempo */
+  const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+  /** Muestra éxito, espera, y navega a categoría */
+  const showSuccessThenBack = useCallback(
+    async (text: string, indicatorMs = 1500, afterMs = 1000) => {
+      setFooterInfo({ type: "success", text }); // mostrar indicador
+      await sleep(indicatorMs); // mantener visible
+      setFooterInfo(null); // ocultar
+      await sleep(afterMs); // esperar 1s extra
+      if (router.canGoBack())
+        router.back(); // regresar a la categoría
+      else router.replace("/"); // fallback
+    },
+    []
+  );
+
+  /** Envío final (modo review) con loader + indicador + retorno */
   const sendOne = useCallback(async () => {
-    const ctrl = new AbortController(); // por si querés abortar el envío al salir de la pantalla
+    const ctrl = new AbortController();
+    console.log("[entries] Sending form entry for review...");
     try {
       if (!sessionId) {
         Alert.alert("Error", "No se pudo obtener la sesión.");
         return;
       }
+      // Solo permitir en revisión cuando está listo
       const isReady = currentSession?.status === "ready_to_submit";
       if (!isReady) {
         Alert.alert("No listo", "El formulario no está listo para ser enviado.");
         return;
       }
-
-      // 2) red (evita pegarle al server si estás offline)
       if (!(await isOnline())) {
         Alert.alert("Sin conexión", "Conéctate a Internet para enviar el formulario.");
         return;
       }
 
-      const json = await dispatch(getJSONForm({ sessionId: sessionId as string })).unwrap();
+      setFooterLoading(true); // 🔄 loader ON
 
+      // Asegura persistencia antes de construir el JSON
+      await saveNow();
+
+      const json = await dispatch(getJSONForm({ sessionId: sessionId as string })).unwrap();
       if (!json) {
-        Alert.alert("Error", "No se pudo obtener el formulario.");
+        setFooterInfo({ type: "error", text: "No se pudo obtener el formulario." });
         return;
       }
 
-      // 3) envío real
+      // 🚀 Envío real
       const resp = await sendFormEntry(json, { signal: ctrl.signal });
       console.log("[entries] server response:", resp);
-      // cambiar el estado
-      await dispatch(setStatus({ sessionId, status: "synced" }));
-      Alert.alert("Enviado", "El formulario se envió y se marcó como 'synced'.");
-    } catch (e: any) {
-      // si usás AbortController: e?.name === 'CanceledError' o 'AbortError'
-      Alert.alert("Error", e?.message ?? "No se pudo enviar el formulario.");
-    }
-  }, [currentSession, dispatch, sessionId]);
 
-  // auto-ocultar mensajes (p.ej. a los 3.5s) si no traen acción
-  useEffect(() => {
-    if (!footerInfo || footerInfo.actionLabel) return;
-    const t = setTimeout(() => setFooterInfo(null), 2000);
-    return () => clearTimeout(t);
-  }, [footerInfo]);
-  // Cargar form (desde saved o desde server)
+      // Marca como enviado/sincronizado localmente
+      await dispatch(setStatus({ sessionId, status: "synced" }));
+
+      // ✅ indicador de éxito y regreso a categoría
+      await showSuccessThenBack("¡Formulario enviado!");
+    } catch (e: any) {
+      setFooterInfo({ type: "error", text: e?.message ?? "No se pudo enviar el formulario." });
+    } finally {
+      setFooterLoading(false); // 🔄 loader OFF
+    }
+  }, [currentSession, dispatch, sessionId, showSuccessThenBack, saveNow]);
+
+  // Cargar form (desde saved o server)
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -194,7 +217,6 @@ const FormRoute: React.FC = () => {
           }
         }
 
-        // Flujo normal: traer del server y crear sesión nueva
         const serverForm = await DB.selectFormFromGroupedById(formId as string);
         if (serverForm) {
           const fixedSessionForm: FormJSON = {
@@ -258,7 +280,7 @@ const FormRoute: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [dispatch, formId, versionId, restored]);
+  }, [dispatch, formId, versionId, restored, entryId]);
 
   const pagesCount = form?.paginas.length ?? 0;
   const currentPage = currentSession?.currentPageIndex ?? 0;
@@ -270,38 +292,29 @@ const FormRoute: React.FC = () => {
         variant="form"
         page={currentPage + 1}
         totalPages={pagesCount}
-        onPrevPage={handlePrev} // tus handlers ya hacen autosave debounced
+        onPrevPage={handlePrev}
         onNextPage={handleNext}
         onBack={handleHeaderBack}
       >
         {({ referenceFrame, contentFrame }) => {
           const gapY = contentFrame.height * 0.02;
-
-          // cantidad de "campos" ficticios
           const items = Array.from({ length: 10 });
-
           return (
             <View style={{ flex: 1, paddingHorizontal: 16 }}>
-              {/* Botón Guardar local (skeleton) */}
               <View style={{ alignItems: "flex-end", marginBottom: gapY }}>
                 <View style={{ width: referenceFrame.width * 0.35 }}>
                   <SkeletonLoader preset="button" frame={referenceFrame} />
                 </View>
               </View>
-
-              {/* Lista de campos: label + input */}
               <View style={{ gap: gapY }}>
                 {items.map((_, i) => (
                   <View key={i} style={{ gap: referenceFrame.height * 0.008 }}>
-                    {/* label */}
                     <View style={{ width: "70%" }}>
                       <SkeletonLoader preset="title" frame={referenceFrame} />
                     </View>
-                    {/* input grande */}
                     <SkeletonLoader
                       preset="card"
                       frame={referenceFrame}
-                      // altura tipo input (menos alto que una card grande)
                       height={referenceFrame.height * 0.08}
                     />
                   </View>
@@ -313,7 +326,6 @@ const FormRoute: React.FC = () => {
       </PageScaffold>
     );
   }
-  // ─────────────────────────────────────────────────────────────────────
 
   if (!form) {
     return (
@@ -323,8 +335,7 @@ const FormRoute: React.FC = () => {
     );
   }
 
-  // handler de enviar a revisión con guard
-
+  /** Envío a revisión (modo normal) con loader + indicador + retorno */
   const handleSendForReview = async () => {
     if (!sessionId) return;
     if (!canSendForReview) {
@@ -332,21 +343,32 @@ const FormRoute: React.FC = () => {
       return;
     }
     try {
-      setFooterLoading(true);
-      await saveNow(); // ya persiste fill_json + cursor
-      setFooterInfo({
-        type: "success",
-        text: "¡Enviado a revisión!",
-        actionLabel: "Volver",
-        onAction: () => router.back(),
-      });
-      // o directamente router.back();
+      setFooterLoading(true); // 🔄 loader ON
+      await saveNow(); // persiste fill_json + cursor
+      await showSuccessThenBack("¡Enviado a revisión!");
     } catch {
       setFooterInfo({ type: "error", text: "No se pudo enviar. Intenta nuevamente." });
     } finally {
-      setFooterLoading(false);
+      setFooterLoading(false); // 🔄 loader OFF
     }
   };
+
+  // Lógica de botón principal (label/habilitación/handler)
+  const disabledPrimary = isReviewMode ? !(canSendForReview && isLastPage) : !canSendForReview;
+  const primaryLabel = isReviewMode ? "Enviar" : "Enviar a revisión";
+  const onPrimary = isReviewMode ? sendOne : handleSendForReview;
+
+  // console.log(
+  //   "[UI] reviewMode:",
+  //   isReviewMode,
+  //   "isLastPage:",
+  //   isLastPage,
+  //   "canSendForReview:",
+  //   canSendForReview,
+  //   "disabledPrimary:",
+  //   isReviewMode ? !(canSendForReview && isLastPage) : !canSendForReview
+  // );
+
   return (
     <PageScaffold
       title={form.nombre}
@@ -370,10 +392,11 @@ const FormRoute: React.FC = () => {
           <FormStickyActions
             referenceFrame={referenceFrame}
             contentFrame={contentFrame}
-            disabledSend={!canSendForReview}
+            disabledSend={disabledPrimary}
             loading={footerLoading}
             infoMessage={footerInfo}
-            onSendForReview={handleSendForReview}
+            onSendForReview={onPrimary}
+            sendLabel={primaryLabel}
           />
         </View>
       )}

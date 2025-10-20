@@ -1,4 +1,3 @@
-// src/components/molecules/FormStickyActions.tsx
 import { colors } from "@/theme/tokens";
 import React from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
@@ -21,6 +20,7 @@ type Props = {
   loading?: boolean; // deshabilita botón y muestra spinner
   infoMessage?: InfoMessage | null; // banner superior con feedback
   onSendForReview: () => void;
+  sendLabel?: string; // texto del botón
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -28,11 +28,11 @@ const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(ma
 const bgForType = (t: InfoType) => {
   switch (t) {
     case "success":
-      return "#EAF7EA"; // verde claro
+      return "#EAF7EA";
     case "error":
-      return "#FDECEA"; // rojo claro
+      return "#FDECEA";
     default:
-      return colors.warningBg; // amarillo claro
+      return colors.warningBg;
   }
 };
 
@@ -54,6 +54,7 @@ const FormStickyActions: React.FC<Props> = ({
   loading = false,
   infoMessage,
   onSendForReview,
+  sendLabel,
 }) => {
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
   const pad = clamp(minSide * 0.02, 12, 20);
@@ -103,7 +104,7 @@ const FormStickyActions: React.FC<Props> = ({
         <View style={{ flexDirection: "row", gap }}>
           <TouchableOpacity
             onPress={onSendForReview}
-            disabled={loading}
+            disabled={loading || disabledSend}
             style={{
               flex: 1,
               height: btnH,
@@ -120,7 +121,7 @@ const FormStickyActions: React.FC<Props> = ({
               <ActivityIndicator />
             ) : (
               <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
-                Enviar a revisión
+                {sendLabel ?? "Enviar a revisión"}
               </Text>
             )}
           </TouchableOpacity>
