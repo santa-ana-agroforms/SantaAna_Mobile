@@ -8,11 +8,13 @@ import type { Formulario } from "@/screens/FormPage";
 import FormScreen from "@/screens/FormScreen";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { Alert, View } from "react-native";
 
 // Redux
+import { sendFormEntry } from "@/api/client";
 import FormStickyActions from "@/components/molecules/FormStickyActions";
 import {
+  getJSONForm,
   initSession,
   initSessionFromSaved,
   nextPage,
@@ -22,9 +24,11 @@ import {
   selectCanSendForReview,
   selectCurrentSession,
   selectCurrentSessionId,
+  setStatus,
 } from "@/forms/state/formSessionSlice";
 import { useFormPersistence } from "@/forms/state/useFormPersistence";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { isOnline } from "@/utils/network";
 
 const FormRoute: React.FC = () => {
   const { formId, versionId, restored, entryId } = useLocalSearchParams<{
@@ -58,7 +62,9 @@ const FormRoute: React.FC = () => {
 
   const sessionId = useAppSelector(selectCurrentSessionId);
   const currentSession = useAppSelector(selectCurrentSession);
-  const canGoNext = useAppSelector(sessionId ? selectCanGoNext(sessionId) : () => false);
+  const canGoNext = useAppSelector((state) =>
+    sessionId ? selectCanGoNext(sessionId)(state) : false
+  );
 
   const canSendForReview = useAppSelector(
     sessionId ? selectCanSendForReview(sessionId) : () => false
@@ -103,6 +109,44 @@ const FormRoute: React.FC = () => {
     if (!sessionId) return;
     dispatch(persistCursorIndex({ sessionId })).finally(() => debouncedSave());
   }, [dispatch, sessionId, debouncedSave]);
+
+  const sendOne = useCallback(async () => {
+    const ctrl = new AbortController(); // por si querés abortar el envío al salir de la pantalla
+    try {
+      if (!sessionId) {
+        Alert.alert("Error", "No se pudo obtener la sesión.");
+        return;
+      }
+      const isReady = currentSession?.status === "ready_to_submit";
+      if (!isReady) {
+        Alert.alert("No listo", "El formulario no está listo para ser enviado.");
+        return;
+      }
+
+      // 2) red (evita pegarle al server si estás offline)
+      if (!(await isOnline())) {
+        Alert.alert("Sin conexión", "Conéctate a Internet para enviar el formulario.");
+        return;
+      }
+
+      const json = await dispatch(getJSONForm({ sessionId: sessionId as string })).unwrap();
+
+      if (!json) {
+        Alert.alert("Error", "No se pudo obtener el formulario.");
+        return;
+      }
+
+      // 3) envío real
+      const resp = await sendFormEntry(json, { signal: ctrl.signal });
+      console.log("[entries] server response:", resp);
+      // cambiar el estado
+      await dispatch(setStatus({ sessionId, status: "synced" }));
+      Alert.alert("Enviado", "El formulario se envió y se marcó como 'synced'.");
+    } catch (e: any) {
+      // si usás AbortController: e?.name === 'CanceledError' o 'AbortError'
+      Alert.alert("Error", e?.message ?? "No se pudo enviar el formulario.");
+    }
+  }, [currentSession, dispatch, sessionId]);
 
   // auto-ocultar mensajes (p.ej. a los 3.5s) si no traen acción
   useEffect(() => {
