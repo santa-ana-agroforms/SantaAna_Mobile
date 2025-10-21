@@ -223,6 +223,17 @@ export const upsertGroups = async (
   for (const g of groups) await upsertGroup(g);
 };
 
+// Limpia todos los grupos y campos locales
+export const clearGroups = async () => {
+  await ensureGroupsTables();
+  const db = await getDb();
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM local_group_fields`);
+    await db.runAsync(`DELETE FROM local_groups`);
+  });
+};
+
 // Selecciona todos los grupos (con sus campos)
 export const selectGroups = async () => {
   await ensureGroupsTables();
@@ -397,6 +408,19 @@ export const upsertGroupedForms = async (groups: ServerCategoryGroup[]) => {
         }
       }
     }
+  });
+};
+
+// Funcion para limpiar los formularios y categorías (antes de un upsert completo)
+export const clearFormsAndCategories = async () => {
+  await ensureMigrated();
+  const db = await getDb();
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM field`);
+    await db.runAsync(`DELETE FROM page`);
+    await db.runAsync(`DELETE FROM form`);
+    await db.runAsync(`DELETE FROM category`);
   });
 };
 
@@ -671,6 +695,16 @@ export const upsertDatasets = async (tables: DatasetTable[]) => {
   });
 };
 
+// Limpiar Datasets
+export const clearDatasets = async () => {
+  await ensureDatasetsTables();
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM local_dataset_value`);
+    await db.runAsync(`DELETE FROM local_dataset_field`);
+  });
+};
+
 // ------------- Selects/lecturas -------------
 /**
  * Devuelve el dataset completo de un campo (metadatos + filas).
@@ -803,6 +837,7 @@ export const DB = {
   selectFormsGroupedByCategory,
   selectFormFromGroupedById,
   logDbCounts,
+  clearFormsAndCategories,
 
   upsertGroup,
   upsertGroups,
