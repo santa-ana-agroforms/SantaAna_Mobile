@@ -46,6 +46,8 @@ export const fetchAndSaveForms = async (
       return { categories: 0, forms: 0 };
     }
     const groups = await getFormsTreeWithRetry(signal);
+    // borrar todo lo que haya en DB antes de insertar lo nuevo
+    await DB.clearFormsAndCategories();
     let formsCount = 0;
     for (const g of groups) formsCount += g.formularios?.length ?? 0;
 

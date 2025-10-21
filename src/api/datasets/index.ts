@@ -1,6 +1,6 @@
 // src/api/datasets.ts
 import { getAccessToken, getApiBase, makeClient } from "@/api/client";
-import { DB } from "@/db/sqlite";
+import { clearDatasets, DB } from "@/db/sqlite";
 import axios from "axios";
 
 // Tipos alineados al backend
@@ -55,6 +55,7 @@ export const fetchDatasetsByForm = async (
  */
 export const syncAllDatasets = async () => {
   const tables = await fetchAllDatasets();
+  await clearDatasets();
   if (tables.length) {
     await DB.upsertDatasets(tables);
   }

@@ -1,0 +1,125 @@
+digraph Arquitectura {
+    rankdir=LR;
+    node [shape=box, fontname="Helvetica"];
+
+    // --------------------------
+    // CLUSTER: Aplicación Móvil
+    // --------------------------
+    subgraph cluster_mobile {
+        label="Aplicación Móvil\n(React Native + TypeScript)";
+        style=rounded;
+        color=blue;
+
+        RN [label="React Native\n(TypeScript)"];
+        SQLite [label="SQLite\n(Almacenamiento local)"];
+        FormEngine [label="Motor de Formularios Dinámicos"];
+        ContextAPI [label="Context API\ny Hooks Tipados"];
+
+        RN -> FormEngine;
+        FormEngine -> SQLite;
+        RN -> ContextAPI;
+    }
+
+    // ----------------
+    // NGINX (Proxy)
+    // ----------------
+    Nginx [label="Nginx\n(Proxy Inverso)", shape=box, color=gray];
+
+    // ---------------------------
+    // CLUSTER: Backend (NestJS + PostgreSQL)
+    // ---------------------------
+    subgraph cluster_backend {
+        label="Backend\n(NestJS + PostgreSQL)";
+        style=rounded;
+        color=green;
+
+        // Módulos de la API NestJS
+        subgraph cluster_api {
+            label="API NestJS\n(TypeScript)";
+            style=dashed;
+            AuthModule [label="AuthModule"];
+            UsersModule [label="UsersModule"];
+            FormsModule [label="FormsModule"];
+            EntriesModule [label="EntriesModule"];
+        }
+
+        TypeORM [label="TypeORM\n(Entidades / Migraciones)", shape=box, style=dotted];
+        PostgreSQL [label="PostgreSQL", shape=box3d];
+        WebSocketMS [label="Microservicio WebSocket", shape=box];
+
+        // Conexiones internas entre módulos y base de datos
+        AuthModule -> TypeORM;
+        UsersModule -> TypeORM;
+        FormsModule -> TypeORM;
+        EntriesModule -> TypeORM;
+
+        AuthModule -> PostgreSQL;
+        UsersModule -> PostgreSQL;
+        FormsModule -> PostgreSQL;
+        EntriesModule -> PostgreSQL;
+
+        WebSocketMS -> PostgreSQL;
+    }
+
+    // ---------------------------
+    // CLUSTER: Validaciones Dinámicas
+    // ---------------------------
+    subgraph cluster_validations {
+        label="Validaciones Dinámicas";
+        style=rounded;
+        color=orange;
+
+        FieldValidations [label="Tabla field_validations"];
+        TSCompiler       [label="Transpilador TS\n(ts-morph)"];
+        Sandbox          [label="Sandbox ejecución"];
+
+        // Flujo de validación en la app
+        FormEngine -> FieldValidations;
+        FieldValidations -> TSCompiler;
+        TSCompiler -> Sandbox;
+        Sandbox -> FormEngine [label="Resultado validación"];
+    }
+
+    // ---------------------------
+    // CLUSTER: Autenticación y Roles
+    // ---------------------------
+    subgraph cluster_auth {
+        label="Autenticación y Roles";
+        style=rounded;
+        color=purple;
+
+        JWT       [label="JWT"];
+        RoleForms [label="Tabla role_forms"];
+        UserRoles [label="Tabla user_roles"];
+
+        AuthModule -> JWT;
+        JWT -> AuthModule [label="Valida permisos"];
+        RoleForms -> AuthModule;
+        UserRoles -> AuthModule;
+    }
+
+    // ---------------------------
+    // CLUSTER: Sincronización Offline/Online
+    // ---------------------------
+    subgraph cluster_sync {
+        label="Sincronización\nOffline/Online";
+        style=rounded;
+        color=brown;
+
+        SyncManager [shape=ellipse,label="Sync Manager\nen App"];
+        SQLite      [label="SQLite\n(Almacenamiento local)"];
+        EntriesModule [label="EntriesModule"];  // ya definido en cluster_backend
+
+        SQLite -> SyncManager [label="Marcar registros"];
+        SyncManager -> EntriesModule [label="POST /sync"];
+    }
+
+    // ----------------
+    // Conexiones Generales
+    // ----------------
+    RN -> Nginx          [label="HTTPS/HTTP"];
+    ContextAPI -> RN     [dir=back];
+    Nginx -> AuthModule  [label="Reenvía /api"];
+    Nginx -> WebSocketMS [label="Reenvía WS"];
+    WebSocketMS -> RN    [label="Notificaciones"];
+}

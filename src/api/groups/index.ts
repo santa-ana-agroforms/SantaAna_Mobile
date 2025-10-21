@@ -1,7 +1,7 @@
 // Cliente HTTP (igual que en forms/index.ts)
 import { makeClient } from "../client";
 // DB local (igual que en forms/index.ts)
-import { DB } from "@/db/sqlite";
+import { clearGroups, DB } from "@/db/sqlite";
 
 import { isOnline } from "@/utils/network";
 import type { GroupTree } from "./types";
@@ -68,6 +68,7 @@ export const pullAndCacheGroups = async (opts?: { signal?: AbortSignal }) => {
     return [];
   }
   const remote = await getGroupsRemote(opts);
+  await clearGroups();
   console.log("Pulled groups from server:", remote);
   await saveGroupsLocal(remote);
   return remote;
