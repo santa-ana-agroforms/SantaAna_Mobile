@@ -577,10 +577,7 @@ const FieldRenderer: React.FC<Props> = ({
 
   if (campo.tipo === "booleano") return renderBoolean();
 
-  if (campo.tipo === "numerico") {
-    if (campo.clase === "calc") return renderCalc();
-    return renderNumber();
-  }
+  if (campo.tipo === "numerico") return renderNumber();
 
   if (campo.tipo === "imagen" && campo.clase === "firm") return renderFirm();
 
@@ -597,6 +594,8 @@ const FieldRenderer: React.FC<Props> = ({
         return renderDate("date");
       case "hour":
         return renderDate("hour");
+      case "calc":
+        return renderCalc();
     }
   }
 
