@@ -40,6 +40,7 @@ const Home: React.FC = () => {
 
   // Revalidación remota segura
   const revalidateFromServer = useCallback(async () => {
+    console.log("[home/revalidate] iniciando revalidación desde server...");
     if (isRefreshingRef.current) return;
 
     const online = await isOnline();
@@ -52,8 +53,10 @@ const Home: React.FC = () => {
 
     isRefreshingRef.current = true;
     setLoadingRemote(true);
+    console.log("\n\n[home/revalidate] online, revalidando...");
     try {
       await fetchAndSaveForms(); // /forms/tree -> SQLite
+      console.log("\n\n[home/revalidate] forms revalidados");
       await pullAndCacheGroups(); // /groups     -> SQLite (si aplica)
       await syncAllDatasets();
     } catch (e: any) {

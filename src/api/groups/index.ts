@@ -1,7 +1,7 @@
 // Cliente HTTP (igual que en forms/index.ts)
 import { makeClient } from "../client";
 // DB local (igual que en forms/index.ts)
-import { clearGroups, DB } from "@/db/sqlite";
+import { clearGroupById, DB } from "@/db/sqlite";
 
 import { isOnline } from "@/utils/network";
 import type { GroupTree } from "./types";
@@ -16,6 +16,7 @@ export const getGroupsRemote = async (opts?: { signal?: AbortSignal }): Promise<
   const { data } = await api.get<GroupTree[]>("/groups", {
     signal: opts?.signal,
   });
+  console.log("Fetched groups from remote:", data);
   return data ?? [];
 };
 
@@ -63,12 +64,23 @@ export const getGroupByIdLocal = async (id_grupo: string): Promise<GroupTree | n
 
 export const pullAndCacheGroups = async (opts?: { signal?: AbortSignal }) => {
   // Verificar si hay internat antes de llamar a getGroupsRemote?
+  console.log("\n[groups/pullAndCache] checking online status...");
   if (!(await isOnline())) {
     console.warn("No hay conexión a Internet");
     return [];
   }
+  console.log("\n[groups/pullAndCache] pulling groups from server...");
   const remote = await getGroupsRemote(opts);
-  await clearGroups();
+  console.log("\n[groups/pullAndCache] remote groups:", remote);
+  const groups = await getGroupsLocal();
+
+  // verificar cuales ya no están en el server y borrarlos
+  const remoteIds = new Set(remote.map((g) => g.id_grupo));
+  for (const g of groups) {
+    if (!remoteIds.has(g.id_grupo)) {
+      await clearGroupById(g.id_grupo);
+    }
+  }
   console.log("Pulled groups from server:", remote);
   await saveGroupsLocal(remote);
   return remote;
@@ -82,7 +94,9 @@ export const pullAndCacheGroupById = async (id_grupo: string, opts?: { signal?: 
 
 // Primero intenta local; si no existe, va al server y cachea
 export const getGroupOrFetch = async (id_grupo: string) => {
+  console.log(`Getting group ${id_grupo} from local or remote`);
   const local = await getGroupByIdLocal(id_grupo);
+  console.log("Local group:", local);
   if (local) return local;
   return pullAndCacheGroupById(id_grupo);
 };

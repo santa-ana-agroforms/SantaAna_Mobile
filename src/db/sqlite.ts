@@ -234,6 +234,13 @@ export const clearGroups = async () => {
   });
 };
 
+// Limpiar un grupo por id
+export const clearGroupById = async (id_grupo: string) => {
+  await ensureGroupsTables();
+  await run(`DELETE FROM local_group_fields WHERE id_grupo = ?`, [id_grupo]);
+  await run(`DELETE FROM local_groups WHERE id_grupo = ?`, [id_grupo]);
+};
+
 // Selecciona todos los grupos (con sus campos)
 export const selectGroups = async () => {
   await ensureGroupsTables();
@@ -421,6 +428,37 @@ export const clearFormsAndCategories = async () => {
     await db.runAsync(`DELETE FROM page`);
     await db.runAsync(`DELETE FROM form`);
     await db.runAsync(`DELETE FROM category`);
+  });
+};
+
+// Delete a form by id (and if category becomes empty, delete it too)
+export const deleteFormById = async (formId: string) => {
+  await ensureMigrated();
+  const db = await getDb();
+
+  await db.withTransactionAsync(async () => {
+    // 1) Borrar campos del form (vía versiones de página)
+    await db.runAsync(
+      `DELETE FROM field
+         WHERE page_version_id IN (
+           SELECT version_id
+             FROM page
+            WHERE form_id = ?
+         )`,
+      [formId]
+    );
+
+    // 2) Borrar páginas del form
+    await db.runAsync(`DELETE FROM page WHERE form_id = ?`, [formId]);
+
+    // 3) Borrar el form
+    await db.runAsync(`DELETE FROM form WHERE id = ?`, [formId]);
+
+    // 4) Limpiar categorías huérfanas
+    await db.runAsync(
+      `DELETE FROM category
+         WHERE id NOT IN (SELECT DISTINCT categoria_id FROM form)`
+    );
   });
 };
 
