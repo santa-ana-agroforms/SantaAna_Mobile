@@ -582,6 +582,10 @@ const FieldRenderer: React.FC<Props> = ({
   if (campo.tipo === "imagen" && campo.clase === "firm") return renderFirm();
 
   if (campo.tipo === "texto") {
+    // console.warn("[FR] campo texto clase:", campo.clase);
+    // console.warn("[FR] campo config:", campo.tipo);
+    // console.warn("[FR] campo valor:", campo.etiqueta);
+    // console.warn("[FR] campo nombre interno:", campo.nombre_interno);
     switch (campo.clase) {
       case "string":
       case "text":
