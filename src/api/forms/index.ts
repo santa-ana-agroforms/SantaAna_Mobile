@@ -1,5 +1,5 @@
 // src/api/forms.ts
-import { DB } from "@/db/sqlite";
+import { DB, deleteFormById } from "@/db/sqlite";
 import { isOnline } from "@/utils/network";
 import { makeClient } from "../client";
 import { FormCategoryGroup, FormTree } from "./types";
@@ -45,14 +45,44 @@ export const fetchAndSaveForms = async (
       setLoading?.(false);
       return { categories: 0, forms: 0 };
     }
-    const groups = await getFormsTreeWithRetry(signal);
-    // borrar todo lo que haya en DB antes de insertar lo nuevo
-    await DB.clearFormsAndCategories();
-    let formsCount = 0;
-    for (const g of groups) formsCount += g.formularios?.length ?? 0;
 
-    await DB.upsertGroupedForms(groups); // asegúrate que internamente haga BEGIN/COMMIT
-    return { categories: groups.length, forms: formsCount };
+    console.log("[forms/fetchAndSave] online, haciendo fetch...");
+    const newForms = await getFormsTreeWithRetry(signal);
+    // Obtener los formularios actuales
+    const currentForms = await DB.selectFormsGroupedByCategory();
+
+    // Buscar cuales formularios ya no están
+    const currentFormIds = new Set<string>();
+    for (const cat of currentForms) {
+      for (const form of cat.formularios ?? []) {
+        if (form.id_formulario) currentFormIds.add(form.id_formulario);
+      }
+    }
+
+    const newFormIds = new Set<string>();
+    for (const cat of newForms) {
+      for (const form of cat.formularios ?? []) {
+        if (form.id_formulario) newFormIds.add(form.id_formulario);
+      }
+    }
+
+    // Formularios a borrar = current - new
+    for (const id of newFormIds) {
+      currentFormIds.delete(id);
+    }
+
+    console.log("[forms/fetchAndSave] current form IDs:", currentFormIds);
+    for (const id of currentFormIds) {
+      await deleteFormById(id);
+    }
+
+    console.log("[forms/fetchAndSave] saving fetched forms...");
+
+    let formsCount = 0;
+    for (const g of newForms) formsCount += g.formularios?.length ?? 0;
+
+    await DB.upsertGroupedForms(newForms); // asegúrate que internamente haga BEGIN/COMMIT
+    return { categories: newForms.length, forms: formsCount };
   } finally {
     setLoading?.(false);
   }
