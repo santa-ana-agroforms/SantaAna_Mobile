@@ -19,8 +19,8 @@ type Props = {
   disabledSend?: boolean;
   loading?: boolean; // deshabilita botón y muestra spinner
   infoMessage?: InfoMessage | null; // banner superior con feedback
-  onSendForReview: () => void;
-  sendLabel?: string; // texto del botón
+  onSendForReview: () => void; // ← se usa como “Enviar”
+  sendLabel?: string; // ← por defecto ahora será "Enviar"
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -54,7 +54,7 @@ const FormStickyActions: React.FC<Props> = ({
   loading = false,
   infoMessage,
   onSendForReview,
-  sendLabel,
+  sendLabel = "Enviar",
 }) => {
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
   const pad = clamp(minSide * 0.02, 12, 20);
@@ -62,6 +62,10 @@ const FormStickyActions: React.FC<Props> = ({
   const btnH = clamp(minSide * 0.064, 44, 56);
   const radius = clamp(minSide * 0.02, 10, 14);
   const titleSize = clamp(minSide * 0.038, 14, 18);
+
+  const primaryBg = disabledSend || loading ? "#EDEDED" : colors.primary600;
+  const primaryBorder = disabledSend || loading ? colors.border : colors.primary600;
+  const primaryText = disabledSend || loading ? colors.textSecondary : colors.neutral0;
 
   return (
     <View style={{ paddingHorizontal: pad, paddingBottom: pad }}>
@@ -111,18 +115,16 @@ const FormStickyActions: React.FC<Props> = ({
               borderRadius: radius,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: disabledSend || loading ? "#EEE" : colors.neutral0,
+              backgroundColor: primaryBg,
               borderWidth: 1,
-              borderColor: disabledSend || loading ? colors.border : colors.textSecondary,
-              opacity: disabledSend || loading ? 0.6 : 1,
+              borderColor: primaryBorder,
+              opacity: disabledSend || loading ? 0.85 : 1,
             }}
           >
             {loading ? (
               <ActivityIndicator />
             ) : (
-              <Text style={{ color: colors.textPrimary, fontWeight: "800" }}>
-                {sendLabel ?? "Enviar a revisión"}
-              </Text>
+              <Text style={{ color: primaryText, fontWeight: "800" }}>{sendLabel}</Text>
             )}
           </TouchableOpacity>
         </View>

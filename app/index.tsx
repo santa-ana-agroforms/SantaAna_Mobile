@@ -97,9 +97,9 @@ const Home: React.FC = () => {
   useFocusEffect(
     useCallback(() => {
       loadLocal();
-      revalidateFromServer();
+      // revalidateFromServer();
       return () => {};
-    }, [loadLocal, revalidateFromServer])
+    }, [loadLocal])
   );
 
   // 3) App vuelve activa con internet → revalidar

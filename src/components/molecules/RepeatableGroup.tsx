@@ -1,6 +1,5 @@
-// src/components/molecules/RepeatableGroup.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { TouchableOpacity, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
 import { Body } from "@/components/atoms/Typography";
@@ -18,37 +17,64 @@ export type CampoLite = {
   clase?: string;
 };
 
-export type GroupRow = Record<string, any> & { __id: string };
+export type GroupRow = Record<string, any>; // UI no añade metadata a Redux
 
 type Frame = { width: number; height: number };
+
+type ReduxProps = {
+  sessionId: string;
+  pageIndex: number;
+  idGrupo: string;
+  nombreInternoGrupo: string;
+};
+
+type ModalProps = {
+  /** "modal" centrado es el default; se deja el enum por si quieres volver a "sheet" más adelante */
+  presentation?: "modal";
+  title?: string;
+};
 
 type Props = {
   title?: string;
   fieldsTemplate: CampoLite[];
-  /** Filas planas con __id (controlado por el padre/Redux) */
+  /** Filas actuales (vienen de Redux o del padre en modo controlado) */
   entries: GroupRow[];
-  /** Devuelve las filas planas (controlado) */
-  onChange: (next: GroupRow[]) => void;
+  /** Modo controlado (compat): si NO hay reduxProps, se usa onChange */
+  onChange?: (next: GroupRow[]) => void;
 
-  /** Opcionales para layout externo (los usa FieldRenderer) */
+  /** Modo Redux-first: si se provee, el padre inyectará handlers con bindReduxHandlers */
+  reduxProps?: ReduxProps;
+
+  /** Inyección de handlers Redux sin acoplar el componente al store */
+  bindReduxHandlers?: (
+    set: (h: {
+      addRow: () => void;
+      removeRow: (rowIndex: number) => void;
+      setRowField: (rowIndex: number, campoInterno: string, value: any) => void;
+    }) => void
+  ) => void;
+
+  /** Opcionales para layout externo (solo para calcular medidas) */
   referenceFrame?: Frame;
   contentFrame?: Frame;
 
-  /** Grupo requerido / mínimo de entradas */
-  required?: boolean;
+  /** Mínimo permitido; por defecto 0 (ya NO autoinserta filas) */
   minEntries?: number;
 
-  /** Render personalizado del resumen (si deseas) */
+  /** Resumen visual por fila (fuera del modal) */
   renderSummary?: (row: GroupRow, idx: number) => React.ReactNode;
 
-  /** Children (protocolo que espera FieldRenderer) */
-  children: (args: {
+  /** Render de campos hijo (se usa dentro del modal) */
+  children?: (args: {
     campo: CampoLite;
     row: GroupRow;
-    setField: (name: string, value: any) => void; // ← por nombre_interno
+    setField: (name: string, value: any) => void;
   }) => React.ReactNode;
 
-  /** Activa logs de depuración */
+  /** Personalización de modal */
+  modalProps?: ModalProps;
+
+  /** Id de depuración opcional */
   debugId?: string;
 };
 
@@ -56,69 +82,40 @@ type Props = {
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 /** ===== DEBUG ===== */
-const DEBUG = false; // ← apágalo cuando termines de depurar
-const makeLogger = (id?: string) => {
-  const prefix = `[RepeatableGroup${id ? `:${id}` : ""}]`;
-  const log = (...args: any[]) => DEBUG && console.log(prefix, ...args);
-  const warn = (...args: any[]) => DEBUG && console.warn(prefix, ...args);
-  const error = (...args: any[]) => DEBUG && console.error(prefix, ...args);
-  return { log, warn, error };
-};
-
-/** id estable para filas nuevas */
-const genId = () => `grp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-
-/** crea una fila vacía plana en base al template (por nombre_interno) */
-const makeEmptyRowFromTemplate = (tpl: CampoLite[]): GroupRow => {
-  const base: GroupRow = { __id: genId(), __draft: true };
-  for (const c of tpl) base[c.nombre_interno] = "";
-  return base;
-};
-
-/** igualdad superficial para evitar renders/ciclos innecesarios */
-const shallowEqualRows = (a: GroupRow[], b: GroupRow[]) => {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const ra = a[i];
-    const rb = b[i];
-    if (ra.__id !== rb.__id) return false;
-    const ka = Object.keys(ra);
-    const kb = Object.keys(rb);
-    if (ka.length !== kb.length) return false;
-    for (const k of ka) {
-      if (!Object.is(ra[k], rb[k])) return false;
-    }
-  }
-  return true;
-};
+// const DEBUG = false;
+// const makeLogger = (id?: string) => {
+//   const prefix = `[RepeatableGroup${id ? `:${id}` : ""}]`;
+//   const log = (...args: any[]) => DEBUG && console.log(prefix, ...args);
+//   const warn = (...args: any[]) => DEBUG && console.warn(prefix, ...args);
+//   const error = (...args: any[]) => DEBUG && console.error(prefix, ...args);
+//   return { log, warn, error };
+// };
 
 const RepeatableGroup: React.FC<Props> = ({
   title,
   fieldsTemplate,
   entries,
   onChange,
+  reduxProps,
+  bindReduxHandlers,
   referenceFrame,
-  required = false,
-  minEntries,
+  minEntries = 0, // 👈 por defecto 0: no obliga fila inicial
   children,
-  debugId,
+  renderSummary,
+  modalProps,
+  // debugId,
 }) => {
-  const { log, warn, error } = makeLogger(debugId);
+  // const { log, warn, error } = makeLogger(debugId);
 
-  /** ===== Render calc helpers ===== */
   const layoutAnim = LinearTransition.springify().damping(18);
 
   const minSide = Math.min(referenceFrame?.width ?? 360, referenceFrame?.height ?? 640);
   const gap = clamp(minSide * 0.016, 10, 22);
-  const boxPad = clamp(minSide * 0.014, 12, 18);
+  const cardRadius = clamp(minSide * 0.018, 8, 12);
+  const cardPad = clamp(minSide * 0.018, 12, 18);
   const smallGap = clamp(minSide * 0.01, 8, 14);
+  const sectionTitleSize = clamp(minSide * 0.05, 16, 22);
   const dividerH = clamp(minSide * 0.005, 2, 6);
-
-  const addCardPadV = clamp(minSide * 0.018, 12, 18);
-  const addCardPadH = clamp(minSide * 0.02, 14, 22);
-  const addCardRadius = clamp(minSide * 0.018, 8, 12);
-  const addCardBorder = clamp(minSide * 0.004, 1, 2);
 
   const iconFrame = {
     width: (referenceFrame?.height ?? 640) * 0.55,
@@ -126,109 +123,111 @@ const RepeatableGroup: React.FC<Props> = ({
   };
   const iconSize = clamp(minSide * 0.05, 20, 40);
 
-  const _minEntries = useMemo(
-    () => (required ? (minEntries ?? 1) : (minEntries ?? 0)),
-    [required, minEntries]
-  );
+  // === Modo de operación ===
+  const isReduxMode = !!reduxProps;
 
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // === Handlers Redux inyectados (si aplica) ===
+  const [reduxHandlers, setReduxHandlers] = useState<{
+    addRow?: () => void;
+    removeRow?: (rowIndex: number) => void;
+    setRowField?: (rowIndex: number, campoInterno: string, value: any) => void;
+  }>({});
 
-  /** ===== LOG props in ===== */
-  /** ===== Auto-init filas para cumplir minEntries ===== */
   useEffect(() => {
-    if (fieldsTemplate.length === 0) {
-      warn("fieldsTemplate está vacío; no se pueden crear filas iniciales.");
-      return;
+    if (bindReduxHandlers) {
+      bindReduxHandlers((h) => setReduxHandlers(h));
     }
-    if (entries.length < _minEntries) {
-      const need = _minEntries - entries.length;
-      const additions: GroupRow[] = Array.from({ length: need }, () =>
-        makeEmptyRowFromTemplate(fieldsTemplate)
-      );
-      // log("auto-init rows:", { need, additions });
-      try {
-        onChange([...entries, ...additions]);
-      } catch (e) {
-        error("onChange() lanzó error durante auto-init:", e);
-      }
-      // marca como expandidas las nuevas
-      setCollapsed((c) => {
-        const next = { ...c };
-        for (const r of additions) next[r.__id] = false;
-        return next;
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries.length, _minEntries, fieldsTemplate]);
+  }, [bindReduxHandlers]);
 
-  /** ===== Sincroniza collapsed con entries ===== */
-  useEffect(() => {
-    setCollapsed((prev) => {
-      const next: Record<string, boolean> = {};
-      for (const e of entries) if (prev[e.__id]) next[e.__id] = true;
-      return next;
-    });
-  }, [entries]);
+  // === Modal state ===
+  type ModalMode = "create" | "edit";
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<ModalMode>("edit");
+  const [modalIndex, setModalIndex] = useState<number | null>(null);
+  const [draft, setDraft] = useState<GroupRow | null>(null); // solo para "create" o si quieres edición diferida
 
-  /** ===== Handlers ===== */
+  const openCreate = useCallback(() => {
+    // Borrador local vacío basado en template
+    const base: GroupRow = {};
+    for (const c of fieldsTemplate) base[c.nombre_interno] = "";
+    setDraft(base);
+    setModalMode("create");
+    setModalIndex(null);
+    setModalOpen(true);
+  }, [fieldsTemplate]);
+
+  const openEdit = useCallback((idx: number) => {
+    setModalMode("edit");
+    setModalIndex(idx);
+    setDraft(null); // edición inmediata (sin borrador); si prefieres diferida, clona aquí
+    setModalOpen(true);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setModalOpen(false);
+    setModalIndex(null);
+    setDraft(null);
+  }, []);
+
+  // === Modo controlado helpers ===
   const safeOnChange = useCallback(
     (next: GroupRow[]) => {
-      if (!shallowEqualRows(entries, next)) {
-        onChange(next);
-      }
+      onChange?.(next);
     },
-    [entries, onChange]
+    [onChange]
   );
 
-  const addEntry = useCallback(() => {
-    if (fieldsTemplate.length === 0) {
-      warn("addEntry abortado: fieldsTemplate vacío.");
-      return;
+  // === Acciones UI ===
+  const removeOutside = useCallback(
+    (idx: number) => {
+      if (entries.length <= minEntries) return; // respeta el mínimo si lo configuran > 0
+      if (isReduxMode && reduxHandlers.removeRow) {
+        reduxHandlers.removeRow(idx);
+      } else if (!isReduxMode && onChange) {
+        const next = entries.slice();
+        next.splice(idx, 1);
+        safeOnChange(next);
+      }
+    },
+    [entries, minEntries, isReduxMode, reduxHandlers, onChange, safeOnChange]
+  );
+
+  const setFieldImmediate = useCallback(
+    (rowIndex: number, campoInterno: string, value: any) => {
+      // Edición inmediata (modo edit)
+      if (isReduxMode && reduxHandlers.setRowField) {
+        reduxHandlers.setRowField(rowIndex, campoInterno, value);
+      } else if (!isReduxMode && onChange) {
+        const next = entries.map((e, idx) =>
+          idx === rowIndex ? { ...e, [campoInterno]: value } : e
+        );
+        safeOnChange(next);
+      }
+    },
+    [isReduxMode, reduxHandlers, onChange, entries, safeOnChange]
+  );
+
+  const setDraftField = useCallback((campoInterno: string, value: any) => {
+    setDraft((d) => ({ ...(d ?? {}), [campoInterno]: value }));
+  }, []);
+
+  const saveDraft = useCallback(() => {
+    if (!draft) return;
+    if (isReduxMode && reduxHandlers.addRow && reduxHandlers.setRowField) {
+      // Índice futuro = tamaño actual (añadir al final)
+      const baseIndex = entries.length;
+      reduxHandlers.addRow();
+      // propaga valores del borrador
+      for (const [k, v] of Object.entries(draft)) {
+        reduxHandlers.setRowField(baseIndex, k, v);
+      }
+    } else if (!isReduxMode && onChange) {
+      safeOnChange([...entries, draft]);
     }
-    const newRow = makeEmptyRowFromTemplate(fieldsTemplate);
-    log("addEntry", newRow);
-    safeOnChange([...entries, newRow]);
-    setCollapsed((c) => ({ ...c, [newRow.__id]: false }));
-  }, [entries, fieldsTemplate, safeOnChange, log, warn]);
+    closeModal();
+  }, [draft, isReduxMode, reduxHandlers, entries.length, onChange, safeOnChange, closeModal]);
 
-  const removeEntry = useCallback(
-    (id: string) => {
-      if (required && entries.length <= _minEntries) {
-        warn("removeEntry bloqueado por minEntries", { entries: entries.length, _minEntries });
-        return;
-      }
-      log("removeEntry", id);
-      const next = entries.filter((e) => e.__id !== id);
-      safeOnChange(next);
-      setCollapsed((c) => {
-        const n = { ...c };
-        delete n[id];
-        return n;
-      });
-    },
-    [entries, required, _minEntries, safeOnChange, log, warn]
-  );
-
-  const setEntryCollapsed = useCallback(
-    (id: string, v: boolean) => {
-      log("setEntryCollapsed", { id, v });
-      setCollapsed((c) => ({ ...c, [id]: v }));
-    },
-    [log]
-  );
-
-  /** setField: actualiza un campo por nombre_interno dentro de la fila con __id */
-  const setField = useCallback(
-    (rowId: string, fieldName: string, value: unknown) => {
-      log("setField", { rowId, fieldName, value });
-      const next = entries.map((e) =>
-        e.__id === rowId ? { ...e, [fieldName]: value, __draft: undefined } : e
-      );
-      safeOnChange(next);
-    },
-    [entries, safeOnChange, log]
-  );
-
+  // === Orden de plantilla estable ===
   const templateSorted = useMemo(() => {
     const sorted = [...fieldsTemplate].sort(
       (a, b) => (a.sequence ?? 0) - (b.sequence ?? 0) || a.id_campo.localeCompare(b.id_campo)
@@ -236,175 +235,129 @@ const RepeatableGroup: React.FC<Props> = ({
     return sorted;
   }, [fieldsTemplate]);
 
-  /** ===== UI bits ===== */
-  const AddCard = (
-    <Animated.View layout={layoutAnim} pointerEvents="box-none">
-      <Animated.View
-        entering={FadeIn.duration(150)}
-        style={{
-          borderWidth: addCardBorder,
-          borderStyle: "dashed",
-          borderColor: colors.border,
-          borderRadius: addCardRadius,
-          paddingVertical: addCardPadV,
-          paddingHorizontal: addCardPadH,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#FAFAFA",
-        }}
-      >
-        <TouchableOpacity onPress={addEntry} accessibilityRole="button">
-          <Body weight="bold" style={{ opacity: 0.9, alignSelf: "center" }}>
-            + Agregar otro
-          </Body>
-          <Body size="xs" color="secondary">
-            Añade una nueva instancia de este grupo
-          </Body>
-        </TouchableOpacity>
-      </Animated.View>
-    </Animated.View>
-  );
-
-  /** ===== Render ===== */
-  if (fieldsTemplate.length === 0) {
-    // Muestra algo visible si no hay template (muy común cuando la API aún no trajo los campos)
-    warn("Render abortado: fieldsTemplate vacío (¿API aún cargando?)");
+  // === Resumen por defecto (fuera del modal) ===
+  const renderRowSummary = (row: GroupRow, idx: number) => {
+    if (renderSummary) return renderSummary(row, idx);
+    const primaryKey =
+      Object.keys(row).find((k) => typeof row[k] === "string" && (row[k] as string)?.trim()) ??
+      null;
+    const primary = primaryKey ? String(row[primaryKey]) : `#${idx + 1}`;
+    const secondary =
+      !primaryKey &&
+      Object.keys(row)
+        .filter((k) => typeof row[k] === "string")
+        .slice(0, 2)
+        .map((k) => String(row[k]))
+        .filter(Boolean)
+        .join(" • ");
     return (
-      <View style={{ gap }}>
-        {title ? (
-          <Body weight="bold" style={{ fontSize: clamp(minSide * 0.05, 16, 22) }}>
-            {title}
+      <View style={{ gap: 2 }}>
+        <Body weight="bold">{primary}</Body>
+        {secondary ? (
+          <Body size="xs" color="secondary" numberOfLines={1}>
+            {secondary}
           </Body>
         ) : null}
-        <Body color="secondary">Este grupo no tiene campos para mostrar.</Body>
       </View>
     );
-  }
+  };
 
+  // === UI ===
   return (
     <View style={{ gap }}>
+      {/* Header del grupo */}
       {title ? (
-        <Body weight="bold" style={{ fontSize: clamp(minSide * 0.05, 16, 22) }}>
-          {title}
-        </Body>
-      ) : null}
+        <View
+          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+        >
+          <Body weight="bold" style={{ fontSize: sectionTitleSize }}>
+            {title}
+          </Body>
+          <Pressable
+            onPress={openCreate}
+            accessibilityRole="button"
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              backgroundColor: colors.primary600,
+              borderRadius: 10,
+            }}
+          >
+            <Body style={{ color: "white" }} weight="bold">
+              Nuevo
+            </Body>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={{ alignItems: "flex-end" }}>
+          <Pressable
+            onPress={openCreate}
+            accessibilityRole="button"
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              backgroundColor: colors.primary600,
+              borderRadius: 10,
+            }}
+          >
+            <Body style={{ color: "white" }} weight="bold">
+              Nuevo
+            </Body>
+          </Pressable>
+        </View>
+      )}
 
-      {/* Log visual si no hay entries */}
-      {entries.length === 0 ? (
-        <Body color="secondary">Sin filas aún (minEntries={_minEntries}).</Body>
-      ) : null}
+      {/* Lista de filas (solo resúmenes) */}
+      {entries.length === 0 ? <Body color="secondary">No hay registros en este grupo.</Body> : null}
 
       {entries.map((row, idx) => {
-        const collapsedNow = !!collapsed[row.__id];
-        const canDelete = entries.length > _minEntries; // respeta mínimo
-        DEBUG && log("render row", { idx, __id: row.__id, collapsedNow, row });
-
+        const canDelete = entries.length > minEntries;
         return (
-          <Animated.View key={row.__id} layout={layoutAnim} pointerEvents="box-none">
-            <Animated.View
-              layout={layoutAnim}
-              entering={FadeIn.duration(120)}
-              exiting={FadeOut.duration(100)}
-              collapsable={false}
+          <Animated.View key={`row_${idx}`} layout={layoutAnim} entering={FadeIn} exiting={FadeOut}>
+            <Pressable
+              onPress={() => openEdit(idx)}
               style={{
                 borderWidth: 1,
                 borderColor: colors.border,
-                borderRadius: clamp(minSide * 0.018, 8, 12),
+                borderRadius: cardRadius,
                 backgroundColor: colors.neutral0,
-                padding: boxPad,
+                padding: cardPad,
                 marginTop: idx === 0 ? gap * 0.5 : 0,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
-              {/* Header */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-                pointerEvents="box-none"
-              >
-                <Body weight="bold">#{idx + 1} - versión</Body>
-                <View style={{ flexDirection: "row", gap: smallGap, alignItems: "center" }}>
-                  {canDelete ? (
-                    <IconButton
-                      accessibilityLabel="Eliminar"
-                      onPress={() => removeEntry(row.__id)}
-                      iconSource={require("../../../assets/images/cerca.png")}
-                      frame={iconFrame}
-                      iconSize={iconSize}
-                      bgColor={colors.danger600}
-                      showShadow={false}
-                    />
-                  ) : null}
+              <View style={{ flex: 1, paddingRight: smallGap }}>{renderRowSummary(row, idx)}</View>
+
+              <View style={{ flexDirection: "row", gap: smallGap, alignItems: "center" }}>
+                {canDelete ? (
                   <IconButton
-                    accessibilityLabel={collapsedNow ? "Editar" : "Completar"}
-                    onPress={() => setEntryCollapsed(row.__id, !collapsedNow)}
-                    iconSource={
-                      collapsedNow
-                        ? require("../../../assets/images/lapiz.png")
-                        : require("../../../assets/images/marca-de-verificacion.png")
-                    }
+                    accessibilityLabel="Eliminar"
+                    onPress={() => removeOutside(idx)}
+                    iconSource={require("../../../assets/images/cerca.png")}
                     frame={iconFrame}
                     iconSize={iconSize}
-                    bgColor={collapsedNow ? colors.textTertiary : colors.primary600}
+                    bgColor={colors.danger600}
                     showShadow={false}
                   />
-                </View>
+                ) : null}
+                <IconButton
+                  accessibilityLabel="Editar"
+                  onPress={() => openEdit(idx)}
+                  iconSource={require("../../../assets/images/lapiz.png")}
+                  frame={iconFrame}
+                  iconSize={iconSize}
+                  bgColor={colors.primary600}
+                  showShadow={false}
+                />
               </View>
-
-              {/* Contenido */}
-              <Animated.View layout={layoutAnim} style={{ gap: smallGap }} collapsable={false}>
-                {collapsedNow ? null : (
-                  <Animated.View
-                    key="fields"
-                    layout={layoutAnim}
-                    entering={FadeIn.duration(120)}
-                    exiting={FadeOut.duration(80)}
-                    pointerEvents="box-none"
-                    style={{ gap: smallGap }}
-                  >
-                    {templateSorted.map((campo) => {
-                      DEBUG &&
-                        log("render field in row", {
-                          rowId: row.__id,
-                          campoId: campo.id_campo,
-                          nombre_interno: campo.nombre_interno,
-                        });
-                      try {
-                        return (
-                          <Animated.View
-                            key={campo.id_campo}
-                            layout={layoutAnim}
-                            collapsable={false}
-                            pointerEvents="box-none"
-                          >
-                            {children({
-                              campo,
-                              row,
-                              setField: (name, value) => setField(row.__id, name, value),
-                            })}
-                          </Animated.View>
-                        );
-                      } catch (e) {
-                        error("children renderer lanzó error:", e, {
-                          campoId: campo.id_campo,
-                          nombre_interno: campo.nombre_interno,
-                          rowId: row.__id,
-                        });
-                        return null;
-                      }
-                    })}
-                  </Animated.View>
-                )}
-              </Animated.View>
-            </Animated.View>
+            </Pressable>
           </Animated.View>
         );
       })}
 
-      {AddCard}
-
+      {/* Divider visual */}
       <Animated.View layout={layoutAnim} pointerEvents="box-none">
         <View
           style={{
@@ -415,6 +368,163 @@ const RepeatableGroup: React.FC<Props> = ({
           }}
         />
       </Animated.View>
+
+      {/* === MODAL CENTRADO === */}
+      <Modal visible={modalOpen} transparent animationType="fade" onRequestClose={closeModal}>
+        <KeyboardAvoidingView
+          behavior={Platform.select({ ios: "padding", android: undefined })}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.38)",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: 20,
+          }}
+        >
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 720,
+              backgroundColor: colors.neutral0,
+              borderRadius: 16,
+              overflow: "hidden",
+              shadowColor: "#000",
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              elevation: 8,
+            }}
+          >
+            {/* Header */}
+            <View
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Body weight="bold">
+                  {modalProps?.title ??
+                    (modalMode === "create" ? "Nuevo registro" : "Editar registro")}
+                </Body>
+                {modalMode === "edit" && modalIndex != null ? (
+                  <Body size="xs" color="secondary">
+                    #{modalIndex + 1}
+                  </Body>
+                ) : null}
+              </View>
+              <IconButton
+                accessibilityLabel="Cerrar"
+                onPress={closeModal}
+                iconSource={require("../../../assets/images/cerca.png")}
+                frame={iconFrame}
+                iconSize={iconSize}
+                bgColor={colors.textTertiary}
+                showShadow={false}
+              />
+            </View>
+
+            {/* Contenido */}
+            <ScrollView
+              contentContainerStyle={{ padding: 16, gap: smallGap }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {children ? (
+                modalMode === "create" ? (
+                  draft ? (
+                    <>
+                      {templateSorted.map((campo) => (
+                        <Animated.View key={campo.id_campo} layout={layoutAnim}>
+                          {children({
+                            campo,
+                            row: draft,
+                            setField: (name, value) => setDraftField(name, value),
+                          })}
+                        </Animated.View>
+                      ))}
+                    </>
+                  ) : null
+                ) : modalIndex != null && entries[modalIndex] ? (
+                  <>
+                    {templateSorted.map((campo) => (
+                      <Animated.View key={campo.id_campo} layout={layoutAnim}>
+                        {children({
+                          campo,
+                          row: entries[modalIndex],
+                          setField: (name, value) => setFieldImmediate(modalIndex, name, value),
+                        })}
+                      </Animated.View>
+                    ))}
+                  </>
+                ) : null
+              ) : null}
+              <View style={{ height: 8 }} />
+            </ScrollView>
+
+            {/* Footer */}
+            <View
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+                flexDirection: "row",
+                justifyContent: "flex-end",
+                gap: 12,
+              }}
+            >
+              {modalMode === "create" ? (
+                <>
+                  <Pressable
+                    onPress={closeModal}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      backgroundColor: colors.textTertiary,
+                    }}
+                  >
+                    <Body style={{ color: "white" }} weight="bold">
+                      Cancelar
+                    </Body>
+                  </Pressable>
+                  <Pressable
+                    onPress={saveDraft}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      backgroundColor: colors.primary600,
+                    }}
+                  >
+                    <Body style={{ color: "white" }} weight="bold">
+                      Guardar
+                    </Body>
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable
+                  onPress={closeModal}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    backgroundColor: colors.primary600,
+                  }}
+                >
+                  <Body style={{ color: "white" }} weight="bold">
+                    Listo
+                  </Body>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };

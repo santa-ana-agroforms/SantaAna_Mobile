@@ -8,7 +8,7 @@ import Label from "@/components/atoms/Label";
 import { Body } from "@/components/atoms/Typography";
 import DateTimeField from "@/components/molecules/DateTimeField";
 import FieldSignature from "@/components/molecules/FieldSignature";
-import RepeatableGroup, { type GroupRow } from "@/components/molecules/RepeatableGroup";
+import RepeatableGroup from "@/components/molecules/RepeatableGroup";
 import { colors } from "@/theme/tokens";
 
 import { getGroupOrFetch } from "@/api/groups";
@@ -17,11 +17,15 @@ import type { Campo } from "./FormPage";
 // ⬇️ Redux
 import DatasetField from "@/components/molecules/DatasetField";
 import {
+  groupAddRow,
+  groupRemoveRow,
+  groupSetRowField,
   selectCurrentSession,
   selectCurrentSessionId,
   selectFieldValue,
   setFieldValue,
 } from "@/forms/state/formSessionSlice";
+import { AppDispatch } from "@/store";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 type Frame = { width: number; height: number };
@@ -91,6 +95,52 @@ const useDebugLogger = (label: string) => {
   };
 
   return { log, group, onRender, id: idRef.current, renders };
+};
+
+export const bindGroupHandlers = ({
+  dispatch,
+  sessionId,
+  pageIndex,
+  idGrupo,
+  nombreInternoGrupo,
+}: {
+  dispatch: AppDispatch;
+  sessionId: string;
+  pageIndex: number;
+  idGrupo: string;
+  nombreInternoGrupo: string;
+}) => {
+  return {
+    addRow: () =>
+      dispatch(
+        groupAddRow({
+          sessionId,
+          nombreInternoGrupo,
+          id_grupo: idGrupo,
+          pageIndex,
+        })
+      ),
+    removeRow: (rowIndex: number) =>
+      dispatch(
+        groupRemoveRow({
+          sessionId,
+          nombreInternoGrupo,
+          rowIndex,
+          pageIndex,
+        })
+      ),
+    setRowField: (rowIndex: number, campoInterno: string, value: any) =>
+      dispatch(
+        groupSetRowField({
+          sessionId,
+          nombreInternoGrupo,
+          rowIndex,
+          campoInterno,
+          value,
+          pageIndex,
+        })
+      ),
+  };
 };
 
 const FieldRenderer: React.FC<Props> = ({
@@ -472,38 +522,37 @@ const FieldRenderer: React.FC<Props> = ({
     [groupData]
   );
 
-  // Valor de grupo (array de filas planas). Aseguramos __id en UI.
-  const groupRows: GroupRow[] = useMemo(() => {
+  // Valor del grupo como array plano (Redux o external)
+  const groupRows = useMemo(() => {
     const raw = Array.isArray(value) ? (value as any[]) : [];
-    return raw.map((r, i) => ({
-      ...r,
-      __id: r?.__id ?? `${campo.nombre_interno}_${i}_${Math.random().toString(36).slice(2, 8)}`,
-    }));
-  }, [value, campo.nombre_interno]);
-
-  // Primer render con filas sin __id → escribirlas de vuelta con __id para fijarlas
-  useEffect(() => {
-    if (!Array.isArray(value)) return;
-    const missing = value.some((r: any) => !r || !r.__id);
-    if (!missing) return;
-
-    const withIds = groupRows; // ya trae __id
-    const commit = external
-      ? external.onChange
-      : (v: any) =>
-          dispatch(
-            setFieldValue({
-              sessionId: sessionId!,
-              nombreInterno: campo.nombre_interno,
-              value: v,
-              pageIndex: effectivePage,
-            })
-          );
-    commit(withIds);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // una vez
+    return raw;
+  }, [value]);
 
   const renderGroup = () => {
+    const isControlled = !!external;
+
+    // Props Redux (solo si NO estamos en external)
+    const reduxProps =
+      !isControlled && sessionId
+        ? {
+            sessionId,
+            pageIndex: effectivePage,
+            idGrupo: groupId!,
+            nombreInternoGrupo: campo.nombre_interno,
+          }
+        : undefined;
+
+    // Handlers desde helper (se inyectan vía bindReduxHandlers)
+    const handlers = reduxProps
+      ? bindGroupHandlers({
+          dispatch,
+          sessionId: reduxProps.sessionId,
+          pageIndex: reduxProps.pageIndex,
+          idGrupo: reduxProps.idGrupo,
+          nombreInternoGrupo: reduxProps.nombreInternoGrupo,
+        })
+      : null;
+
     return (
       <View style={{ gap: 0 }}>
         <Label
@@ -530,28 +579,54 @@ const FieldRenderer: React.FC<Props> = ({
 
         {groupFields.length ? (
           <RepeatableGroup
-            required={!!campo.requerido}
+            title={groupData?.nombre || groupData?.name || label}
             fieldsTemplate={groupFields as any}
             entries={groupRows}
-            minEntries={1}
             referenceFrame={referenceFrame}
             contentFrame={contentFrame}
-            onChange={(nextRows) => {
-              const commit = external
-                ? external.onChange
-                : (v: any) =>
-                    dispatch(
-                      setFieldValue({
-                        sessionId: sessionId!,
-                        nombreInterno: campo.nombre_interno,
-                        value: v,
-                        pageIndex: effectivePage,
-                      })
-                    );
-
-              commit(nextRows);
-              onChangeValue?.(campo.nombre_interno, nextRows);
+            reduxProps={reduxProps}
+            bindReduxHandlers={
+              handlers
+                ? (set) =>
+                    set({
+                      addRow: handlers.addRow,
+                      removeRow: handlers.removeRow,
+                      setRowField: handlers.setRowField,
+                    })
+                : undefined
+            }
+            // Modo controlado (si este grupo vive dentro de otro y el padre maneja el array):
+            onChange={
+              isControlled
+                ? (nextRows) => {
+                    external!.onChange(nextRows);
+                    onChangeValue?.(campo.nombre_interno, nextRows);
+                  }
+                : undefined
+            }
+            // Permite 0 filas por defecto:
+            minEntries={0}
+            // Resumen mejorado
+            renderSummary={(row, idx) => {
+              const prefer = groupFields.find((c: any) =>
+                ["nombre", "name", "descripcion", "description", "titulo", "title"].includes(
+                  c.nombre_interno?.toLowerCase?.()
+                )
+              );
+              const primary =
+                (prefer && row?.[prefer.nombre_interno]) ||
+                Object.values(row).find((v) => typeof v === "string" && (v as string).trim()) ||
+                `#${idx + 1}`;
+              return (
+                <View style={{ gap: 2 }}>
+                  <Body weight="bold">{String(primary)}</Body>
+                  <Body size="xs" color="secondary">
+                    {groupData?.nombre || groupData?.name || label}
+                  </Body>
+                </View>
+              );
             }}
+            modalProps={{ presentation: "modal", title: groupData?.nombre || label }}
           >
             {({ campo: subCampo, row, setField }) => (
               <FieldRenderer

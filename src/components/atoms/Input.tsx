@@ -3,9 +3,11 @@ import { colors } from "@/theme/tokens";
 import React, { useMemo, useState } from "react";
 import {
   LayoutChangeEvent,
+  NativeSyntheticEvent,
   Platform,
   Text,
   TextInput,
+  TextInputKeyPressEventData,
   TextInputProps,
   View,
   useWindowDimensions,
@@ -38,6 +40,11 @@ const Input: React.FC<Props> = ({
   onChangeText,
   value,
   placeholder,
+  onKeyPress,
+  onSubmitEditing,
+  returnKeyType,
+  blurOnSubmit,
+  multiline = true, // mantenemos multiline para autoaltura
   ...rest
 }) => {
   const { width, height } = useWindowDimensions();
@@ -52,7 +59,7 @@ const Input: React.FC<Props> = ({
 
   const isFocused = focusedOverride ?? focused;
   const textValue = value ?? uncontrolledText;
-  const displayText = (textValue?.length ?? 0) > 0 ? textValue : (placeholder ?? " "); // ← medimos placeholder si no hay texto
+  const displayText = (textValue?.length ?? 0) > 0 ? textValue : (placeholder ?? " ");
 
   const dims = useMemo(() => {
     const minSide = Math.min(baseFrame.width, baseFrame.height);
@@ -100,9 +107,56 @@ const Input: React.FC<Props> = ({
     [dims.fontSize, dims.lineH]
   );
 
+  // ====== Helpers de commit ======
+  // Ajuste dentro del Input.tsx
+  const commit = (raw: string) => {
+    // Evita newlines finales
+    const next = raw.replace(/[\r\n]+$/, "").trim();
+
+    // Si está vacío, consideramos que no hay valor
+    const finalValue = next.length === 0 ? null : next;
+
+    if (value === undefined && (finalValue ?? "") !== uncontrolledText) {
+      setUncontrolledText(finalValue ?? "");
+    }
+
+    onChangeText?.(finalValue as any); // ahora puede ser string o null
+  };
+
+  const handleChangeText = (t: string) => {
+    if (value === undefined) setUncontrolledText(t);
+    // seguimos notificando en cada cambio (si tu parent quiere live-update)
+    onChangeText?.(t);
+  };
+
+  const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+    // Llama también al onKeyPress del caller si lo pasó
+    onKeyPress?.(e);
+    if (e.nativeEvent.key === "Enter") {
+      // En web podríamos evitar salto; en nativo RN no hay preventDefault para TextInput
+      if (Platform.OS === "web") {
+        // @ts-ignore
+        e.preventDefault?.();
+      }
+      commit(textValue ?? "");
+    }
+  };
+
+  const handleSubmitEditing = () => {
+    // iOS/Android disparan esto si blurOnSubmit=true (incluso con multiline en versiones recientes)
+    onSubmitEditing?.({} as any);
+    commit(textValue ?? "");
+  };
+
+  const handleBlur = (ev: any) => {
+    setFocused(false);
+    // Commit on blur
+    commit(textValue ?? "");
+    onBlur?.(ev);
+  };
+
   const Measure = (
     <View
-      // fuera de pantalla y sin interacción
       style={{
         position: "absolute",
         left: -9999,
@@ -111,7 +165,6 @@ const Input: React.FC<Props> = ({
         opacity: 0,
         pointerEvents: "none",
       }}
-      // Forzamos remedir si cambia ancho o contenido
       key={`${innerWidth}-${displayText.length}-${dims.fontSize}-${dims.lineH}`}
     >
       <Text
@@ -119,7 +172,7 @@ const Input: React.FC<Props> = ({
         onLayout={(ev) => {
           const h = ev.nativeEvent.layout.height;
           if (h > 0) {
-            const fix = Platform.OS === "android" ? 1 : 0; // evita px residuales en Android
+            const fix = Platform.OS === "android" ? 1 : 0;
             setMeasuredHeight(Math.max(dims.lineH, Math.ceil(h) - fix));
           } else {
             setMeasuredHeight(dims.lineH);
@@ -136,11 +189,6 @@ const Input: React.FC<Props> = ({
       </Text>
     </View>
   );
-
-  const handleChangeText = (t: string) => {
-    if (value === undefined) setUncontrolledText(t);
-    onChangeText?.(t);
-  };
 
   return (
     <View style={{ width: "100%" }}>
@@ -164,7 +212,7 @@ const Input: React.FC<Props> = ({
           allowFontScaling={false}
           {...rest}
           editable={editable}
-          multiline
+          multiline={multiline}
           scrollEnabled={false}
           value={textValue}
           onChangeText={handleChangeText}
@@ -172,10 +220,12 @@ const Input: React.FC<Props> = ({
             setFocused(true);
             onFocus?.(e);
           }}
-          onBlur={(e) => {
-            setFocused(false);
-            onBlur?.(e);
-          }}
+          onBlur={handleBlur}
+          onKeyPress={handleKeyPress}
+          onSubmitEditing={handleSubmitEditing}
+          // Para garantizar onSubmitEditing en iOS/Android con multiline
+          blurOnSubmit={blurOnSubmit ?? true}
+          returnKeyType={returnKeyType ?? "done"}
           style={[
             {
               ...textStyleBase,

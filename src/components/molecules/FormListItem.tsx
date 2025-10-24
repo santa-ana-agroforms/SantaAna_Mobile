@@ -359,9 +359,9 @@ const FormListItem: React.FC<Props> = ({
             <Badge label={`Borradores ${draftCount}`} fg="#1E51B8" bg="#E8F0FF" />
           ) : null}
           {readyCount > 0 ? (
-            <Badge label={`En revisión ${readyCount}`} fg="#8A5A00" bg="#FFF4D6" />
+            <Badge label={`En progreso ${readyCount}`} fg="#8A5A00" bg="#FFF4D6" />
           ) : (
-            <Badge label="En revisión 0" fg="#666" bg="#F0F0F0" />
+            <Badge label="En progreso 0" fg="#666" bg="#F0F0F0" />
           )}
           {submittedCount > 0 ? (
             <Badge label={`Enviados ${submittedCount}`} fg="#1E7D2B" bg="#EAF7EA" />
