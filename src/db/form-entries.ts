@@ -198,3 +198,41 @@ export const updateCursor = async (local_id: string, pageIndex: number) => {
     local_id,
   ]);
 };
+
+// Recordatorio cuando hay ready_to_submit viejos (basado en el más antiguo)
+// Dedup: máximo 1 noti por día (key: noti.ready.<YYYY-MM-DD>)
+export const findReadyToSubmitReminder = async (
+  thresholdDays = 2
+): Promise<{ title: string; body: string; count: number; oldestDays: number } | null> => {
+  await ensureFormEntriesTables();
+  await ensureMigrated();
+  const db = await getDb();
+
+  const [row] = await db.getAllAsync<{ c: number; oldest: string | null }>(`
+    SELECT COUNT(*) AS c, MIN(filled_at_local) AS oldest
+      FROM form_entries
+     WHERE status = 'ready_to_submit'
+  `);
+
+  const count = Number(row?.c ?? 0);
+  if (!count || !row?.oldest) return null;
+
+  const oldest = new Date(row.oldest);
+  const ageDays = Math.floor((Date.now() - oldest.getTime()) / 86400000);
+  if (ageDays < thresholdDays) return null;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const kvKey = `noti.ready.${today}`;
+  const seen = await db.getAllAsync<{ v: string }>(`SELECT v FROM kv WHERE k = ? LIMIT 1`, [kvKey]);
+  if (seen.length) return null;
+
+  await db.runAsync(`INSERT OR REPLACE INTO kv (k, v) VALUES (?, ?)`, [kvKey, String(Date.now())]);
+
+  const title = "Tienes formularios por enviar";
+  const body =
+    count === 1
+      ? `Tienes 1 formulario listo para enviar desde hace ${ageDays} día${ageDays > 1 ? "s" : ""}.`
+      : `Tienes ${count} formularios listos para enviar; el más antiguo tiene ${ageDays} días.`;
+
+  return { title, body, count, oldestDays: ageDays };
+};

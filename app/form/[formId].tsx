@@ -219,6 +219,7 @@ const FormRoute: React.FC = () => {
 
         const serverForm = await DB.selectFormFromGroupedById(formId as string);
         if (serverForm) {
+          console.log("Cargando form desde server:", JSON.stringify(serverForm, null, 2));
           const fixedSessionForm: FormJSON = {
             id_formulario: serverForm.id_formulario,
             nombre: serverForm.nombre,

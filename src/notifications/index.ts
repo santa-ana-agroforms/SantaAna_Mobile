@@ -13,6 +13,16 @@ Notifications.setNotificationHandler({
   }),
 });
 
+export const notifyNow = async (title: string, body?: string) => {
+  try {
+    await ensureNotificationPermissionsAsync();
+  } catch {}
+  return Notifications.scheduleNotificationAsync({
+    content: { title, body, sound: true },
+    trigger: null, // inmediato
+  });
+};
+
 export const ensureNotificationPermissionsAsync = async (): Promise<boolean> => {
   // ANDROID 13+: crear canal ANTES para que salga el prompt del SO
   if (Platform.OS === "android") {
