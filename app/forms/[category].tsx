@@ -7,11 +7,15 @@ import { DB } from "@/db/sqlite";
 import { useFocusEffect } from "@react-navigation/native"; // ⬅️ NUEVO
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { InteractionManager, View } from "react-native";
+import { Alert, InteractionManager, View } from "react-native";
 
 // NEW: selector + hook de estado visual
+import { sendFormEntry } from "@/api/client";
 import InstanceSelector from "@/components/molecules/InstanceSelector";
+import { getJSONForm, initSessionFromSaved, setStatus } from "@/forms/state/formSessionSlice";
 import { useInstanceSelectorState } from "@/forms/state/useInstanceSelectorState";
+import { useAppDispatch } from "@/store/hooks";
+import { isOnline } from "@/utils/network";
 
 /** -----------------------------------------
  * Tipos locales
@@ -132,9 +136,13 @@ const FormsByCategoryScreen: React.FC = () => {
 
   const { visible, entries, allowNew, periodLabel, openForForm, close, computeDecorators } =
     useInstanceSelectorState();
-  const [selectedForm, setSelectedForm] = useState<{ formId: string; versionId: string } | null>(
-    null
-  );
+  const [selectedForm, setSelectedForm] = useState<{
+    formId: string;
+    versionId: string;
+    formName: string; // ← NEW
+  } | null>(null);
+
+  const dispatch = useAppDispatch();
 
   const [countsByForm, setCountsByForm] = useState<
     Record<
@@ -215,6 +223,41 @@ const FormsByCategoryScreen: React.FC = () => {
         active = false;
       };
     }, [refreshScreen])
+  );
+
+  const handleSubmitFromSelector = useCallback(
+    async (entry: { id: string }) => {
+      try {
+        if (!(await isOnline())) {
+          Alert.alert("Sin conexión", "Conéctate a Internet para enviar el formulario.");
+          return;
+        }
+
+        // Carga sesión desde el registro guardado
+        await dispatch(initSessionFromSaved({ local_id: entry.id })).unwrap();
+
+        // (Opcional) podrías verificar aquí que el estado esté listo para enviar en tu store
+
+        // Construye JSON y envía
+        const json = await dispatch(getJSONForm({ sessionId: entry.id })).unwrap();
+        if (!json) {
+          Alert.alert("Error", "No se pudo preparar el formulario para envío.");
+          return;
+        }
+
+        const resp = await sendFormEntry(json);
+        console.log("[selector] server response:", resp);
+
+        // Marca como synced localmente
+        await dispatch(setStatus({ sessionId: entry.id, status: "synced" }));
+
+        Alert.alert("Éxito", "¡Formulario enviado!");
+        await refreshScreen(); // ya lo tienes definido
+      } catch (e: any) {
+        Alert.alert("Error", e?.message ?? "No se pudo enviar el formulario.");
+      }
+    },
+    [dispatch, refreshScreen]
   );
 
   const headerTitle = String(category);
@@ -301,14 +344,14 @@ const FormsByCategoryScreen: React.FC = () => {
                     availableUntil={disponibleHasta}
                     onPreload={() => requestPreloadWithDebounce(formId, versionId, 400)}
                     onPress={() => {
-                      setSelectedForm({ formId, versionId });
+                      setSelectedForm({ formId, versionId, formName: f.nombre }); // ← NEW
                       openForForm(formId);
                     }}
                     referenceFrame={referenceFrame}
                     contentFrame={contentFrame}
                     periodLabel={deco.periodLabel}
-                    draftCount={deco.draftCount ?? 0}
-                    readyCount={deco.readyCount ?? 0}
+                    // draftCount={deco.draftCount ?? 0}
+                    readyCount={(deco.draftCount ?? 0) + (deco.readyCount ?? 0)} // En revisión (unificado)
                     submittedCount={deco.submittedCount ?? 0}
                   />
                 );
@@ -318,6 +361,7 @@ const FormsByCategoryScreen: React.FC = () => {
             <InstanceSelector
               visible={visible}
               periodLabel={periodLabel}
+              formName={selectedForm?.formName ?? ""}
               entries={entries}
               allowNew={allowNew}
               onNew={() => {
@@ -328,6 +372,7 @@ const FormsByCategoryScreen: React.FC = () => {
                 if (!selectedForm) return;
                 goOpen(selectedForm.formId, selectedForm.versionId, entry.id, mode);
               }}
+              onSubmit={handleSubmitFromSelector}
               onClose={close}
               referenceFrame={referenceFrame}
               contentFrame={contentFrame}

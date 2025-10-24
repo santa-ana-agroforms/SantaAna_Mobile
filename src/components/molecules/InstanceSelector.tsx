@@ -5,7 +5,9 @@ import {
   Animated,
   Easing,
   FlatList,
+  LayoutChangeEvent,
   Modal,
+  PanResponder,
   Pressable,
   Text,
   TouchableOpacity,
@@ -30,8 +32,10 @@ export type InstanceSelectorProps = {
   allowNew: boolean;
   onNew: () => void;
   onOpen: (entry: EntryPreview, mode: "edit" | "review" | "view") => void;
-  onClose: () => void; // lo llamamos tras animar el cierre
+  onSubmit: (entry: EntryPreview) => void; // envío directo si está listo
+  onClose: () => void;
   referenceFrame: Frame;
+  formName: string;
   contentFrame: Frame;
 };
 
@@ -48,21 +52,14 @@ const formatDateTime = (ts: number) => {
   }
 };
 
-const StatusPill: React.FC<{ status: EntryStatus; size?: number }> = ({ status, size = 12 }) => {
-  const label =
-    status === "in_progress" ? "Borrador" : status === "ready_for_submit" ? "Listo" : "Enviado";
-  const bg =
-    status === "in_progress"
-      ? "#E9F0FF"
-      : status === "ready_for_submit"
-        ? colors.warningBg
-        : "#EAF7EA";
-  const fg =
-    status === "in_progress"
-      ? colors.textSecondary
-      : status === "ready_for_submit"
-        ? colors.textTertiary
-        : colors.primary600;
+/** Solo 2 estados de UI */
+type UIStatus = "reviewable" | "submitted";
+const toUIStatus = (s: EntryStatus): UIStatus => (s === "submitted" ? "submitted" : "reviewable");
+
+const StatusPill: React.FC<{ ui: UIStatus; size?: number }> = ({ ui, size = 12 }) => {
+  const label = ui === "reviewable" ? "En revisión" : "Enviado";
+  const bg = ui === "reviewable" ? colors.warningBg : "#EAF7EA";
+  const fg = ui === "reviewable" ? colors.textTertiary : colors.primary600;
 
   return (
     <View
@@ -80,35 +77,197 @@ const StatusPill: React.FC<{ status: EntryStatus; size?: number }> = ({ status, 
   );
 };
 
-const Chip: React.FC<{ label: string; active?: boolean; onPress?: () => void; size: number }> = ({
-  label,
-  active,
-  onPress,
-  size,
-}) => (
-  <TouchableOpacity
-    onPress={onPress}
-    style={{
-      paddingHorizontal: size * 0.9,
-      paddingVertical: size * 0.5,
-      borderRadius: size * 0.75,
-      backgroundColor: active ? colors.primary600 : colors.neutral0,
-      borderWidth: 1,
-      borderColor: active ? colors.primary600 : colors.border,
-    }}
-  >
-    <Text style={{ color: active ? colors.neutral0 : colors.textPrimary, fontWeight: "700" }}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
-
 const Divider: React.FC<{ inset?: boolean; color?: string; opacity?: number }> = ({
   inset = false,
   color = colors.border,
   opacity = 0.6,
 }) => <View style={{ height: 1, backgroundColor: color, marginLeft: inset ? 12 : 0, opacity }} />;
 
+/* =========================================================
+ * SegmentedPill — control de pestañas con thumb draggable
+ * Todo escalado con minSide.
+ * =======================================================*/
+type Segment = { key: string; label: string; count?: number };
+type SegmentedPillProps = {
+  minSide: number;
+  segments: Segment[];
+  valueKey: string; // key activa
+  onChange: (key: string) => void;
+};
+
+const SegmentedPill: React.FC<SegmentedPillProps> = ({ minSide, segments, valueKey, onChange }) => {
+  const containerPad = clamp(minSide * 0.008, 2, 6);
+  const height = clamp(minSide * 0.1, 44, 56);
+  const radius = clamp(minSide * 0.02, 10, 14);
+  const thumbRadius = clamp(minSide * 0.018, 8, 12);
+  const badgeH = clamp(minSide * 0.06, 22, 28);
+  const badgePadH = clamp(minSide * 0.014, 8, 12);
+  const labelFs = clamp(minSide * 0.04, 13, 16);
+
+  const [width, setWidth] = useState(0);
+  const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+
+  const activeIndex = Math.max(
+    0,
+    segments.findIndex((s) => s.key === valueKey)
+  );
+
+  const x = useRef(new Animated.Value(activeIndex)).current;
+  useEffect(() => {
+    Animated.spring(x, {
+      toValue: activeIndex,
+      useNativeDriver: true,
+      stiffness: 260,
+      damping: 26,
+      mass: 0.9,
+    }).start();
+  }, [activeIndex, x]);
+
+  const padding = containerPad;
+  const innerWidth = Math.max(width - padding * 2, 0);
+  const segWidth = segments.length > 0 ? innerWidth / segments.length : 0;
+
+  // Drag con PanResponder
+  const startRef = useRef(0);
+  const pan = useRef(new Animated.Value(0)).current;
+  const dragging = useRef(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        dragging.current = true;
+        pan.setValue(0);
+        startRef.current = (x as any)._value ?? activeIndex;
+      },
+      onPanResponderMove: (_, g) => {
+        if (!dragging.current) return;
+        const delta = g.dx / (segWidth || 1);
+        const next = clamp(startRef.current + delta, 0, segments.length - 1);
+        x.setValue(next);
+      },
+      onPanResponderRelease: () => {
+        dragging.current = false;
+        const idx = Math.round((x as any)._value ?? activeIndex);
+        const nextKey = segments[clamp(idx, 0, segments.length - 1)].key;
+        onChange(nextKey);
+      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderTerminate: () => {
+        dragging.current = false;
+        const idx = Math.round((x as any)._value ?? activeIndex);
+        const nextKey = segments[clamp(idx, 0, segments.length - 1)].key;
+        onChange(nextKey);
+      },
+    })
+  ).current;
+
+  const translateX = x.interpolate({
+    inputRange: [0, segments.length - 1 || 1],
+    outputRange: [0, Math.max(segWidth * (segments.length - 1), 0)],
+  });
+
+  const pressTab = (idx: number) => {
+    const key = segments[idx].key;
+    onChange(key);
+  };
+
+  return (
+    <View
+      onLayout={onLayout}
+      style={{
+        height,
+        borderRadius: radius,
+        backgroundColor: colors.neutral0,
+        borderWidth: 1,
+        borderColor: colors.border,
+        padding,
+        overflow: "hidden",
+        justifyContent: "center",
+      }}
+      accessibilityRole="tablist"
+    >
+      {/* thumb */}
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={{
+          position: "absolute",
+          left: padding,
+          width: segWidth,
+          height: height - padding * 2,
+          borderRadius: thumbRadius,
+          backgroundColor: colors.primary600,
+          transform: [{ translateX }],
+        }}
+        accessibilityLabel="Control deslizante"
+        accessibilityHint="Arrastra para cambiar de pestaña"
+      />
+
+      {/* tabs */}
+      <View style={{ flexDirection: "row", paddingHorizontal: padding }}>
+        {segments.map((s, i) => {
+          const isActive = valueKey === s.key;
+          return (
+            <Pressable
+              key={s.key}
+              onPress={() => pressTab(i)}
+              style={{
+                width: segWidth,
+                height: height - padding * 2,
+                alignItems: "center",
+                justifyContent: "center",
+                flexDirection: "row",
+                gap: clamp(minSide * 0.01, 4, 8),
+              }}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text
+                style={{
+                  fontWeight: "800",
+                  fontSize: labelFs,
+                  color: isActive ? colors.neutral0 : colors.textPrimary,
+                }}
+                numberOfLines={1}
+              >
+                {s.label}
+              </Text>
+
+              <View
+                style={{
+                  minWidth: badgeH,
+                  height: badgeH,
+                  paddingHorizontal: badgePadH,
+                  borderRadius: clamp(minSide * 0.016, 8, 12),
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: isActive ? "rgba(255,255,255,0.25)" : "#EFEFEF",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Text
+                  style={{
+                    fontWeight: "800",
+                    fontSize: clamp(minSide * 0.032, 11, 13),
+                    color: isActive ? colors.neutral0 : colors.textPrimary,
+                  }}
+                >
+                  {s.count}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+};
+
+/* =========================================================
+ * InstanceSelector
+ * =======================================================*/
 const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   visible,
   periodLabel,
@@ -116,25 +275,25 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   allowNew,
   onNew,
   onOpen,
+  onSubmit,
   onClose,
+  formName,
   referenceFrame,
-  contentFrame,
 }) => {
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
 
-  // responsive
-  const pad = minSide * 0.035;
-  const gap = clamp(contentFrame.width * 0.032, 8, 18);
+  // responsive escalado con minSide
+  const pad = clamp(minSide * 0.035, 14, 24);
+  const gap = clamp(minSide * 0.028, 8, 18);
   const radius = clamp(minSide * 0.02, 12, 16);
   const titleSize = clamp(minSide * 0.042, 16, 22);
   const subtitleSize = clamp(minSide * 0.034, 13, 18);
-  const chipSize = clamp(minSide * 0.032, 12, 16);
   const cardPad = clamp(minSide * 0.02, 10, 16);
   const btnH = clamp(minSide * 0.064, 44, 56);
   const handleW = clamp(minSide * 0.14, 36, 56);
   const handleH = clamp(minSide * 0.012, 4, 6);
 
-  // animaciones
+  // animaciones modales
   const overlayA = useRef(new Animated.Value(0)).current;
   const sheetA = useRef(new Animated.Value(0)).current;
 
@@ -182,26 +341,34 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
     if (visible) playIn();
   }, [visible, playIn]);
 
-  // filtro
-  type FilterKey = "all" | EntryStatus;
-  const [filter, setFilter] = useState<FilterKey>("all");
+  /** --------- NUEVO SEGMENTED PILL --------- */
+  type FilterKey = "reviewable" | "submitted";
+  const [filter, setFilter] = useState<FilterKey>("reviewable");
 
-  const filtered = useMemo(() => {
-    if (filter === "all") return entries;
-    return entries.filter((e) => e.status === filter);
-  }, [entries, filter]);
-
+  /** Contadores combinados */
   const counts = useMemo(() => {
-    let inProgress = 0,
-      ready = 0,
-      submitted = 0;
+    let reviewable = 0;
+    let submitted = 0;
     for (const e of entries) {
-      if (e.status === "in_progress") inProgress++;
-      else if (e.status === "ready_for_submit") ready++;
-      else submitted++;
+      if (toUIStatus(e.status) === "reviewable") {
+        reviewable++;
+      } else {
+        submitted++;
+      }
     }
-    return { inProgress, ready, submitted, total: entries.length };
+    return { reviewable, submitted, total: entries.length };
   }, [entries]);
+
+  /** Lista filtrada por pestaña */
+  const filtered = useMemo(
+    () =>
+      entries.filter((e) =>
+        filter === "submitted"
+          ? toUIStatus(e.status) === "submitted"
+          : toUIStatus(e.status) === "reviewable"
+      ),
+    [entries, filter]
+  );
 
   const cardStyle = {
     padding: cardPad,
@@ -211,16 +378,11 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
     borderColor: colors.border,
   } as const;
 
-  // helpers UI
   const getDisplayName = (idx: number, item: EntryPreview) =>
     item.instanceName?.trim() || `Registro ${idx + 1}`;
 
-  const handleTapOpen = (item: EntryPreview, mode: "edit" | "review" | "view") => () => {
-    // cierra con animación y luego navega
-    playOut(() => onOpen(item, mode));
-  };
-
-  const handleTapNew = () => playOut(onNew);
+  // helpers
+  const openThen = (fn: () => void) => () => playOut(fn);
   const handleTapOverlay = () => playOut();
 
   return (
@@ -278,49 +440,20 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
           </View>
 
           {/* header */}
-          <View style={{ paddingHorizontal: pad, gap: 4, marginBottom: gap * 0.5 }}>
+          <View style={{ paddingHorizontal: pad, gap: 8, marginBottom: gap * 0.5 }}>
             <Text style={{ fontWeight: "800", fontSize: titleSize, color: colors.textPrimary }}>
-              Registros de {periodLabel}
+              Registros de {periodLabel} - {formName}
             </Text>
-            {/* <Text style={{ color: colors.textSecondary, fontSize: subtitleSize }}>
-              {counts.total} en total • {counts.inProgress} Borrador • {counts.ready} Listo •{" "}
-              {counts.submitted} Enviado
-            </Text> */}
-          </View>
 
-          {/* chips */}
-          <View
-            style={{
-              paddingHorizontal: pad,
-              flexDirection: "row",
-              gap,
-              marginBottom: gap * 0.5,
-              flexWrap: "wrap",
-            }}
-          >
-            <Chip
-              label="Todos"
-              active={filter === "all"}
-              onPress={() => setFilter("all")}
-              size={chipSize}
-            />
-            <Chip
-              label={`Borrador (${counts.inProgress})`}
-              active={filter === "in_progress"}
-              onPress={() => setFilter("in_progress")}
-              size={chipSize}
-            />
-            <Chip
-              label={`En revisión (${counts.ready})`}
-              active={filter === "ready_for_submit"}
-              onPress={() => setFilter("ready_for_submit")}
-              size={chipSize}
-            />
-            <Chip
-              label={`Enviado (${counts.submitted})`}
-              active={filter === "submitted"}
-              onPress={() => setFilter("submitted")}
-              size={chipSize}
+            {/* ===== NUEVO SegmentedPill (2 pestañas) ===== */}
+            <SegmentedPill
+              minSide={minSide}
+              valueKey={filter}
+              onChange={(key) => setFilter(key as FilterKey)}
+              segments={[
+                { key: "reviewable", label: "En revisión", count: counts.reviewable },
+                { key: "submitted", label: "Enviados", count: counts.submitted },
+              ]}
             />
           </View>
 
@@ -340,28 +473,31 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
               </View>
             )}
             renderItem={({ item, index }) => {
-              const primary =
-                item.status === "in_progress"
-                  ? {
-                      label: "Continuar",
-                      mode: "edit" as const,
-                      color: colors.primary600,
-                      bg: "#E9F6EA",
-                    }
-                  : item.status === "ready_for_submit"
-                    ? {
-                        label: "Revisar",
-                        mode: "review" as const,
-                        color: colors.textTertiary,
-                        bg: "#FFF7E2",
-                      }
-                    : {
-                        label: "Ver",
-                        mode: "view" as const,
-                        color: colors.textSecondary,
-                        bg: "#F3F3F3",
-                      };
-              const showSecondary = item.status === "ready_for_submit";
+              const ui = toUIStatus(item.status);
+
+              // Acción única por tarjeta
+              let label: string;
+              let handler: () => void;
+              let bg: string;
+              let fg: string;
+
+              if (ui === "submitted") {
+                label = "Ver";
+                handler = openThen(() => onOpen(item, "view"));
+                bg = "#F3F3F3";
+                fg = colors.textSecondary;
+              } else if (item.status === "ready_for_submit") {
+                label = "Enviar";
+                handler = openThen(() => onSubmit(item)); // envío directo
+                bg = "#E6F7EA";
+                fg = colors.primary600;
+              } else {
+                // in_progress → Continuar en modo review
+                label = "Continuar";
+                handler = openThen(() => onOpen(item, "review"));
+                bg = "#FFF7E2";
+                fg = colors.textTertiary;
+              }
 
               return (
                 <View style={cardStyle}>
@@ -390,7 +526,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                         {formatDateTime(item.updatedAt || item.createdAt)}
                       </Text>
                     </View>
-                    <StatusPill status={item.status} />
+                    <StatusPill ui={ui} size={clamp(minSide * 0.03, 10, 14)} />
                   </View>
 
                   <Divider inset />
@@ -405,36 +541,18 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                     }}
                   >
                     <TouchableOpacity
-                      onPress={handleTapOpen(item, primary.mode)}
+                      onPress={handler}
                       style={{
-                        paddingHorizontal: 14,
-                        paddingVertical: 10,
-                        borderRadius: 10,
-                        backgroundColor: primary.bg,
+                        paddingHorizontal: clamp(minSide * 0.035, 12, 16),
+                        paddingVertical: clamp(minSide * 0.025, 8, 12),
+                        borderRadius: clamp(minSide * 0.024, 8, 12),
+                        backgroundColor: bg,
                         borderWidth: 1,
                         borderColor: colors.border,
                       }}
                     >
-                      <Text style={{ fontWeight: "800", color: primary.color }}>
-                        {primary.label}
-                      </Text>
+                      <Text style={{ fontWeight: "800", color: fg }}>{label}</Text>
                     </TouchableOpacity>
-
-                    {showSecondary && (
-                      <TouchableOpacity
-                        onPress={handleTapOpen(item, "edit")}
-                        style={{
-                          paddingHorizontal: 14,
-                          paddingVertical: 10,
-                          borderRadius: 10,
-                          backgroundColor: "#E9F6EA",
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                        }}
-                      >
-                        <Text style={{ fontWeight: "700", color: colors.primary600 }}>Editar</Text>
-                      </TouchableOpacity>
-                    )}
                   </View>
                 </View>
               );
@@ -446,7 +564,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
           <View style={{ paddingHorizontal: pad, gap: 8 }}>
             {allowNew && (
               <TouchableOpacity
-                onPress={handleTapNew}
+                onPress={openThen(onNew)}
                 style={{
                   height: btnH,
                   borderRadius: 12,

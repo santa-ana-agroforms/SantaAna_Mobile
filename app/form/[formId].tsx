@@ -355,9 +355,9 @@ const FormRoute: React.FC = () => {
   };
 
   // Lógica de botón principal (label/habilitación/handler)
-  const disabledPrimary = isReviewMode ? !(canSendForReview && isLastPage) : !canSendForReview;
-  const primaryLabel = isReviewMode ? "Enviar" : "Enviar a revisión";
-  const onPrimary = isReviewMode ? sendOne : handleSendForReview;
+  // const disabledPrimary = isReviewMode ? !(canSendForReview && isLastPage) : !canSendForReview;
+  // const primaryLabel = isReviewMode ? "Enviar" : "Enviar a revisión";
+  // const onPrimary = isReviewMode ? sendOne : handleSendForReview;
 
   // console.log(
   //   "[UI] reviewMode:",
@@ -369,6 +369,14 @@ const FormRoute: React.FC = () => {
   //   "disabledPrimary:",
   //   isReviewMode ? !(canSendForReview && isLastPage) : !canSendForReview
   // );
+
+  const isViewMode = mode === "view";
+
+  // Considera enviados/sincronizados como solo lectura
+  const isSubmittedLike = ["synced", "submitted"].includes(currentSession?.status ?? "");
+
+  // Flag final de solo-lectura
+  const isReadonly = isViewMode || isSubmittedLike;
 
   return (
     <PageScaffold
@@ -390,15 +398,17 @@ const FormRoute: React.FC = () => {
             page={currentPage}
             onPageChange={handlePageChange}
           />
-          <FormStickyActions
-            referenceFrame={referenceFrame}
-            contentFrame={contentFrame}
-            disabledSend={disabledPrimary}
-            loading={footerLoading}
-            infoMessage={footerInfo}
-            onSendForReview={onPrimary}
-            sendLabel={primaryLabel}
-          />
+          {!isReadonly && (
+            <FormStickyActions
+              referenceFrame={referenceFrame}
+              contentFrame={contentFrame}
+              disabledSend={isReviewMode ? !(canSendForReview && isLastPage) : !canSendForReview}
+              loading={footerLoading}
+              infoMessage={footerInfo}
+              onSendForReview={isReviewMode ? sendOne : handleSendForReview}
+              sendLabel={isReviewMode ? "Enviar" : "Enviar a revisión"}
+            />
+          )}
         </View>
       )}
     </PageScaffold>

@@ -8,7 +8,7 @@ import Button from "@/components/atoms/Button";
 import SkeletonLoader from "@/components/atoms/SkeletonLoader";
 import CategoryCard from "@/components/molecules/CategoryCard";
 import PageScaffold from "@/components/templates/PageScaffold";
-import { findReadyToSubmitReminder, listEntriesSummary } from "@/db/form-entries";
+import { findReadyToSubmitReminder } from "@/db/form-entries";
 import { DB } from "@/db/sqlite";
 import { notifyNow } from "@/notifications";
 import { onActiveWithInternet } from "@/utils/appstate";
@@ -37,41 +37,43 @@ const Home: React.FC = () => {
   }, []);
 
   // Revalidación remota segura
+  // Revalidación remota segura
   const revalidateFromServer = useCallback(async () => {
     console.log("[home/revalidate] iniciando revalidación desde server...");
     if (isRefreshingRef.current) return;
 
     const online = await isOnline();
     if (!online) {
-      // registra un intento para el próximo reconnect (una sola vez)
       onReconnectOnce(() => revalidateFromServer());
       setLoadingRemote(false);
       return;
     }
 
     isRefreshingRef.current = true;
+
+    // 🔥 Enciende el skeleton inmediatamente (antes de cualquier await)
     setLoadingRemote(true);
+
     console.log("\n\n[home/revalidate] online, revalidando...");
+
     try {
-      await fetchAndSaveForms(); // /forms/tree -> SQLite
+      await fetchAndSaveForms(); // /forms/tree -> SQLite (sin callback)
       console.log("\n\n[home/revalidate] forms revalidados");
-      await pullAndCacheGroups(); // /groups     -> SQLite (si aplica)
-      await syncAllDatasets();
+      await pullAndCacheGroups(); // /groups -> SQLite (si aplica)
+      await syncAllDatasets(); // otros datasets
     } catch (e: any) {
       console.log("[home/revalidate] fallo:", e?.message ?? e);
     } finally {
       try {
         await loadLocal(); // pinta lo último que quedó en DB
       } finally {
-        setLoadingRemote(false);
+        setLoadingRemote(false); // ✅ apaga al final de TODO el pipeline
         isRefreshingRef.current = false;
       }
     }
 
-    const reminder = await findReadyToSubmitReminder(0.04); // o 3 días
-    if (reminder) {
-      await notifyNow(reminder.title, reminder.body);
-    }
+    const reminder = await findReadyToSubmitReminder(0.04);
+    if (reminder) await notifyNow(reminder.title, reminder.body);
   }, [loadLocal]);
 
   // 1) Montaje: asegúrate de marcar initialized SIEMPRE
@@ -149,10 +151,13 @@ const Home: React.FC = () => {
           );
         }
 
-        // 2) Aún no hay datos, pero estoy trayendo del server → muestra skeleton (no “vacío”)
-        if (loadingRemote && data.length === 0) {
-          const skeletonRows = 3;
-          const skeletonItems = Array.from({ length: skeletonRows * columns });
+        // 2) MOSTRAR SKELETON TAMBIÉN CUANDO YA HAY DATOS
+        if (loadingRemote) {
+          // Si ya hay datos, igual mostramos un skeleton “del mismo tamaño”
+          const minRows = 3;
+          const skeletonCount = Math.max(data.length, minRows * columns);
+          const skeletonItems = Array.from({ length: skeletonCount });
+
           return (
             <>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
@@ -164,6 +169,7 @@ const Home: React.FC = () => {
                   </View>
                 ))}
               </View>
+              {/* (Opcional) botón skeleton mientras refresca */}
               <View style={{ alignItems: "flex-end", marginTop: gap }}>
                 <SkeletonLoader preset="button" frame={referenceFrame} width="40%" />
               </View>
@@ -171,6 +177,7 @@ const Home: React.FC = () => {
           );
         }
 
+        // 3) Contenido normal
         return (
           <>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
@@ -195,28 +202,6 @@ const Home: React.FC = () => {
             <View style={{ alignItems: "flex-end", marginTop: gap }}>
               <Button title="Cerrar sesión (TEMP)" size="sm" onPress={handleLogout} />
             </View>
-            {/* 
-            <View style={{ alignItems: "flex-end", marginTop: gap }}>
-              <Button
-                title="Guardados"
-                size="sm"
-                onPress={async () => {
-                  const entries = await listEntriesSummary();
-                  console.log("Entries:", entries);
-                  router.push("/form/saved");
-                }}
-              />
-            </View>
-            <View style={{ alignItems: "flex-end", marginTop: gap }}>
-              <Button
-                title="Pruebas"
-                size="sm"
-                onPress={async () => {
-                  const entries = await getDatasetRowsLocal("f96d3af1-ec34-4209-8c2c-d806306a12fe");
-                  console.log("Dataset rows:", entries);
-                }}
-              />
-            </View> */}
           </>
         );
       }}

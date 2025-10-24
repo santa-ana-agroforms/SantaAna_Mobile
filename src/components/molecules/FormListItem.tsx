@@ -357,9 +357,7 @@ const FormListItem: React.FC<Props> = ({
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: badgeGap * 1.8 }}>
           {draftCount > 0 ? (
             <Badge label={`Borradores ${draftCount}`} fg="#1E51B8" bg="#E8F0FF" />
-          ) : (
-            <Badge label="Borradores 0" fg="#666" bg="#F0F0F0" />
-          )}
+          ) : null}
           {readyCount > 0 ? (
             <Badge label={`En revisión ${readyCount}`} fg="#8A5A00" bg="#FFF4D6" />
           ) : (
@@ -370,32 +368,7 @@ const FormListItem: React.FC<Props> = ({
           ) : (
             <Badge label="Enviados 0" fg="#666" bg="#F0F0F0" />
           )}
-          {/* {total === 0 && (
-            <>
-              <Badge label="Borradores 0" fg="#666" bg="#F0F0F0" />
-              <Badge label="En revisión 0" fg="#666" bg="#F0F0F0" />
-              <Badge label="Enviados 0" fg="#666" bg="#F0F0F0" />
-            </>
-          )} */}
         </View>
-
-        {/* Período y cupo */}
-        {/* <View
-          style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
-        >
-          <Body frame={referenceFrame} color="secondary" size="xs">
-            {periodLabel
-              ? `Período: ${periodLabel}`
-              : availableUntil
-                ? `Disponible hasta el ${formatFechaCorta(availableUntil)} 🕒`
-                : ""}
-          </Body>
-
-          <Body frame={referenceFrame} color="secondary" size="xs" style={{ fontWeight: "700" }}>
-            {limitText}
-            {reachedLimit ? " • Límite alcanzado" : ""}
-          </Body>
-        </View> */}
       </View>
 
       {/* Icono decorativo */}
