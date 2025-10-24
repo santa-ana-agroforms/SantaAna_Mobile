@@ -1,11 +1,5 @@
 // src/api/forms.ts
-import {
-  DB,
-  planAvailabilityNotifications,
-  ServerCategoryGroup,
-  tryMarkNotificationSent,
-} from "@/db/sqlite";
-import { notifyNow } from "@/notifications";
+import { DB, ServerCategoryGroup } from "@/db/sqlite";
 import { isOnline } from "@/utils/network";
 import { makeClient } from "../client";
 import { FormCategoryGroup, FormTree } from "./types";
@@ -56,14 +50,6 @@ export const fetchAndSaveForms = async (
 
     // Reemplazo atómico + poda exacta
     await DB.replaceFormsSnapshot(newForms as ServerCategoryGroup[]);
-
-    const plans = await planAvailabilityNotifications();
-    for (const p of plans) {
-      const ok = await tryMarkNotificationSent(p.kvKey);
-      if (ok) {
-        await notifyNow(p.title, p.body);
-      }
-    }
 
     let formsCount = 0;
     for (const g of newForms) formsCount += g.formularios?.length ?? 0;
