@@ -257,8 +257,9 @@ const FieldRenderer: React.FC<Props> = ({
       frame={referenceFrame}
       label={label}
       required={campo.requerido}
-      value={value ?? ""}
-      onChangeText={(t) => onCommit(t)}
+      value={value ?? ""} // para visualizar; el commit mandará null si queda vacío
+      onChangeText={(t) => onCommit(t)} // live-update (opcional)
+      onCommitValue={(finalVal) => onCommit(finalVal)} // ← AQUÍ llega string | null
       placeholder={campo.ayuda ? campo.ayuda : "Escribe aquí…"}
     />
   );
@@ -273,6 +274,11 @@ const FieldRenderer: React.FC<Props> = ({
       onChangeText={(t) => {
         const sanitized = t.replace(/[^0-9.,-]/g, "");
         onCommit(sanitized);
+      }}
+      onCommitValue={(finalVal) => {
+        // Si quedó vacío, manda null; si no, mantiene el string sanitizado
+        const v = (finalVal ?? "").toString().trim();
+        onCommit(v.length ? v : null);
       }}
       placeholder={campo.ayuda ? campo.ayuda : "0"}
     />

@@ -179,9 +179,6 @@ const FormRoute: React.FC = () => {
     }
   }, [canSendForReview, dispatch, saveNow, sessionId, showSuccessThenBack]);
 
-  // ⚙️ Auto-gestión del estado:
-  // - Si cumple requeridos => ready_to_submit
-  // - Si deja algún requerido vacío después => in_progress
   useEffect(() => {
     if (!sessionId) return;
 
@@ -192,19 +189,29 @@ const FormRoute: React.FC = () => {
     if (canSendForReview) {
       if (st !== "ready_to_submit") {
         dispatch(setStatus({ sessionId, status: "ready_to_submit" }));
-        setFooterInfo({ type: "info", text: "Formulario listo para enviar." });
       }
+      // Muestra el banner y lo auto-cierra
+      setFooterInfo({ type: "info", text: "Formulario listo para enviar." });
+      const t = setTimeout(() => setFooterInfo(null), 2000);
+      return () => clearTimeout(t);
     } else {
+      // Si antes estaba listo y ahora no, vuelve a pending y (opcional) muestra mensaje corto
       if (st === "ready_to_submit") {
-        // 🔻 Volver a in_progress si un requerido se vacía
         dispatch(setStatus({ sessionId, status: "pending" }));
-        setFooterInfo({
-          type: "info",
-          text: "Hay campos requeridos vacíos. Continúa completando el formulario.",
-        });
+        setFooterInfo({ type: "info", text: "Hay campos requeridos vacíos." });
+        const t = setTimeout(() => setFooterInfo(null), 2000);
+        return () => clearTimeout(t);
       }
     }
   }, [canSendForReview, currentSession?.status, dispatch, sessionId]);
+
+  // 2) Si por cualquier razón disabledSend vuelve a true,
+  //    limpia banners informativos persistentes (no toca error/success)
+  useEffect(() => {
+    if (!canSendForReview) {
+      setFooterInfo((prev) => (prev?.type === "info" ? null : prev));
+    }
+  }, [canSendForReview]);
 
   // Cargar form (desde saved o server)
   useEffect(() => {

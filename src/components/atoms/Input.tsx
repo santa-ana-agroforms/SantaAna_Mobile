@@ -23,6 +23,8 @@ type Props = TextInputProps & {
   error?: string;
   frame?: Frame;
   focusedOverride?: boolean;
+  /** NUEVO: se dispara en Enter / submit / blur con el valor normalizado ("" -> null) */
+  onCommitValue?: (v: string | null) => void;
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -38,6 +40,7 @@ const Input: React.FC<Props> = ({
   onFocus,
   onBlur,
   onChangeText,
+  onCommitValue, // ← NUEVO
   value,
   placeholder,
   onKeyPress,
@@ -108,32 +111,33 @@ const Input: React.FC<Props> = ({
   );
 
   // ====== Helpers de commit ======
-  // Ajuste dentro del Input.tsx
   const commit = (raw: string) => {
-    // Evita newlines finales
-    const next = raw.replace(/[\r\n]+$/, "").trim();
+    // Evita newlines finales cuando se confirma con Enter
+    const stripped = raw.replace(/[\r\n]+$/, "");
+    // Normaliza "" -> null (para que los requeridos no cuenten como llenos)
+    const normalized: string | null = stripped.trim().length ? stripped : null;
 
-    // Si está vacío, consideramos que no hay valor
-    const finalValue = next.length === 0 ? null : next;
-
-    if (value === undefined && (finalValue ?? "") !== uncontrolledText) {
-      setUncontrolledText(finalValue ?? "");
+    // Refleja en estado no-controlado si aplica
+    if (value === undefined) {
+      setUncontrolledText(normalized ?? "");
     }
 
-    onChangeText?.(finalValue as any); // ahora puede ser string o null
+    // Notifica a quien le interese el commit “definitivo”
+    onCommitValue?.(normalized);
+
+    // Si el caller además quiere onSubmitEditing clásico, se respeta
+    // (lo disparamos aparte en handleSubmitEditing)
   };
 
   const handleChangeText = (t: string) => {
     if (value === undefined) setUncontrolledText(t);
-    // seguimos notificando en cada cambio (si tu parent quiere live-update)
+    // live-update para vista previa, etc.
     onChangeText?.(t);
   };
 
   const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-    // Llama también al onKeyPress del caller si lo pasó
     onKeyPress?.(e);
     if (e.nativeEvent.key === "Enter") {
-      // En web podríamos evitar salto; en nativo RN no hay preventDefault para TextInput
       if (Platform.OS === "web") {
         // @ts-ignore
         e.preventDefault?.();
@@ -143,14 +147,12 @@ const Input: React.FC<Props> = ({
   };
 
   const handleSubmitEditing = () => {
-    // iOS/Android disparan esto si blurOnSubmit=true (incluso con multiline en versiones recientes)
     onSubmitEditing?.({} as any);
     commit(textValue ?? "");
   };
 
   const handleBlur = (ev: any) => {
     setFocused(false);
-    // Commit on blur
     commit(textValue ?? "");
     onBlur?.(ev);
   };
@@ -223,7 +225,6 @@ const Input: React.FC<Props> = ({
           onBlur={handleBlur}
           onKeyPress={handleKeyPress}
           onSubmitEditing={handleSubmitEditing}
-          // Para garantizar onSubmitEditing en iOS/Android con multiline
           blurOnSubmit={blurOnSubmit ?? true}
           returnKeyType={returnKeyType ?? "done"}
           style={[
