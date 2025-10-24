@@ -8,8 +8,9 @@ import Button from "@/components/atoms/Button";
 import SkeletonLoader from "@/components/atoms/SkeletonLoader";
 import CategoryCard from "@/components/molecules/CategoryCard";
 import PageScaffold from "@/components/templates/PageScaffold";
-import { listEntriesSummary } from "@/db/form-entries";
+import { findReadyToSubmitReminder, listEntriesSummary } from "@/db/form-entries";
 import { DB } from "@/db/sqlite";
+import { notifyNow } from "@/notifications";
 import { onActiveWithInternet } from "@/utils/appstate";
 import { isOnline, onReconnectOnce } from "@/utils/network";
 import { router, useFocusEffect } from "expo-router";
@@ -65,6 +66,11 @@ const Home: React.FC = () => {
         setLoadingRemote(false);
         isRefreshingRef.current = false;
       }
+    }
+
+    const reminder = await findReadyToSubmitReminder(0.04); // o 3 días
+    if (reminder) {
+      await notifyNow(reminder.title, reminder.body);
     }
   }, [loadLocal]);
 

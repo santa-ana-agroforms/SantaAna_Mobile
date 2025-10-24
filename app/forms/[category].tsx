@@ -152,6 +152,7 @@ const FormsByCategoryScreen: React.FC = () => {
   const loadLocal = useCallback(async (): Promise<FormCategoryGroup | null> => {
     const groups = await DB.selectFormsGroupedByCategory();
     const found = (groups ?? []).find((g) => g.nombre_categoria === category) ?? null;
+    console.log("Grupo cargado para categoría", category, ":", JSON.stringify(found, null, 2));
     setGrupo(found);
     return found;
   }, [category]);
