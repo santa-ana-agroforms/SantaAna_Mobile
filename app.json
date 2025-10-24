@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "SantaAna_Mobile",
+    "name": "SANTA ANA",
     "slug": "SantaAna_Mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/LOGO.png",
     "scheme": "santaanamobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
@@ -14,8 +14,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/LOGO.png",
+        "backgroundColor": "#F9F6EE"
       },
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "pan",
@@ -32,10 +32,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/LOGO.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#F9F6EE"
         }
       ],
       "expo-font",

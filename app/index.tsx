@@ -1,6 +1,6 @@
 // app/index.tsx
 import { clearTokens } from "@/api/client";
-import { getDatasetRowsLocal, syncAllDatasets } from "@/api/datasets";
+import { syncAllDatasets } from "@/api/datasets";
 import { fetchAndSaveForms } from "@/api/forms";
 import type { FormCategoryGroup } from "@/api/forms/types";
 import { pullAndCacheGroups } from "@/api/groups";
@@ -8,7 +8,6 @@ import Button from "@/components/atoms/Button";
 import SkeletonLoader from "@/components/atoms/SkeletonLoader";
 import CategoryCard from "@/components/molecules/CategoryCard";
 import PageScaffold from "@/components/templates/PageScaffold";
-import { listEntriesSummary } from "@/db/form-entries";
 import { DB } from "@/db/sqlite";
 import { onActiveWithInternet } from "@/utils/appstate";
 import { isOnline, onReconnectOnce } from "@/utils/network";
@@ -189,7 +188,7 @@ const Home: React.FC = () => {
             <View style={{ alignItems: "flex-end", marginTop: gap }}>
               <Button title="Cerrar sesión (TEMP)" size="sm" onPress={handleLogout} />
             </View>
-
+            {/* 
             <View style={{ alignItems: "flex-end", marginTop: gap }}>
               <Button
                 title="Guardados"
@@ -210,7 +209,7 @@ const Home: React.FC = () => {
                   console.log("Dataset rows:", entries);
                 }}
               />
-            </View>
+            </View> */}
           </>
         );
       }}

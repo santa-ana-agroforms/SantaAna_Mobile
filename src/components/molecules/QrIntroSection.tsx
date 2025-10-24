@@ -34,7 +34,7 @@ type Props = {
 const QrIntroSection: React.FC<Props> = ({
   referenceFrame,
   title = "Bienvenido",
-  subtitle = "Escanea tu código QR",
+  subtitle = "Presiona para escanear tu código QR",
   scannerSize,
   user,
   statusText,
