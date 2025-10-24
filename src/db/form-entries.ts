@@ -211,8 +211,9 @@ export const findReadyToSubmitReminder = async (
   const [row] = await db.getAllAsync<{ c: number; oldest: string | null }>(`
     SELECT COUNT(*) AS c, MIN(filled_at_local) AS oldest
       FROM form_entries
-     WHERE status = 'ready_to_submit'
+     WHERE status = 'pending'
   `);
+  console.log("Checking for ready_to_submit entries:", row);
 
   const count = Number(row?.c ?? 0);
   if (!count || !row?.oldest) return null;
@@ -234,5 +235,8 @@ export const findReadyToSubmitReminder = async (
       ? `Tienes 1 formulario listo para enviar desde hace ${ageDays} día${ageDays > 1 ? "s" : ""}.`
       : `Tienes ${count} formularios listos para enviar; el más antiguo tiene ${ageDays} días.`;
 
+  console.log(
+    `Notificación de recordatorio creada para ${count} formularios ready_to_submit (el más viejo tiene ${ageDays} días).`
+  );
   return { title, body, count, oldestDays: ageDays };
 };

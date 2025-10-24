@@ -9,7 +9,7 @@ import SkeletonLoader from "@/components/atoms/SkeletonLoader";
 import CategoryCard from "@/components/molecules/CategoryCard";
 import PageScaffold from "@/components/templates/PageScaffold";
 import { findReadyToSubmitReminder } from "@/db/form-entries";
-import { DB } from "@/db/sqlite";
+import { DB, planAvailabilityNotifications, tryMarkNotificationSent } from "@/db/sqlite";
 import { notifyNow } from "@/notifications";
 import { onActiveWithInternet } from "@/utils/appstate";
 import { isOnline, onReconnectOnce } from "@/utils/network";
@@ -72,8 +72,20 @@ const Home: React.FC = () => {
       }
     }
 
-    const reminder = await findReadyToSubmitReminder(0.04);
+    const reminder = await findReadyToSubmitReminder(2);
     if (reminder) await notifyNow(reminder.title, reminder.body);
+
+    try {
+      const plans = await planAvailabilityNotifications();
+      for (const p of plans) {
+        const ok = await tryMarkNotificationSent(p.kvKey);
+        if (ok) {
+          await notifyNow(p.title, p.body);
+        }
+      }
+    } catch (e) {
+      console.log("[home/revalidate] error notificando disponibilidad:", e);
+    }
   }, [loadLocal]);
 
   // 1) Montaje: asegúrate de marcar initialized SIEMPRE

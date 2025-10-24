@@ -81,6 +81,8 @@ export const useInstanceSelectorState = () => {
       // 1) Traer entradas del formulario
       const raw: SavedEntry[] = (await getEntriesByFormId(formId)) || [];
 
+      console.log(JSON.stringify(raw, null, 2));
+
       // 2) Filtrar por periodo si aplica (usamos filled_at_local como referencia)
       const filtered = raw.filter((e) => {
         const ts = new Date(e.filled_at_local).getTime();
@@ -92,6 +94,11 @@ export const useInstanceSelectorState = () => {
       let draftCount = 0;
       let readyCount = 0;
       let submittedCount = 0;
+
+      console.log(
+        `Filtered entries for form ${formId} in period ${label}:`,
+        JSON.stringify(filtered, null, 2)
+      );
 
       for (const e of filtered) {
         // Normalizamos al esquema UI

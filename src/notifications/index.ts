@@ -17,6 +17,7 @@ export const notifyNow = async (title: string, body?: string) => {
   try {
     await ensureNotificationPermissionsAsync();
   } catch {}
+  console.log("Sending local notification:", { title, body });
   return Notifications.scheduleNotificationAsync({
     content: { title, body, sound: true },
     trigger: null, // inmediato

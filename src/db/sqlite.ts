@@ -756,29 +756,34 @@ export const planAvailabilityNotifications = async (): Promise<
     disponible_desde: string | null;
     disponible_hasta: string | null;
     periodicidad: number | null;
-  }>(`SELECT id, nombre, disponible_desde, disponible_hasta, periodicidad FROM form`);
+    nombre_categoria: string | null;
+  }>(
+    `SELECT f.id, f.nombre, f.disponible_desde, f.disponible_hasta, f.periodicidad, c.nombre AS nombre_categoria
+       FROM form f
+       LEFT JOIN category c ON f.categoria_id = c.id`
+  );
 
   const now = new Date();
   const out: { form_id: string; title: string; body: string; kvKey: string }[] = [];
 
+  console.log(`Revisando ${forms.length} formularios...`);
   for (const f of forms) {
     const desde = parseInGT(f.disponible_desde);
     const hasta = parseInGT(f.disponible_hasta);
     const per = f.periodicidad ? Number(f.periodicidad) : null;
-
     if (!desde) continue;
     if (!isWithinWindow(now, desde, hasta)) continue;
 
     const diffDays = toGtDay(now) - toGtDay(desde);
-    if (diffDays < 0) continue;
+    if (diffDays < 1) continue;
 
     // ¿hoy arranca período?
     let isStartToday = false;
     if (per && per > 0) {
-      isStartToday = diffDays % per === 0;
+      isStartToday = diffDays % per === 1;
     } else {
       // sin periodicidad → solo el primer día
-      isStartToday = diffDays === 0;
+      isStartToday = diffDays === 1;
     }
     if (!isStartToday) continue;
 
@@ -787,11 +792,11 @@ export const planAvailabilityNotifications = async (): Promise<
       per && per > 0 ? toGtDay(desde) + Math.floor(diffDays / per) * per : toGtDay(desde);
     const kvKey = `noti.periodStart.${f.id}.${periodStartDay}`;
 
-    const firstDay = diffDays === 0;
+    const firstDay = diffDays === 1;
     const title = "Formulario disponible";
     const body = firstDay
-      ? `Hoy empezó a estar disponible el form “${f.nombre}”.`
-      : `Hola, recuerda que hay que llenar el form “${f.nombre}”.`;
+      ? `Hoy empezó a estar disponible el form “${f.nombre}” en la categoría “${f.nombre_categoria ?? "n/a"}”.`
+      : `Hola, recuerda que hay que llenar el form “${f.nombre}” en la categoría “${f.nombre_categoria ?? "n/a"}”.`;
 
     out.push({ form_id: f.id, title, body, kvKey });
   }
