@@ -1,7 +1,7 @@
-// src/components/molecules/InstanceSelector.tsx
 import { colors } from "@/theme/tokens";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   FlatList,
@@ -25,6 +25,8 @@ export type EntryPreview = {
   updatedAt: number;
 };
 
+type Banner = { type: "info" | "success" | "error"; text: string };
+
 export type InstanceSelectorProps = {
   visible: boolean;
   periodLabel: string;
@@ -32,11 +34,13 @@ export type InstanceSelectorProps = {
   allowNew: boolean;
   onNew: () => void;
   onOpen: (entry: EntryPreview, mode: "edit" | "review" | "view") => void;
-  onSubmit: (entry: EntryPreview) => void; // envío directo si está listo
+  onSubmit: (entry: EntryPreview) => void;
   onClose: () => void;
   referenceFrame: Frame;
-  formName: string;
   contentFrame: Frame;
+  formName: string;
+  submittingId?: string | null;
+  banner?: Banner | null;
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -52,15 +56,13 @@ const formatDateTime = (ts: number) => {
   }
 };
 
-/** Solo 2 estados de UI (para el pill y la badge del item) */
 type UIStatus = "reviewable" | "submitted";
 const toUIStatus = (s: EntryStatus): UIStatus => (s === "submitted" ? "submitted" : "reviewable");
 
 const StatusPill: React.FC<{ ui: UIStatus; size?: number }> = ({ ui, size = 12 }) => {
-  const label = ui === "reviewable" ? "En progreso" : "Enviado";
+  const label = ui === "reviewable" ? "En revisión" : "Enviado";
   const bg = ui === "reviewable" ? colors.warningBg : "#EAF7EA";
   const fg = ui === "reviewable" ? colors.textTertiary : colors.primary600;
-
   return (
     <View
       style={{
@@ -83,17 +85,13 @@ const Divider: React.FC<{ inset?: boolean; color?: string; opacity?: number }> =
   opacity = 0.6,
 }) => <View style={{ height: 1, backgroundColor: color, marginLeft: inset ? 12 : 0, opacity }} />;
 
-/* =========================================================
- * SegmentedPill — dos pestañas: En progreso / Enviados
- * =======================================================*/
-type Segment = { key: "reviewable" | "submitted"; label: string; count?: number };
+type Segment = { key: string; label: string; count?: number };
 type SegmentedPillProps = {
   minSide: number;
   segments: Segment[];
-  valueKey: Segment["key"]; // key activa
-  onChange: (key: Segment["key"]) => void;
+  valueKey: string;
+  onChange: (key: string) => void;
 };
-
 const SegmentedPill: React.FC<SegmentedPillProps> = ({ minSide, segments, valueKey, onChange }) => {
   const containerPad = clamp(minSide * 0.008, 2, 6);
   const height = clamp(minSide * 0.1, 44, 56);
@@ -110,7 +108,6 @@ const SegmentedPill: React.FC<SegmentedPillProps> = ({ minSide, segments, valueK
     0,
     segments.findIndex((s) => s.key === valueKey)
   );
-
   const x = useRef(new Animated.Value(activeIndex)).current;
   useEffect(() => {
     Animated.spring(x, {
@@ -126,9 +123,7 @@ const SegmentedPill: React.FC<SegmentedPillProps> = ({ minSide, segments, valueK
   const innerWidth = Math.max(width - padding * 2, 0);
   const segWidth = segments.length > 0 ? innerWidth / segments.length : 0;
 
-  // Drag con PanResponder
   const startRef = useRef(0);
-  const pan = useRef(new Animated.Value(0)).current;
   const dragging = useRef(false);
 
   const panResponder = useRef(
@@ -137,7 +132,6 @@ const SegmentedPill: React.FC<SegmentedPillProps> = ({ minSide, segments, valueK
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         dragging.current = true;
-        pan.setValue(0);
         startRef.current = (x as any)._value ?? activeIndex;
       },
       onPanResponderMove: (_, g) => {
@@ -167,8 +161,6 @@ const SegmentedPill: React.FC<SegmentedPillProps> = ({ minSide, segments, valueK
     outputRange: [0, Math.max(segWidth * (segments.length - 1), 0)],
   });
 
-  const pressTab = (idx: number) => onChange(segments[idx].key);
-
   return (
     <View
       onLayout={onLayout}
@@ -184,7 +176,6 @@ const SegmentedPill: React.FC<SegmentedPillProps> = ({ minSide, segments, valueK
       }}
       accessibilityRole="tablist"
     >
-      {/* thumb */}
       <Animated.View
         {...panResponder.panHandlers}
         style={{
@@ -197,17 +188,14 @@ const SegmentedPill: React.FC<SegmentedPillProps> = ({ minSide, segments, valueK
           transform: [{ translateX }],
         }}
         accessibilityLabel="Control deslizante"
-        accessibilityHint="Arrastra para cambiar de pestaña"
       />
-
-      {/* tabs */}
       <View style={{ flexDirection: "row", paddingHorizontal: padding }}>
-        {segments.map((s, i) => {
+        {segments.map((s) => {
           const isActive = valueKey === s.key;
           return (
             <Pressable
               key={s.key}
-              onPress={() => pressTab(i)}
+              onPress={() => onChange(s.key)}
               style={{
                 width: segWidth,
                 height: height - padding * 2,
@@ -229,7 +217,6 @@ const SegmentedPill: React.FC<SegmentedPillProps> = ({ minSide, segments, valueK
               >
                 {s.label}
               </Text>
-
               <View
                 style={{
                   minWidth: badgeH,
@@ -261,9 +248,9 @@ const SegmentedPill: React.FC<SegmentedPillProps> = ({ minSide, segments, valueK
   );
 };
 
-/* =========================================================
+/* ============================
  * InstanceSelector
- * =======================================================*/
+ * ==========================*/
 const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   visible,
   periodLabel,
@@ -275,10 +262,20 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   onClose,
   formName,
   referenceFrame,
+  submittingId = null,
+  banner = null,
 }) => {
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
 
-  // responsive escalado con minSide
+  // ---------- ESTADO LOCAL (para update optimista) ----------
+  const [localEntries, setLocalEntries] = useState<EntryPreview[]>(entries);
+
+  // sincroniza cuando cambian las props desde fuera (refetch del padre)
+  useEffect(() => {
+    setLocalEntries(entries);
+  }, [entries]);
+
+  // medidas
   const pad = clamp(minSide * 0.035, 14, 24);
   const gap = clamp(minSide * 0.028, 8, 18);
   const radius = clamp(minSide * 0.02, 12, 16);
@@ -289,7 +286,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   const handleW = clamp(minSide * 0.14, 36, 56);
   const handleH = clamp(minSide * 0.012, 4, 6);
 
-  // animaciones modales
+  // animaciones
   const overlayA = useRef(new Animated.Value(0)).current;
   const sheetA = useRef(new Animated.Value(0)).current;
 
@@ -337,33 +334,29 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
     if (visible) playIn();
   }, [visible, playIn]);
 
-  /** --------- Filtro por 2 pestañas: reviewable/submitted --------- */
   type FilterKey = "reviewable" | "submitted";
   const [filter, setFilter] = useState<FilterKey>("reviewable");
 
-  /** Contadores para la pill */
+  // ⚠️ usa localEntries para contar y filtrar
   const counts = useMemo(() => {
     let reviewable = 0;
     let submitted = 0;
-    for (const e of entries) {
+    for (const e of localEntries) {
       if (toUIStatus(e.status) === "reviewable") reviewable++;
       else submitted++;
     }
-    return { reviewable, submitted, total: entries.length };
-  }, [entries]);
+    return { reviewable, submitted, total: localEntries.length };
+  }, [localEntries]);
 
-  /** Lista filtrada: si reviewable, incluye in_progress + ready_for_submit */
-  const filtered = useMemo(() => {
-    const base =
-      filter === "submitted"
-        ? entries.filter((e) => e.status === "submitted")
-        : entries.filter((e) => e.status !== "submitted");
-    // En progreso: prioriza ready_for_submit arriba
-    if (filter === "reviewable") {
-      return base.sort((a) => (a.status === "ready_for_submit" ? -1 : 0));
-    }
-    return base;
-  }, [entries, filter]);
+  const filtered = useMemo(
+    () =>
+      localEntries.filter((e) =>
+        filter === "submitted"
+          ? toUIStatus(e.status) === "submitted"
+          : toUIStatus(e.status) === "reviewable"
+      ),
+    [localEntries, filter]
+  );
 
   const cardStyle = {
     padding: cardPad,
@@ -376,58 +369,37 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   const getDisplayName = (idx: number, item: EntryPreview) =>
     item.instanceName?.trim() || `Registro ${idx + 1}`;
 
-  // helpers
   const openThen = (fn: () => void) => () => playOut(fn);
   const handleTapOverlay = () => playOut();
 
-  // Botones por item
-  const Buttons: React.FC<{ item: EntryPreview }> = ({ item }) => {
-    const btnBase = {
-      paddingHorizontal: clamp(minSide * 0.035, 12, 16),
-      paddingVertical: clamp(minSide * 0.025, 8, 12),
-      borderRadius: clamp(minSide * 0.024, 8, 12),
-      borderWidth: 1,
-      borderColor: colors.border,
-    } as const;
-
-    if (item.status === "submitted") {
-      return (
-        <TouchableOpacity
-          onPress={openThen(() => onOpen(item, "view"))}
-          style={[btnBase, { backgroundColor: "#F3F3F3" }]}
-        >
-          <Text style={{ fontWeight: "800", color: colors.textSecondary }}>Ver</Text>
-        </TouchableOpacity>
-      );
-    }
-
-    if (item.status === "ready_for_submit") {
-      return (
-        <>
-          <TouchableOpacity
-            onPress={openThen(() => onOpen(item, "review"))}
-            style={[btnBase, { backgroundColor: "#FFF7E2" }]}
-          >
-            <Text style={{ fontWeight: "800", color: colors.textTertiary }}>Revisar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={openThen(() => onSubmit(item))}
-            style={[btnBase, { backgroundColor: "#E6F7EA" }]}
-          >
-            <Text style={{ fontWeight: "800", color: colors.primary600 }}>Enviar</Text>
-          </TouchableOpacity>
-        </>
-      );
-    }
-
-    // in_progress
+  const renderBanner = () => {
+    if (!banner) return null;
+    const bg =
+      banner.type === "success"
+        ? "#EAF7EA"
+        : banner.type === "error"
+          ? "#FDECEA"
+          : colors.warningBg;
+    const fg =
+      banner.type === "success"
+        ? colors.primary600
+        : banner.type === "error"
+          ? (colors.danger600 ?? "#C0392B")
+          : colors.textTertiary;
     return (
-      <TouchableOpacity
-        onPress={openThen(() => onOpen(item, "review"))}
-        style={[btnBase, { backgroundColor: "#FFF7E2" }]}
+      <View
+        style={{
+          marginHorizontal: pad,
+          marginBottom: clamp(gap * 0.6, 6, 12),
+          backgroundColor: bg,
+          borderColor: colors.border,
+          borderWidth: 1,
+          borderRadius: 12,
+          padding: clamp(pad * 0.7, 8, 14),
+        }}
       >
-        <Text style={{ fontWeight: "800", color: colors.textTertiary }}>Revisar</Text>
-      </TouchableOpacity>
+        <Text style={{ color: fg, fontWeight: "800" }}>{banner.text}</Text>
+      </View>
     );
   };
 
@@ -490,49 +462,126 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
             <Text style={{ fontWeight: "800", fontSize: titleSize, color: colors.textPrimary }}>
               Registros de {periodLabel} - {formName}
             </Text>
-
-            {/* ===== SegmentedPill con 2 pestañas ===== */}
             <SegmentedPill
               minSide={minSide}
               valueKey={filter}
-              onChange={(key) => setFilter(key)}
+              onChange={(key) => setFilter(key as FilterKey)}
               segments={[
-                { key: "reviewable", label: "En progreso", count: counts.reviewable },
+                { key: "reviewable", label: "En revisión", count: counts.reviewable },
                 { key: "submitted", label: "Enviados", count: counts.submitted },
               ]}
             />
           </View>
 
+          {/* BANNER */}
+          {renderBanner()}
+
           <Divider color={colors.border} opacity={0.4} />
 
-          {/* lista filtrada */}
+          {/* lista */}
           <FlatList
             contentContainerStyle={{ padding: pad, paddingBottom: pad * 0.5, gap }}
             data={filtered}
             keyExtractor={(e) => e.id}
+            extraData={{ filtered, submittingId }} // fuerza rerender ante cambios locales
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={() => (
-              <View
-                style={[
-                  {
-                    padding: cardPad,
-                    borderRadius: 12,
-                    backgroundColor: colors.neutral0,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    alignItems: "center",
-                  },
-                ]}
-              >
+              <View style={[cardStyle, { alignItems: "center" }]}>
                 <Text style={{ color: colors.textSecondary }}>
-                  {filter === "submitted"
-                    ? "No hay registros enviados."
-                    : "No hay registros en progreso."}
+                  No hay registros para este filtro.
                 </Text>
               </View>
             )}
             renderItem={({ item, index }) => {
               const ui = toUIStatus(item.status);
+              const isSubmitting = submittingId === item.id;
+
+              const btnBase = {
+                paddingHorizontal: clamp(minSide * 0.035, 12, 16),
+                paddingVertical: clamp(minSide * 0.025, 8, 12),
+                borderRadius: clamp(minSide * 0.024, 8, 12),
+                borderWidth: 1,
+                borderColor: colors.border,
+              } as const;
+
+              const handleOptimisticSubmit = () => {
+                // 1) mover inmediatamente a "submitted"
+                setLocalEntries((prev) =>
+                  prev.map((e) => (e.id === item.id ? { ...e, status: "submitted" } : e))
+                );
+                // 2) delegar la persistencia real al padre
+                onSubmit(item);
+              };
+
+              const Buttons = () => {
+                if (ui === "submitted") {
+                  return (
+                    <TouchableOpacity
+                      onPress={openThen(() => onOpen(item, "view"))}
+                      style={[btnBase, { backgroundColor: "#F3F3F3" }]}
+                    >
+                      <Text style={{ fontWeight: "800", color: colors.textSecondary }}>Ver</Text>
+                    </TouchableOpacity>
+                  );
+                }
+
+                if (item.status === "ready_for_submit") {
+                  return (
+                    <>
+                      <TouchableOpacity
+                        onPress={openThen(() => onOpen(item, "review"))}
+                        disabled={!!submittingId}
+                        style={[
+                          btnBase,
+                          { backgroundColor: "#FFF7E2", opacity: submittingId ? 0.7 : 1 },
+                        ]}
+                      >
+                        <Text style={{ fontWeight: "800", color: colors.textTertiary }}>
+                          Revisar
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={handleOptimisticSubmit}
+                        disabled={!!submittingId}
+                        style={[
+                          btnBase,
+                          {
+                            backgroundColor: "#E6F7EA",
+                            opacity: submittingId ? 0.7 : 1,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 8,
+                          },
+                        ]}
+                      >
+                        {isSubmitting ? (
+                          <ActivityIndicator />
+                        ) : (
+                          <Text style={{ fontWeight: "800", color: colors.primary600 }}>
+                            Enviar
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </>
+                  );
+                }
+
+                // in_progress
+                return (
+                  <TouchableOpacity
+                    onPress={openThen(() => onOpen(item, "review"))}
+                    disabled={!!submittingId}
+                    style={[
+                      btnBase,
+                      { backgroundColor: "#FFF7E2", opacity: submittingId ? 0.7 : 1 },
+                    ]}
+                  >
+                    <Text style={{ fontWeight: "800", color: colors.textTertiary }}>Revisar</Text>
+                  </TouchableOpacity>
+                );
+              };
+
               return (
                 <View style={cardStyle}>
                   <View
@@ -574,7 +623,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                       flexWrap: "wrap",
                     }}
                   >
-                    <Buttons item={item} />
+                    <Buttons />
                   </View>
                 </View>
               );
@@ -587,14 +636,16 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
             {allowNew && (
               <TouchableOpacity
                 onPress={openThen(onNew)}
+                disabled={!!submittingId}
                 style={{
                   height: btnH,
                   borderRadius: 12,
-                  backgroundColor: colors.primary600,
+                  backgroundColor: !!submittingId ? "#EEE" : colors.primary600,
                   alignItems: "center",
                   justifyContent: "center",
                   borderWidth: 1,
-                  borderColor: colors.primary600,
+                  borderColor: !!submittingId ? colors.border : colors.primary600,
+                  opacity: !!submittingId ? 0.8 : 1,
                 }}
               >
                 <Text style={{ color: colors.neutral0, fontWeight: "800" }}>+ Nuevo registro</Text>
@@ -602,11 +653,13 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
             )}
             <TouchableOpacity
               onPress={handleTapOverlay}
+              disabled={!!submittingId}
               style={{
                 height: Math.max(btnH * 0.9, 40),
                 borderRadius: 12,
                 alignItems: "center",
                 justifyContent: "center",
+                opacity: !!submittingId ? 0.8 : 1,
               }}
             >
               <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>Cerrar</Text>

@@ -4,12 +4,11 @@ import { Body } from "@/components/atoms/Typography";
 import FormListItem from "@/components/molecules/FormListItem";
 import PageScaffold, { type ScaffoldDimensions } from "@/components/templates/PageScaffold";
 import { DB } from "@/db/sqlite";
-import { useFocusEffect } from "@react-navigation/native"; // ⬅️ NUEVO
+import { useFocusEffect } from "@react-navigation/native";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { Alert, InteractionManager, View } from "react-native";
 
-// NEW: selector + hook de estado visual
 import { sendFormEntry } from "@/api/client";
 import InstanceSelector from "@/components/molecules/InstanceSelector";
 import { getJSONForm, initSessionFromSaved, setStatus } from "@/forms/state/formSessionSlice";
@@ -17,9 +16,7 @@ import { useInstanceSelectorState } from "@/forms/state/useInstanceSelectorState
 import { useAppDispatch } from "@/store/hooks";
 import { isOnline } from "@/utils/network";
 
-/** -----------------------------------------
- * Tipos locales
- * ----------------------------------------- */
+/** tipos locales */
 type VersionVigente = { id_index_version: string; fecha_creacion: string };
 type Formulario = { id_formulario: string; nombre: string; version_vigente: VersionVigente };
 export type FormCategoryGroup = {
@@ -28,9 +25,7 @@ export type FormCategoryGroup = {
   formularios: { id_formulario: string; nombre: string; version_vigente: VersionVigente }[];
 };
 
-/** -----------------------------------------
- * Helpers de estado/fecha (se mantienen)
- * ----------------------------------------- */
+/** helpers de estado/fecha (igual que tenías) */
 const getEstado = (
   f: Formulario
 ): { texto: "Pendiente" | "En progreso" | "Completado"; color: string } => {
@@ -52,9 +47,7 @@ const getFechaDisponibleHasta = (asignado: Date | null): Date | null => {
   return d;
 };
 
-/** -----------------------------------------
- * PRELOAD local (igual que antes)
- * ----------------------------------------- */
+/** preload (igual que tenías) */
 const pickGroupIdFromConfig = (cfg: any): string | null => {
   if (!cfg) return null;
   const cand =
@@ -107,7 +100,7 @@ const preloadFormScreenAndData = async (formId: string, versionId: string) => {
     );
 
     InteractionManager.runAfterInteractions(() => {
-      // precarga opcional de assets
+      // opcional
     });
   })();
 
@@ -126,46 +119,52 @@ const requestPreloadWithDebounce = (formId: string, versionId: string, wait = 40
   debounceTimers.set(key, t);
 };
 
-/** -----------------------------------------
- * Pantalla
- * ----------------------------------------- */
+/** pantalla */
 const FormsByCategoryScreen: React.FC = () => {
   const { category } = useLocalSearchParams<{ category: string }>();
   const [loading, setLoading] = useState(true);
   const [grupo, setGrupo] = useState<FormCategoryGroup | null>(null);
 
-  const { visible, entries, allowNew, periodLabel, openForForm, close, computeDecorators } =
-    useInstanceSelectorState();
+  const {
+    visible,
+    entries,
+    allowNew,
+    periodLabel,
+    openForForm,
+    close,
+    computeDecorators,
+    refetch,
+    optimisticMarkSubmitted, // ← importante
+  } = useInstanceSelectorState();
+
   const [selectedForm, setSelectedForm] = useState<{
     formId: string;
     versionId: string;
-    formName: string; // ← NEW
+    formName: string;
   } | null>(null);
 
   const dispatch = useAppDispatch();
 
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [banner, setBanner] = useState<{ type: "info" | "success" | "error"; text: string } | null>(
+    null
+  );
+
   const [countsByForm, setCountsByForm] = useState<
     Record<
       string,
-      {
-        draftCount: number;
-        readyCount: number;
-        submittedCount: number;
-        periodLabel?: string;
-      }
+      { draftCount: number; readyCount: number; submittedCount: number; periodLabel?: string }
     >
   >({});
 
-  /** Carga el grupo actual y lo retorna */
+  /** carga grupo + contadores */
   const loadLocal = useCallback(async (): Promise<FormCategoryGroup | null> => {
     const groups = await DB.selectFormsGroupedByCategory();
     const found = (groups ?? []).find((g) => g.nombre_categoria === category) ?? null;
-    console.log("Grupo cargado para categoría", category, ":", JSON.stringify(found, null, 2));
     setGrupo(found);
     return found;
   }, [category]);
 
-  /** Recalcula contadores para todos los formularios del grupo dado */
   const recomputeCounts = useCallback(
     async (targetGroup: FormCategoryGroup | null) => {
       if (!targetGroup?.formularios?.length) {
@@ -176,7 +175,7 @@ const FormsByCategoryScreen: React.FC = () => {
       await Promise.all(
         targetGroup.formularios.map(async (f) => {
           const formId = f.id_formulario;
-          const deco = await computeDecorators(formId, "daily"); // mismo periodo que muestras
+          const deco = await computeDecorators(formId, "daily");
           acc[formId] = deco;
         })
       );
@@ -185,13 +184,11 @@ const FormsByCategoryScreen: React.FC = () => {
     [computeDecorators]
   );
 
-  /** Hace reload del grupo y luego recomputa los contadores */
   const refreshScreen = useCallback(async () => {
     const freshGroup = await loadLocal();
     await recomputeCounts(freshGroup);
   }, [loadLocal, recomputeCounts]);
 
-  // Primer load (skeletons, etc.)
   useEffect(() => {
     (async () => {
       try {
@@ -203,7 +200,6 @@ const FormsByCategoryScreen: React.FC = () => {
     })();
   }, [loadLocal, recomputeCounts]);
 
-  // Limpieza de debounces
   useEffect(() => {
     return () => {
       for (const t of debounceTimers.values()) clearTimeout(t);
@@ -211,7 +207,6 @@ const FormsByCategoryScreen: React.FC = () => {
     };
   }, []);
 
-  // ⬇️ Refresco cada vez que la pantalla gana foco
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
@@ -225,6 +220,20 @@ const FormsByCategoryScreen: React.FC = () => {
     }, [refreshScreen])
   );
 
+  /** ✅ update optimista de los contadores de la tarjeta del formulario */
+  const bumpCountsAfterSubmit = useCallback((formId: string) => {
+    setCountsByForm((prev) => {
+      const cur = prev[formId] ?? { draftCount: 0, readyCount: 0, submittedCount: 0 };
+      // En InstanceSelector solo se puede enviar si estaba "ready_for_submit"
+      const next = {
+        ...cur,
+        readyCount: Math.max(0, (cur.readyCount ?? 0) - 1),
+        submittedCount: (cur.submittedCount ?? 0) + 1,
+      };
+      return { ...prev, [formId]: next };
+    });
+  }, []);
+
   const handleSubmitFromSelector = useCallback(
     async (entry: { id: string }) => {
       try {
@@ -232,32 +241,41 @@ const FormsByCategoryScreen: React.FC = () => {
           Alert.alert("Sin conexión", "Conéctate a Internet para enviar el formulario.");
           return;
         }
+        if (!selectedForm) return;
 
-        // Carga sesión desde el registro guardado
+        setSubmittingId(entry.id);
+        setBanner(null);
+
+        // 1) Carga sesión local
         await dispatch(initSessionFromSaved({ local_id: entry.id })).unwrap();
 
-        // (Opcional) podrías verificar aquí que el estado esté listo para enviar en tu store
-
-        // Construye JSON y envía
+        // 2) JSON + envío
         const json = await dispatch(getJSONForm({ sessionId: entry.id })).unwrap();
-        if (!json) {
-          Alert.alert("Error", "No se pudo preparar el formulario para envío.");
-          return;
-        }
+        if (!json) throw new Error("No se pudo preparar el formulario para envío.");
+        await sendFormEntry(json);
 
-        const resp = await sendFormEntry(json);
-        console.log("[selector] server response:", resp);
+        // 3) UI optimista:
+        optimisticMarkSubmitted(entry.id); // mueve el ítem a “Enviados” en el modal
+        bumpCountsAfterSubmit(selectedForm.formId); // ajusta contadores de la lista inmediatamente
 
-        // Marca como synced localmente
+        // 4) Estado real (persistencia local tuya)
         await dispatch(setStatus({ sessionId: entry.id, status: "synced" }));
 
-        Alert.alert("Éxito", "¡Formulario enviado!");
-        await refreshScreen(); // ya lo tienes definido
+        // 5) (Opcional) refetch suave desde DB cuando tu persistencia ya guardó
+        setTimeout(() => {
+          refetch();
+          refreshScreen();
+        }, 120);
+
+        // 6) Banner OK
+        setBanner({ type: "success", text: "¡Formulario enviado!" });
       } catch (e: any) {
-        Alert.alert("Error", e?.message ?? "No se pudo enviar el formulario.");
+        setBanner({ type: "error", text: e?.message ?? "No se pudo enviar el formulario." });
+      } finally {
+        setSubmittingId(null);
       }
     },
-    [dispatch, refreshScreen]
+    [dispatch, selectedForm, optimisticMarkSubmitted, bumpCountsAfterSubmit, refetch, refreshScreen]
   );
 
   const headerTitle = String(category);
@@ -344,14 +362,15 @@ const FormsByCategoryScreen: React.FC = () => {
                     availableUntil={disponibleHasta}
                     onPreload={() => requestPreloadWithDebounce(formId, versionId, 400)}
                     onPress={() => {
-                      setSelectedForm({ formId, versionId, formName: f.nombre }); // ← NEW
-                      openForForm(formId);
+                      setSelectedForm({ formId, versionId, formName: f.nombre });
+                      openForForm(formId); // abre modal y carga entries
+                      setBanner(null); // limpia banner previo
                     }}
                     referenceFrame={referenceFrame}
                     contentFrame={contentFrame}
                     periodLabel={deco.periodLabel}
-                    // draftCount={deco.draftCount ?? 0}
-                    readyCount={(deco.draftCount ?? 0) + (deco.readyCount ?? 0)} // En revisión (unificado)
+                    // En la tarjeta muestras drafts + ready como "En revisión"
+                    readyCount={(deco.draftCount ?? 0) + (deco.readyCount ?? 0)}
                     submittedCount={deco.submittedCount ?? 0}
                   />
                 );
@@ -376,6 +395,8 @@ const FormsByCategoryScreen: React.FC = () => {
               onClose={close}
               referenceFrame={referenceFrame}
               contentFrame={contentFrame}
+              submittingId={submittingId}
+              banner={banner}
             />
           </>
         );
