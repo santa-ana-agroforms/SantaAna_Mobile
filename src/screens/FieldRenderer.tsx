@@ -1,5 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import React, { useCallback, useMemo, useRef } from "react";
 
 import Boolean from "@/components/atoms/Boolean";
 import DatasetSelect from "@/components/atoms/DatasetSelect";
@@ -8,14 +7,13 @@ import Label from "@/components/atoms/Label";
 import { Body } from "@/components/atoms/Typography";
 import DateTimeField from "@/components/molecules/DateTimeField";
 import FieldSignature from "@/components/molecules/FieldSignature";
-import RepeatableGroup from "@/components/molecules/RepeatableGroup";
-import { colors } from "@/theme/tokens";
 
-import { getGroupOrFetch } from "@/api/groups";
 import type { Campo } from "./FormPage";
 
 // ⬇️ Redux
+import CalcOutput from "@/components/atoms/CalcOutput";
 import DatasetField from "@/components/molecules/DatasetField";
+import GroupEditor from "@/components/molecules/GroupEditor";
 import {
   groupAddRow,
   groupRemoveRow,
@@ -29,7 +27,6 @@ import { AppDispatch } from "@/store";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 type Frame = { width: number; height: number };
-type GroupTreeLite = { fields?: Campo[]; campos?: Campo[]; nombre?: string; name?: string };
 
 type Props = {
   campo: Campo;
@@ -42,21 +39,61 @@ type Props = {
   external?: { value: any; onChange: (v: any) => void };
 };
 
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-const DEBUG_FR = false;
+const getFieldKind = (c: { tipo?: string; clase?: string }) => {
+  // console.log("[FR] FF", c);
+  const t = String(c?.tipo || "").toLowerCase();
+  const k = String(c?.clase || "").toLowerCase();
 
+  // console.log("[FR] getFieldKind()", { tipo: t, clase: k });
+  // grupos
+  if (k === "group" || t === "grupo" || t === "group") return "group";
+
+  // booleanos
+  if (t === "booleano" || t === "boolean" || k === "boolean") return "boolean";
+
+  // numéricos
+  if (t === "numerico" || t === "numeric" || t === "number" || k === "number") return "number";
+
+  // firmas
+  if (t === "imagen" && k === "firm") return "firm";
+
+  // dataset (acepta ambas variantes)
+  if (t === "dataset" || k === "dataset") return "dataset";
+
+  // lista (por si a veces viene como tipo:list o clase:list)
+  if (t === "list" || k === "list") return "list";
+
+  // fecha/hora posibles
+  if (t === "date" || k === "date") return "date";
+  if (t === "hour" || t === "time" || k === "hour" || k === "time") return "hour";
+
+  // calculado (puede venir como texto/calc o numerico/calc)
+  if (k === "calc") return "calc";
+
+  // texto (string/long)
+  if (t === "texto" || t === "text" || k === "string" || k === "text") return "text";
+
+  // fallback
+  return "unknown";
+};
+
+// helper simple para leer id del config
 const pickGroupIdFromConfig = (cfg: any): string | null => {
   if (!cfg) return null;
-  const cand =
-    cfg.id_group ??
-    cfg.id_grupo ??
-    cfg.groupId ??
-    cfg.group_id ??
-    cfg.idGroup ??
-    cfg.group?.id ??
-    null;
-  return cand != null ? String(cand) : null;
+  return (
+    (
+      cfg.id_grupo ??
+      cfg.id_group ??
+      cfg.groupId ??
+      cfg.group_id ??
+      cfg.idGroup ??
+      cfg.group?.id ??
+      null
+    )?.toString() ?? null
+  );
 };
+
+const DEBUG_FR = false;
 
 /** =========================
  *  🔎 DEBUG HELPERS
@@ -151,6 +188,8 @@ const FieldRenderer: React.FC<Props> = ({
   pageIndex,
   external,
 }) => {
+  // Prints campo info with good json formatting
+  console.log("🎒🎒🎒🎒", JSON.stringify(campo, null, 2));
   const dispatch = useAppDispatch();
   // useAppSelector expects a selector with a different state signature; forward the store state as `any`
   const sessionId = useAppSelector((state: any) => selectCurrentSessionId(state));
@@ -204,19 +243,6 @@ const FieldRenderer: React.FC<Props> = ({
     },
     [dispatch, campo.nombre_interno, effectivePage, onChangeValue, sessionId, external]
   );
-
-  const dims = useMemo(() => {
-    const minSide = Math.min(referenceFrame.width, referenceFrame.height);
-    return {
-      inputMinH: clamp(minSide * 0.06, 44, 62),
-      inputPadH: clamp(minSide * 0.014, 12, 18),
-      inputPadV: clamp(minSide * 0.01, 8, 14),
-      inputRadius: clamp(minSide * 0.018, 8, 12),
-      fieldGap: clamp(minSide * 0.016, 10, 22),
-      minSide,
-    };
-  }, [referenceFrame]);
-
   // 🚨 LOG: cada render
   dbg.onRender({
     hasExternal: !!external,
@@ -227,28 +253,6 @@ const FieldRenderer: React.FC<Props> = ({
 
   const LabelBlock = (
     <Label frame={referenceFrame} text={label} required={campo.requerido} help={help} />
-  );
-
-  const Box: React.FC<React.PropsWithChildren<{ minH?: number; center?: boolean }>> = ({
-    children,
-    minH = dims.inputMinH,
-    center = true,
-  }) => (
-    <View
-      style={{
-        minHeight: minH,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: dims.inputRadius,
-        backgroundColor: colors.neutral0,
-        paddingHorizontal: dims.inputPadH,
-        paddingVertical: dims.inputPadV,
-        alignItems: center ? "center" : undefined,
-        justifyContent: center ? "center" : undefined,
-      }}
-    >
-      {children}
-    </View>
   );
 
   // ---------- Renders simples ----------
@@ -441,16 +445,21 @@ const FieldRenderer: React.FC<Props> = ({
   };
 
   const renderCalc = () => {
-    const calcValue = value;
+    if (!sessionId) return null;
     return (
-      <>
-        {LabelBlock}
-        <Box>
-          <Body frame={referenceFrame} color="secondary" size="sm">
-            {calcValue ?? `(calculado) ${campo.config?.operation ?? "—"}`}
-          </Body>
-        </Box>
-      </>
+      <CalcOutput
+        frame={referenceFrame}
+        label={label}
+        help={help}
+        required={campo.requerido}
+        operation={campo?.config?.operation}
+        vars={Array.isArray(campo?.config?.vars) ? campo.config.vars : []}
+        fieldName={campo.nombre_interno} // se guarda con el nombre del campo actual
+        sessionId={sessionId}
+        pageIndex={effectivePage}
+        placeholderText="(calculado)"
+        // format={(v) => String(v)} // opcional
+      />
     );
   };
 
@@ -486,58 +495,16 @@ const FieldRenderer: React.FC<Props> = ({
   };
 
   // ---------- Grupo ----------
+  // ---------- Branch de grupo (MUY simple)
   const groupId = useMemo(() => pickGroupIdFromConfig(campo?.config), [campo?.config]);
-  const [groupLoading, setGroupLoading] = useState(false);
-  const [groupError, setGroupError] = useState<string | null>(null);
-  const [groupData, setGroupData] = useState<GroupTreeLite | null>(null);
-  const lastGroupIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (lastGroupIdRef.current === groupId) return;
-    lastGroupIdRef.current = groupId;
-
-    let cancelled = false;
-    if (!groupId) {
-      setGroupLoading(false);
-      setGroupError(null);
-      setGroupData(null);
-      return;
-    }
-
-    setGroupLoading(true);
-    setGroupError(null);
-
-    (async () => {
-      try {
-        const g = await getGroupOrFetch(groupId);
-        if (!cancelled) setGroupData(g as GroupTreeLite);
-      } catch (e: any) {
-        if (!cancelled) setGroupError(e?.message ?? "No se pudo cargar el grupo.");
-      } finally {
-        if (!cancelled) setGroupLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [groupId]);
-
-  const groupFields = useMemo(
-    () => (groupData ? groupData.fields || groupData.campos || [] : []),
-    [groupData]
-  );
-
-  // Valor del grupo como array plano (Redux o external)
-  const groupRows = useMemo(() => {
-    const raw = Array.isArray(value) ? (value as any[]) : [];
-    return raw;
-  }, [value]);
 
   const renderGroup = () => {
+    const entries = Array.isArray(value) ? (value as any[]) : [];
+    const title = campo.etiqueta?.trim() || campo.nombre_interno;
+    const subtitle = campo.ayuda || "";
+
     const isControlled = !!external;
 
-    // Props Redux (solo si NO estamos en external)
     const reduxProps =
       !isControlled && sessionId
         ? {
@@ -548,7 +515,6 @@ const FieldRenderer: React.FC<Props> = ({
           }
         : undefined;
 
-    // Handlers desde helper (se inyectan vía bindReduxHandlers)
     const handlers = reduxProps
       ? bindGroupHandlers({
           dispatch,
@@ -560,136 +526,61 @@ const FieldRenderer: React.FC<Props> = ({
       : null;
 
     return (
-      <View style={{ gap: 0 }}>
-        <Label
-          frame={referenceFrame}
-          text={label}
-          required={campo.requerido}
-          help={help}
-          isGroup
-          dividerThickness={dims.minSide * 0.005}
-        />
-
-        {groupLoading ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6 }}>
-            <ActivityIndicator size="small" />
-            <Body frame={referenceFrame} color="secondary" size="sm">
-              Cargando grupo…
-            </Body>
-          </View>
-        ) : groupError ? (
-          <Body frame={referenceFrame} size="sm" style={{ color: colors.danger600 }}>
-            {groupError}
-          </Body>
-        ) : null}
-
-        {groupFields.length ? (
-          <RepeatableGroup
-            title={groupData?.nombre || groupData?.name || label}
-            fieldsTemplate={groupFields as any}
-            entries={groupRows}
-            referenceFrame={referenceFrame}
-            contentFrame={contentFrame}
-            reduxProps={reduxProps}
-            bindReduxHandlers={
-              handlers
-                ? (set) =>
-                    set({
-                      addRow: handlers.addRow,
-                      removeRow: handlers.removeRow,
-                      setRowField: handlers.setRowField,
-                    })
-                : undefined
-            }
-            // Modo controlado (si este grupo vive dentro de otro y el padre maneja el array):
-            onChange={
-              isControlled
-                ? (nextRows) => {
-                    external!.onChange(nextRows);
-                    onChangeValue?.(campo.nombre_interno, nextRows);
-                  }
-                : undefined
-            }
-            // Permite 0 filas por defecto:
-            minEntries={0}
-            // Resumen mejorado
-            renderSummary={(row, idx) => {
-              const prefer = groupFields.find((c: any) =>
-                ["nombre", "name", "descripcion", "description", "titulo", "title"].includes(
-                  c.nombre_interno?.toLowerCase?.()
-                )
-              );
-              const primary =
-                (prefer && row?.[prefer.nombre_interno]) ||
-                Object.values(row).find((v) => typeof v === "string" && (v as string).trim()) ||
-                `#${idx + 1}`;
-              return (
-                <View style={{ gap: 2 }}>
-                  <Body weight="bold">{String(primary)}</Body>
-                  <Body size="xs" color="secondary">
-                    {groupData?.nombre || groupData?.name || label}
-                  </Body>
-                </View>
-              );
-            }}
-            modalProps={{ presentation: "modal", title: groupData?.nombre || label }}
-          >
-            {({ campo: subCampo, row, setField }) => (
-              <FieldRenderer
-                campo={subCampo as any}
-                referenceFrame={referenceFrame}
-                contentFrame={contentFrame}
-                external={{
-                  value: row[subCampo.nombre_interno],
-                  onChange: (val) => setField(subCampo.nombre_interno, val),
-                }}
-                pageIndex={effectivePage}
-              />
-            )}
-          </RepeatableGroup>
-        ) : null}
-      </View>
+      <GroupEditor
+        groupId={groupId!}
+        title={title}
+        subtitle={subtitle}
+        entries={entries}
+        referenceFrame={referenceFrame}
+        contentFrame={contentFrame}
+        pageIndex={effectivePage}
+        reduxProps={reduxProps}
+        bindReduxHandlers={
+          handlers
+            ? (set) =>
+                set({
+                  addRow: handlers.addRow,
+                  removeRow: handlers.removeRow,
+                  setRowField: handlers.setRowField,
+                })
+            : undefined
+        }
+        onChange={
+          isControlled
+            ? (nextRows) => {
+                external!.onChange(nextRows);
+                onChangeValue?.(campo.nombre_interno, nextRows);
+              }
+            : undefined
+        }
+        minEntries={0}
+      />
     );
   };
 
-  // ---------- Switch principal ----------
-  const isGroup = !!groupId;
-  if (isGroup) return renderGroup();
+  // ——— En tu switch final:
+  const kind = getFieldKind(campo);
 
-  if (campo.tipo === "booleano") return renderBoolean();
+  if (kind === "group") return renderGroup();
+  if (kind === "boolean") return renderBoolean();
+  if (kind === "number") return renderNumber();
+  if (kind === "firm") return renderFirm();
 
-  if (campo.tipo === "numerico") return renderNumber();
+  if (kind === "dataset") return renderDataset(); // 👈 ahora sí soporta tipo: "dataset"
+  if (kind === "list") return renderList();
 
-  if (campo.tipo === "imagen" && campo.clase === "firm") return renderFirm();
+  if (kind === "date") return renderDate("date");
+  if (kind === "hour") return renderDate("hour");
+  if (kind === "calc") return renderCalc();
 
-  if (campo.tipo === "texto") {
-    // console.warn("[FR] campo texto clase:", campo.clase);
-    // console.warn("[FR] campo config:", campo.tipo);
-    // console.warn("[FR] campo valor:", campo.etiqueta);
-    // console.warn("[FR] campo nombre interno:", campo.nombre_interno);
-    switch (campo.clase) {
-      case "string":
-      case "text":
-        return renderText();
-      case "list":
-        return renderList();
-      case "dataset":
-        return renderDataset();
-      case "date":
-        return renderDate("date");
-      case "hour":
-        return renderDate("hour");
-      case "calc":
-        return renderCalc();
-    }
-  }
+  if (kind === "text") return renderText();
 
   // Fallback
   return (
     <>
       {LabelBlock}
       <Body frame={referenceFrame} color="secondary" size="sm">
-        (placeholder) tipo: {campo.tipo} / clase: {campo.clase}
+        (placeholder) tipo: {String(campo.tipo)} / clase: {String(campo.clase)}
       </Body>
     </>
   );

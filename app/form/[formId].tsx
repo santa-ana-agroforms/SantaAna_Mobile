@@ -376,6 +376,9 @@ const FormRoute: React.FC = () => {
   // Muestra el footer si no es readonly o si tenemos mensajes/loader activos
   const shouldShowFooter = !isReadonly || footerLoading || !!footerInfo;
 
+  // Print the form with json data
+  console.log("JSON", JSON.stringify(form, null, 2));
+
   return (
     <PageScaffold
       title={form.nombre}
