@@ -253,6 +253,7 @@ const FormRoute: React.FC = () => {
 
         const serverForm = await DB.selectFormFromGroupedById(formId as string);
         if (serverForm) {
+          console.log("Fetched server form:", JSON.stringify(serverForm, null, 2));
           const fixedSessionForm: FormJSON = {
             id_formulario: serverForm.id_formulario,
             nombre: serverForm.nombre,
@@ -421,11 +422,12 @@ const FormRoute: React.FC = () => {
 export default FormRoute;
 
 /* --- mapeos mínimos --- */
-const mapTipo = (t: any): "texto" | "booleano" | "numerico" | "imagen" => {
+const mapTipo = (t: any): "texto" | "booleano" | "numerico" | "imagen" | "group" => {
   const s = String(t || "").toLowerCase();
   if (["bool", "booleano", "boolean"].includes(s)) return "booleano";
   if (["num", "numero", "numerico", "number"].includes(s)) return "numerico";
   if (["img", "image", "imagen", "firma", "firm"].includes(s)) return "imagen";
+  if (["group", "grupo", "section", "seccion"].includes(s)) return "group";
   return "texto";
 };
 
@@ -441,7 +443,8 @@ const mapClase = (
   | "boolean"
   | "number"
   | "calc"
-  | "firm" => {
+  | "firm"
+  | "group" => {
   const s = String(c || "").toLowerCase();
   if (["lista", "list"].includes(s)) return "list";
   if (["dataset", "fuente"].includes(s)) return "dataset";
@@ -452,5 +455,6 @@ const mapClase = (
   if (["calc", "calculado"].includes(s)) return "calc";
   if (["firma", "firm", "signature"].includes(s)) return "firm";
   if (["text", "textarea"].includes(s)) return "text";
+  if (["group", "grupo", "section", "seccion"].includes(s)) return "group";
   return "string";
 };
