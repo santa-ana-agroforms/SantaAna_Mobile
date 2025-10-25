@@ -41,6 +41,8 @@ export type InstanceSelectorProps = {
   formName: string;
   submittingId?: string | null;
   banner?: Banner | null;
+  busy?: boolean;
+  busyText?: string;
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -264,6 +266,8 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   referenceFrame,
   submittingId = null,
   banner = null,
+  busy = false,
+  busyText,
 }) => {
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
 
@@ -370,7 +374,10 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
     item.instanceName?.trim() || `Registro ${idx + 1}`;
 
   const openThen = (fn: () => void) => () => playOut(fn);
-  const handleTapOverlay = () => playOut();
+  const handleTapOverlay = () => {
+    if (submittingId || busy) return;
+    playOut();
+  };
 
   const renderBanner = () => {
     if (!banner) return null;
@@ -472,6 +479,28 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
               ]}
             />
           </View>
+          {(busy || submittingId) && (
+            <View
+              style={{
+                marginHorizontal: pad,
+                marginTop: clamp(gap * 0.4, 4, 10),
+                marginBottom: clamp(gap * 0.4, 4, 10),
+                padding: clamp(pad * 0.6, 8, 14),
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: "#F7F7F7",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <ActivityIndicator />
+              <Text style={{ fontWeight: "700", color: colors.textPrimary }} numberOfLines={1}>
+                {busyText || "Procesando…"}
+              </Text>
+            </View>
+          )}
 
           {/* BANNER */}
           {renderBanner()}
@@ -530,10 +559,10 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                     <>
                       <TouchableOpacity
                         onPress={openThen(() => onOpen(item, "review"))}
-                        disabled={!!submittingId}
+                        disabled={!!submittingId || busy}
                         style={[
                           btnBase,
-                          { backgroundColor: "#FFF7E2", opacity: submittingId ? 0.7 : 1 },
+                          { backgroundColor: "#FFF7E2", opacity: !!submittingId || busy ? 0.7 : 1 },
                         ]}
                       >
                         <Text style={{ fontWeight: "800", color: colors.textTertiary }}>
@@ -543,12 +572,12 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
 
                       <TouchableOpacity
                         onPress={handleOptimisticSubmit}
-                        disabled={!!submittingId}
+                        disabled={!!submittingId || busy}
                         style={[
                           btnBase,
                           {
                             backgroundColor: "#E6F7EA",
-                            opacity: submittingId ? 0.7 : 1,
+                            opacity: !!submittingId || busy ? 0.7 : 1,
                             flexDirection: "row",
                             alignItems: "center",
                             gap: 8,
@@ -571,10 +600,10 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                 return (
                   <TouchableOpacity
                     onPress={openThen(() => onOpen(item, "review"))}
-                    disabled={!!submittingId}
+                    disabled={!!submittingId || busy || busy}
                     style={[
                       btnBase,
-                      { backgroundColor: "#FFF7E2", opacity: submittingId ? 0.7 : 1 },
+                      { backgroundColor: "#FFF7E2", opacity: !!submittingId || busy ? 0.7 : 1 },
                     ]}
                   >
                     <Text style={{ fontWeight: "800", color: colors.textTertiary }}>Revisar</Text>
@@ -636,16 +665,16 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
             {allowNew && (
               <TouchableOpacity
                 onPress={openThen(onNew)}
-                disabled={!!submittingId}
+                disabled={!!submittingId || busy}
                 style={{
                   height: btnH,
                   borderRadius: 12,
-                  backgroundColor: !!submittingId ? "#EEE" : colors.primary600,
+                  backgroundColor: !!submittingId || busy ? "#EEE" : colors.primary600,
                   alignItems: "center",
                   justifyContent: "center",
                   borderWidth: 1,
-                  borderColor: !!submittingId ? colors.border : colors.primary600,
-                  opacity: !!submittingId ? 0.8 : 1,
+                  borderColor: !!submittingId || busy ? colors.border : colors.primary600,
+                  opacity: !!submittingId || busy ? 0.8 : 1,
                 }}
               >
                 <Text style={{ color: colors.neutral0, fontWeight: "800" }}>+ Nuevo registro</Text>
@@ -653,13 +682,13 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
             )}
             <TouchableOpacity
               onPress={handleTapOverlay}
-              disabled={!!submittingId}
+              disabled={!!submittingId || busy}
               style={{
                 height: Math.max(btnH * 0.9, 40),
                 borderRadius: 12,
                 alignItems: "center",
                 justifyContent: "center",
-                opacity: !!submittingId ? 0.8 : 1,
+                opacity: !!submittingId || busy ? 0.8 : 1,
               }}
             >
               <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>Cerrar</Text>

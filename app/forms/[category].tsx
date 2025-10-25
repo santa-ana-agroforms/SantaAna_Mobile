@@ -11,10 +11,12 @@ import { Alert, InteractionManager, View } from "react-native";
 
 import { sendFormEntry } from "@/api/client";
 import InstanceSelector from "@/components/molecules/InstanceSelector";
-import { getJSONForm, initSessionFromSaved, setStatus } from "@/forms/state/formSessionSlice";
+import { getJSONForm, initSessionFromSaved } from "@/forms/state/formSessionSlice";
 import { useInstanceSelectorState } from "@/forms/state/useInstanceSelectorState";
 import { useAppDispatch } from "@/store/hooks";
 import { isOnline } from "@/utils/network";
+
+import { getEntryById, markSynced } from "@/db/form-entries";
 
 /** tipos locales */
 type VersionVigente = { id_index_version: string; fecha_creacion: string };
@@ -119,12 +121,28 @@ const requestPreloadWithDebounce = (formId: string, versionId: string, wait = 40
   debounceTimers.set(key, t);
 };
 
+const waitUntilSynced = async (
+  sessionId: string,
+  { timeout = 8000, interval = 150 }: { timeout?: number; interval?: number } = {}
+) => {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      const row = await getEntryById(sessionId);
+      if (row?.status === "synced") return true;
+    } catch {}
+    await new Promise((r) => setTimeout(r, interval));
+  }
+  return false;
+};
+
 /** pantalla */
 const FormsByCategoryScreen: React.FC = () => {
   const { category } = useLocalSearchParams<{ category: string }>();
   const [loading, setLoading] = useState(true);
   const [grupo, setGrupo] = useState<FormCategoryGroup | null>(null);
-
+  const [modalBusy, setModalBusy] = useState(false);
+  const [modalBusyText, setModalBusyText] = useState<string | null>(null);
   const {
     visible,
     entries,
@@ -243,36 +261,47 @@ const FormsByCategoryScreen: React.FC = () => {
         }
         if (!selectedForm) return;
 
+        // 🔵 loader del botón + loader global del modal
         setSubmittingId(entry.id);
-        setBanner(null);
+        setModalBusy(true);
+        setModalBusyText("Enviando al servidor…");
 
-        // 1) Carga sesión local
+        // 1) cargar sesión local
         await dispatch(initSessionFromSaved({ local_id: entry.id })).unwrap();
 
-        // 2) JSON + envío
+        // 2) envío remoto (mantén busy del modal durante todo este paso)
         const json = await dispatch(getJSONForm({ sessionId: entry.id })).unwrap();
         if (!json) throw new Error("No se pudo preparar el formulario para envío.");
-        await sendFormEntry(json);
+        await sendFormEntry(json); // ← aquí sigue visible el loader global
 
-        // 3) UI optimista:
-        optimisticMarkSubmitted(entry.id); // mueve el ítem a “Enviados” en el modal
-        bumpCountsAfterSubmit(selectedForm.formId); // ajusta contadores de la lista inmediatamente
+        // 3) UI optimista en el modal
+        optimisticMarkSubmitted(entry.id);
+        bumpCountsAfterSubmit(selectedForm.formId);
 
-        // 4) Estado real (persistencia local tuya)
-        await dispatch(setStatus({ sessionId: entry.id, status: "synced" }));
+        // 4) persiste en BD local y espera confirmación
+        await markSynced(entry.id);
+        const ok = await waitUntilSynced(entry.id, { timeout: 8000, interval: 150 });
 
-        // 5) (Opcional) refetch suave desde DB cuando tu persistencia ya guardó
-        setTimeout(() => {
-          refetch();
-          refreshScreen();
-        }, 120);
+        // 5) ya puedes soltar el spinner del botón, pero mantener el global si quieres más pasos
+        setSubmittingId(null);
+        setModalBusyText("Sincronizando datos locales…");
 
-        // 6) Banner OK
-        setBanner({ type: "success", text: "¡Formulario enviado!" });
+        if (ok) {
+          await refetch();
+          await refreshScreen();
+          setBanner({ type: "success", text: "¡Formulario enviado!" });
+        } else {
+          setBanner({
+            type: "info",
+            text: "El envío fue exitoso, pero la sincronización local tardó más de lo esperado.",
+          });
+        }
       } catch (e: any) {
         setBanner({ type: "error", text: e?.message ?? "No se pudo enviar el formulario." });
       } finally {
-        setSubmittingId(null);
+        // 🔵 suelta el loader global al final
+        setModalBusy(false);
+        setModalBusyText(null);
       }
     },
     [dispatch, selectedForm, optimisticMarkSubmitted, bumpCountsAfterSubmit, refetch, refreshScreen]
@@ -397,6 +426,8 @@ const FormsByCategoryScreen: React.FC = () => {
               contentFrame={contentFrame}
               submittingId={submittingId}
               banner={banner}
+              busy={modalBusy}
+              busyText={modalBusyText ?? undefined}
             />
           </>
         );
