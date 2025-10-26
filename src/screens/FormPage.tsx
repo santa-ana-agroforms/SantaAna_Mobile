@@ -10,7 +10,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 export type Campo = {
   id_campo: string;
   sequence: number;
-  tipo: "texto" | "booleano" | "numerico" | "imagen";
+  tipo: "texto" | "booleano" | "numerico" | "imagen" | "group";
   clase: string; // string | text | list | dataset | hour | date | boolean | number | calc | firm
   nombre_interno: string;
   etiqueta: string;
@@ -75,6 +75,7 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
       {fields.map((f) => (
         <View key={f.id_campo} style={{ marginBottom: fieldGap }}>
           <FieldRenderer
+            // key={f.id_campo}
             campo={f}
             formName={formName}
             referenceFrame={referenceFrame}

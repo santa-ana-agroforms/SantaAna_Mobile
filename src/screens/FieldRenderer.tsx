@@ -33,47 +33,24 @@ type Props = {
   formName?: string;
   referenceFrame: Frame;
   contentFrame: Frame;
-  onChangeValue?: (name: string, value: unknown) => void; // para integraciones custom
+  onChangeValue?: (name: string, value: unknown) => void;
   pageIndex?: number;
-  /** Si se usa dentro de un grupo, se inyecta el valor/commit externos y NO se toca Redux */
   external?: { value: any; onChange: (v: any) => void };
 };
 
 const getFieldKind = (c: { tipo?: string; clase?: string }) => {
-  // console.log("[FR] FF", c);
   const t = String(c?.tipo || "").toLowerCase();
   const k = String(c?.clase || "").toLowerCase();
-
-  // console.log("[FR] getFieldKind()", { tipo: t, clase: k });
-  // grupos
   if (k === "group" || t === "grupo" || t === "group") return "group";
-
-  // booleanos
   if (t === "booleano" || t === "boolean" || k === "boolean") return "boolean";
-
-  // numéricos
   if (t === "numerico" || t === "numeric" || t === "number" || k === "number") return "number";
-
-  // firmas
   if (t === "imagen" && k === "firm") return "firm";
-
-  // dataset (acepta ambas variantes)
   if (t === "dataset" || k === "dataset") return "dataset";
-
-  // lista (por si a veces viene como tipo:list o clase:list)
   if (t === "list" || k === "list") return "list";
-
-  // fecha/hora posibles
   if (t === "date" || k === "date") return "date";
   if (t === "hour" || t === "time" || k === "hour" || k === "time") return "hour";
-
-  // calculado (puede venir como texto/calc o numerico/calc)
   if (k === "calc") return "calc";
-
-  // texto (string/long)
   if (t === "texto" || t === "text" || k === "string" || k === "text") return "text";
-
-  // fallback
   return "unknown";
 };
 
@@ -107,18 +84,15 @@ const useDebugLogger = (label: string) => {
 
   const log = (...args: any[]) => {
     if (!DEBUG_FR) return;
-    // @ts-ignore
     console.log(prefix(), ...args);
   };
 
   const group = (title: string, fn: () => void) => {
     if (!DEBUG_FR) return fn();
-    // @ts-ignore
     console.groupCollapsed(prefix(` ${title}`));
     try {
       fn();
     } finally {
-      // @ts-ignore
       console.groupEnd();
     }
   };

@@ -128,7 +128,7 @@ const DatasetField: React.FC<Props> = ({
   }, [frame]);
 
   return (
-    <View style={{ gap: dims.gap }}>
+    <View style={{ gap: dims.gap }} pointerEvents="box-none">
       {showSearch ? (
         <View
           style={{
