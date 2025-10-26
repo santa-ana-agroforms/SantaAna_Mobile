@@ -246,7 +246,7 @@ const GroupEditor: React.FC<Props> = ({
     setModalVisible(true);
   };
 
-  const animateIn = () => {
+  const animateIn = useCallback(() => {
     backdrop.setValue(0);
     sheetY.setValue(1);
     Animated.parallel([
@@ -263,7 +263,7 @@ const GroupEditor: React.FC<Props> = ({
         useNativeDriver: true,
       }),
     ]).start();
-  };
+  }, [backdrop, sheetY]);
 
   const closeModal = () => {
     Animated.parallel([
@@ -289,7 +289,7 @@ const GroupEditor: React.FC<Props> = ({
 
   useEffect(() => {
     if (modalVisible) animateIn();
-  }, [modalVisible]);
+  }, [modalVisible, animateIn]);
 
   // Estado vacío
   const EmptyState = () => (

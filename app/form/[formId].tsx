@@ -398,6 +398,7 @@ const FormRoute: React.FC = () => {
             layoutFrame={layoutFrame}
             page={currentPage}
             onPageChange={handlePageChange}
+            mode={mode}
           />
 
           {shouldShowFooter && (

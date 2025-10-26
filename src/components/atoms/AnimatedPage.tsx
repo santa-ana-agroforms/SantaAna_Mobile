@@ -21,6 +21,7 @@ type Props = {
   formName?: string;
   referenceFrame: { width: number; height: number };
   contentFrame: { width: number; height: number };
+  mode?: "edit" | "review" | "view";
 };
 
 const AnimatedPage: React.FC<Props> = ({
@@ -33,6 +34,7 @@ const AnimatedPage: React.FC<Props> = ({
   formName,
   referenceFrame,
   contentFrame,
+  mode,
 }) => {
   // 1) Suaviza el índice de página para no depender de saltos bruscos
   const smoothed = useDerivedValue(() =>
@@ -81,6 +83,7 @@ const AnimatedPage: React.FC<Props> = ({
           formName={formName}
           referenceFrame={referenceFrame}
           contentFrame={{ ...contentFrame, width, height }}
+          mode={mode}
         />
       </ScrollView>
     </Animated.View>

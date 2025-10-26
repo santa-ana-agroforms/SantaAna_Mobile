@@ -12,6 +12,7 @@ import type { Campo } from "./FormPage";
 
 // ⬇️ Redux
 import CalcOutput from "@/components/atoms/CalcOutput";
+import SignaturePreview from "@/components/atoms/SignaturePreview";
 import DatasetField from "@/components/molecules/DatasetField";
 import GroupEditor from "@/components/molecules/GroupEditor";
 import {
@@ -36,6 +37,7 @@ type Props = {
   onChangeValue?: (name: string, value: unknown) => void;
   pageIndex?: number;
   external?: { value: any; onChange: (v: any) => void };
+  mode?: "edit" | "review" | "view";
 };
 
 const getFieldKind = (c: { tipo?: string; clase?: string }) => {
@@ -161,6 +163,7 @@ const FieldRenderer: React.FC<Props> = ({
   onChangeValue,
   pageIndex,
   external,
+  mode,
 }) => {
   // Prints campo info with good json formatting
   console.log("🎒🎒🎒🎒", JSON.stringify(campo, null, 2));
@@ -438,11 +441,24 @@ const FieldRenderer: React.FC<Props> = ({
   };
 
   const renderFirm = () => {
-    // Throttle simple
+    if (mode === "view" && typeof value === "string") {
+      return (
+        <>
+          {LabelBlock}
+          <SignaturePreview value={value} height={referenceFrame.width * 0.5} />
+        </>
+      );
+    }
+
+    // … si NO es readOnly, mantener tu FieldSignature para firmar/editar …
     let t: any = null;
     let lastRef: any = null;
 
     const throttledCommit = (next: any) => {
+      if (typeof next === "string") {
+        onCommit(next);
+        return;
+      }
       if (typeof next === "string" && next === lastRef) return;
       if (Array.isArray(next) && Array.isArray(lastRef) && next.length === lastRef.length) return;
       if (t) return;
@@ -467,7 +483,6 @@ const FieldRenderer: React.FC<Props> = ({
       </>
     );
   };
-
   // ---------- Grupo ----------
   // ---------- Branch de grupo (MUY simple)
   const groupId = useMemo(() => pickGroupIdFromConfig(campo?.config), [campo?.config]);

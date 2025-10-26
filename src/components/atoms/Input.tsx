@@ -1,13 +1,11 @@
-// src/components/atoms/Input.tsx
+// src/components/atoms/Input.tsx (extracto relevante y listo para pegar)
 import { colors } from "@/theme/tokens";
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
-  LayoutChangeEvent,
-  NativeSyntheticEvent,
   Platform,
+  Pressable,
   Text,
   TextInput,
-  TextInputKeyPressEventData,
   TextInputProps,
   View,
   useWindowDimensions,
@@ -16,15 +14,19 @@ import Label from "./Label";
 import { Caption } from "./Typography";
 
 type Frame = { width: number; height: number };
-
 type Props = TextInputProps & {
   label?: string;
   required?: boolean;
   error?: string;
   frame?: Frame;
   focusedOverride?: boolean;
-  /** NUEVO: se dispara en Enter / submit / blur con el valor normalizado ("" -> null) */
   onCommitValue?: (v: string | null) => void;
+
+  // === NUEVO ===
+  variant?: "text" | "password";
+  toggleLabels?: { show: string; hide: string };
+  /** Renderiza tu propio botón (ícono, etc.) */
+  renderPasswordToggle?: (visible: boolean) => React.ReactNode;
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -37,51 +39,51 @@ const Input: React.FC<Props> = ({
   style,
   frame,
   focusedOverride,
+  value,
+  onChangeText,
+  onCommitValue,
   onFocus,
   onBlur,
-  onChangeText,
-  onCommitValue, // ← NUEVO
-  value,
-  placeholder,
   onKeyPress,
   onSubmitEditing,
-  returnKeyType,
   blurOnSubmit,
-  multiline = true, // mantenemos multiline para autoaltura
+  returnKeyType,
+  placeholder,
+  multiline = true,
+  // === NUEVO ===
+  variant = "text",
+  toggleLabels = { show: "Mostrar", hide: "Ocultar" },
+  renderPasswordToggle,
   ...rest
 }) => {
   const { width, height } = useWindowDimensions();
   const baseFrame = frame ?? { width, height };
+  const minSide = Math.min(baseFrame.width, baseFrame.height);
 
   const [focused, setFocused] = useState(false);
-  const [uncontrolledText, setUncontrolledText] = useState("");
-  const [measuredHeight, setMeasuredHeight] = useState(0);
+  const [uncontrolled, setUncontrolled] = useState("");
+  const [containerW, setContainerW] = useState(0);
 
-  const [containerWidth, setContainerWidth] = useState(0);
-  const [innerWidth, setInnerWidth] = useState(0);
+  // === NUEVO ===
+  const isPassword = variant === "password";
+  const [visible, setVisible] = useState(false);
+  const [pwdKey, setPwdKey] = useState(0); // fuerza remount en iOS al alternar
 
   const isFocused = focusedOverride ?? focused;
-  const textValue = value ?? uncontrolledText;
-  const displayText = (textValue?.length ?? 0) > 0 ? textValue : (placeholder ?? " ");
+  const textValue = value ?? uncontrolled;
 
-  const dims = useMemo(() => {
-    const minSide = Math.min(baseFrame.width, baseFrame.height);
-    const baseRem = clamp(minSide * 0.042, 14, 18);
+  // Dimensiones (puedes mantener tus clamps si quieres)
+  const baseRem = clamp(minSide * 0.042, 14, 18);
+  const radius = clamp(minSide * 0.018, 8, 12);
+  const padH = clamp(minSide * 0.014, 12, 18);
+  const padV = clamp(minSide * 0.01, 8, 14);
+  const fontSize = clamp(baseRem * 1.05, 14, 20);
+  const lineH = Math.round(fontSize * 1.25);
+  const minH = Math.max(44, padV * 2 + lineH);
+  const errorGap = clamp(minSide * 0.006, 4, 10);
 
-    const radius = clamp(minSide * 0.018, 8, 12);
-    const padH = clamp(minSide * 0.014, 12, 18);
-    const padV = clamp(minSide * 0.01, 8, 14);
-    const borderW = 1;
-
-    const labelGap = clamp(minSide * 0.008, 6, 12);
-    const errorGap = clamp(minSide * 0.006, 4, 10);
-
-    const fontSize = clamp(baseRem * 1.05, 14, 20);
-    const lineH = Math.round(fontSize * 1.25);
-    const minH = Math.max(44, padV * 2 + lineH);
-
-    return { radius, padH, padV, borderW, labelGap, errorGap, fontSize, lineH, minH };
-  }, [baseFrame.height, baseFrame.width]);
+  // deja espacio para el botón a la derecha si es password
+  const rightPadForToggle = isPassword ? Math.max(44, padH * 2.5) : 0;
 
   const borderColor = !editable
     ? colors.neutral200
@@ -91,163 +93,122 @@ const Input: React.FC<Props> = ({
         ? colors.primary600
         : colors.border;
 
-  const bg = editable ? colors.neutral0 : "#F2F2F2";
-
-  const handleContainerLayout = (e: LayoutChangeEvent) => {
-    const w = e.nativeEvent.layout.width;
-    if (w !== containerWidth) {
-      setContainerWidth(w);
-      setInnerWidth(Math.max(0, w - dims.padH * 2));
-    }
-  };
-
-  const textStyleBase = useMemo(
-    () => ({
-      fontSize: dims.fontSize,
-      lineHeight: dims.lineH,
-      fontFamily: "Inter_400Regular" as const,
-    }),
-    [dims.fontSize, dims.lineH]
-  );
-
-  // ====== Helpers de commit ======
   const commit = (raw: string) => {
-    // Evita newlines finales cuando se confirma con Enter
     const stripped = raw.replace(/[\r\n]+$/, "");
-    // Normaliza "" -> null (para que los requeridos no cuenten como llenos)
-    const normalized: string | null = stripped.trim().length ? stripped : null;
-
-    // Refleja en estado no-controlado si aplica
-    if (value === undefined) {
-      setUncontrolledText(normalized ?? "");
-    }
-
-    // Notifica a quien le interese el commit “definitivo”
+    const normalized = stripped.trim().length ? stripped : null;
+    if (value === undefined) setUncontrolled(normalized ?? "");
     onCommitValue?.(normalized);
-
-    // Si el caller además quiere onSubmitEditing clásico, se respeta
-    // (lo disparamos aparte en handleSubmitEditing)
   };
 
-  const handleChangeText = (t: string) => {
-    if (value === undefined) setUncontrolledText(t);
-    // live-update para vista previa, etc.
-    onChangeText?.(t);
-  };
-
-  const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-    onKeyPress?.(e);
-    if (e.nativeEvent.key === "Enter") {
-      if (Platform.OS === "web") {
-        // @ts-ignore
-        e.preventDefault?.();
-      }
-      commit(textValue ?? "");
-    }
-  };
-
-  const handleSubmitEditing = () => {
-    onSubmitEditing?.({} as any);
-    commit(textValue ?? "");
-  };
-
-  const handleBlur = (ev: any) => {
-    setFocused(false);
-    commit(textValue ?? "");
-    onBlur?.(ev);
-  };
-
-  const Measure = (
-    <View
-      style={{
-        position: "absolute",
-        left: -9999,
-        top: -9999,
-        width: innerWidth || 0,
-        opacity: 0,
-        pointerEvents: "none",
-      }}
-      key={`${innerWidth}-${displayText.length}-${dims.fontSize}-${dims.lineH}`}
-    >
-      <Text
-        allowFontScaling={false}
-        onLayout={(ev) => {
-          const h = ev.nativeEvent.layout.height;
-          if (h > 0) {
-            const fix = Platform.OS === "android" ? 1 : 0;
-            setMeasuredHeight(Math.max(dims.lineH, Math.ceil(h) - fix));
-          } else {
-            setMeasuredHeight(dims.lineH);
-          }
-        }}
-        style={[
-          textStyleBase,
-          {
-            flexWrap: "wrap",
-          },
-        ]}
-      >
-        {displayText || " "}
-      </Text>
-    </View>
-  );
+  const secure = isPassword ? !visible : rest.secureTextEntry;
+  const effectiveMultiline = isPassword ? false : multiline;
 
   return (
     <View style={{ width: "100%" }}>
       <Label frame={frame} text={label} required={required} />
 
       <View
-        onLayout={handleContainerLayout}
+        onLayout={(e) => setContainerW(e.nativeEvent.layout.width)}
         style={{
           borderColor,
-          borderWidth: dims.borderW,
-          borderRadius: dims.radius,
-          backgroundColor: bg,
-          paddingHorizontal: dims.padH,
-          paddingVertical: dims.padV,
-          minHeight: dims.minH,
+          borderWidth: 1,
+          borderRadius: radius,
+          backgroundColor: editable ? colors.neutral0 : "#F2F2F2",
+          paddingHorizontal: padH,
+          paddingVertical: padV,
+          minHeight: minH,
           justifyContent: "center",
         }}
       >
-        {Measure}
+        {/* Input */}
         <TextInput
+          key={isPassword ? `pwd-${secure}-${pwdKey}` : undefined}
           allowFontScaling={false}
           {...rest}
           editable={editable}
-          multiline={multiline}
+          multiline={effectiveMultiline}
           scrollEnabled={false}
+          textContentType="password" // activa gestor de contraseñas iOS
+          autoComplete="password"
           value={textValue}
-          onChangeText={handleChangeText}
+          onChangeText={(t) => {
+            if (value === undefined) setUncontrolled(t);
+            onChangeText?.(t);
+          }}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);
           }}
-          onBlur={handleBlur}
-          onKeyPress={handleKeyPress}
-          onSubmitEditing={handleSubmitEditing}
+          onBlur={(e) => {
+            setFocused(false);
+            commit(textValue ?? "");
+            onBlur?.(e);
+          }}
+          onKeyPress={(e) => {
+            onKeyPress?.(e);
+            // enter -> commit
+            // @ts-ignore
+            if (e?.nativeEvent?.key === "Enter" && Platform.OS === "web") e.preventDefault?.();
+          }}
+          onSubmitEditing={(ev) => {
+            onSubmitEditing?.(ev as any);
+            commit(textValue ?? "");
+          }}
           blurOnSubmit={blurOnSubmit ?? true}
           returnKeyType={returnKeyType ?? "done"}
-          style={[
-            {
-              ...textStyleBase,
-              color: colors.textPrimary,
-              padding: 0,
-              textAlignVertical: "top",
-              height: Math.max(dims.lineH, measuredHeight || dims.lineH),
-              width: innerWidth || undefined,
-            },
-            style,
-          ]}
-          placeholder={placeholder}
+          secureTextEntry={secure}
+          // textContentType={isPassword ? "password" : rest.textContentType}
+          autoCapitalize={isPassword ? "none" : rest.autoCapitalize}
+          autoCorrect={isPassword ? false : rest.autoCorrect}
+          style={{
+            fontSize,
+            lineHeight: lineH,
+            color: colors.textPrimary,
+            padding: 0,
+            // textAlignVertical: "top",
+            // minHeight: lineH,
+            width: containerW ? containerW - padH * 2 - rightPadForToggle : undefined,
+          }}
+          placeholder={variant === "password" ? (visible ? "Contraseña" : "••••••••") : placeholder}
           placeholderTextColor={colors.textSecondary}
         />
+
+        {/* Botón Mostrar/Ocultar: SIEMPRE cuando variant=password */}
+        {isPassword && (
+          <Pressable
+            onPress={() => {
+              setVisible((v) => !v);
+              setPwdKey((k) => k + 1); // fix iOS
+            }}
+            accessibilityRole="button"
+            hitSlop={10}
+            style={{
+              position: "absolute",
+              right: padH / 2,
+              // top: "50%",
+              // transform: [{ translateY: -lineH / 2 }],
+              minWidth: 44,
+              height: lineH + 8,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {renderPasswordToggle ? (
+              renderPasswordToggle(visible)
+            ) : (
+              <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>
+                {visible ? toggleLabels.hide || "Ocultar" : toggleLabels.show || "Mostrar"}
+              </Text>
+            )}
+          </Pressable>
+        )}
       </View>
 
       {error ? (
         <Caption
           frame={baseFrame}
           color="primary"
-          style={{ color: colors.danger600, marginTop: dims.errorGap }}
+          style={{ color: colors.danger600, marginTop: errorGap }}
         >
           {error}
         </Caption>

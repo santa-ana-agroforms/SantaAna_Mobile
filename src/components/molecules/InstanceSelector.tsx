@@ -2,6 +2,7 @@ import { colors } from "@/theme/tokens";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   FlatList,
@@ -35,6 +36,7 @@ export type InstanceSelectorProps = {
   onNew: () => void;
   onOpen: (entry: EntryPreview, mode: "edit" | "review" | "view") => void;
   onSubmit: (entry: EntryPreview) => void;
+  onDelete?: (entry: EntryPreview) => void;
   onClose: () => void;
   referenceFrame: Frame;
   contentFrame: Frame;
@@ -43,6 +45,7 @@ export type InstanceSelectorProps = {
   banner?: Banner | null;
   busy?: boolean;
   busyText?: string;
+  deleteButton?: boolean;
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -261,6 +264,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   onNew,
   onOpen,
   onSubmit,
+  onDelete,
   onClose,
   formName,
   referenceFrame,
@@ -268,11 +272,73 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   banner = null,
   busy = false,
   busyText,
+  deleteButton = false,
 }) => {
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
+  const whenOf = (e: EntryPreview) => e.updatedAt ?? e.createdAt ?? 0;
 
   // ---------- ESTADO LOCAL (para update optimista) ----------
   const [localEntries, setLocalEntries] = useState<EntryPreview[]>(entries);
+
+  // estado local para spinner de envío masivo
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+
+  // entradas en revisión que YA se pueden enviar
+  const readyForSubmit = useMemo(
+    () =>
+      localEntries.filter(
+        (e) => toUIStatus(e.status) === "reviewable" && e.status === "ready_for_submit"
+      ),
+    [localEntries]
+  );
+
+  const handleBulkSubmit = () => {
+    if (busy || submittingId || bulkSubmitting || readyForSubmit.length === 0) return;
+
+    setBulkSubmitting(true);
+
+    const readySet = new Set(readyForSubmit.map((e) => e.id));
+    const now = Date.now();
+
+    // 1) Actualización optimista local
+    setLocalEntries((prev) =>
+      prev.map((e) => (readySet.has(e.id) ? { ...e, status: "submitted", updatedAt: now } : e))
+    );
+
+    // 2) Delegar persistencia real al padre (uno por uno)
+    for (const entry of readyForSubmit) {
+      try {
+        onSubmit(entry);
+      } catch {
+        // si quieres, aquí puedes agregar manejo de error por item
+      }
+    }
+
+    // 3) Quitar spinner
+    setBulkSubmitting(false);
+  };
+
+  const handleDelete = (entry: EntryPreview) => {
+    if (busy || submittingId) return;
+
+    Alert.alert(
+      "Eliminar registro",
+      `¿Seguro que deseas eliminar “${entry.instanceName?.trim() || "Registro"}”? Esta acción no se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => {
+            // 1) Eliminación optimista
+            setLocalEntries((prev) => prev.filter((e) => e.id !== entry.id));
+            // 2) Delegar al padre
+            onDelete?.(entry);
+          },
+        },
+      ]
+    );
+  };
 
   // sincroniza cuando cambian las props desde fuera (refetch del padre)
   useEffect(() => {
@@ -341,6 +407,9 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   type FilterKey = "reviewable" | "submitted";
   const [filter, setFilter] = useState<FilterKey>("reviewable");
 
+  // conviene saber si mostrar el botón: solo en la pestaña "En revisión"
+  const showBulkButton = filter === "reviewable" && readyForSubmit.length > 0;
+
   // ⚠️ usa localEntries para contar y filtrar
   const counts = useMemo(() => {
     let reviewable = 0;
@@ -352,15 +421,17 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
     return { reviewable, submitted, total: localEntries.length };
   }, [localEntries]);
 
-  const filtered = useMemo(
-    () =>
-      localEntries.filter((e) =>
-        filter === "submitted"
-          ? toUIStatus(e.status) === "submitted"
-          : toUIStatus(e.status) === "reviewable"
-      ),
-    [localEntries, filter]
-  );
+  const filteredSorted = useMemo(() => {
+    const base = localEntries.filter((e) =>
+      filter === "submitted"
+        ? toUIStatus(e.status) === "submitted"
+        : toUIStatus(e.status) === "reviewable"
+    );
+    // Orden: más recientes primero (desc)
+    return base
+      .slice() // evita mutar
+      .sort((a, b) => whenOf(b) - whenOf(a) || b.id.localeCompare(a.id)); // desempate por id
+  }, [localEntries, filter]);
 
   const cardStyle = {
     padding: cardPad,
@@ -469,6 +540,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
             <Text style={{ fontWeight: "800", fontSize: titleSize, color: colors.textPrimary }}>
               Registros de {periodLabel} - {formName}
             </Text>
+
             <SegmentedPill
               minSide={minSide}
               valueKey={filter}
@@ -478,6 +550,31 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                 { key: "submitted", label: "Enviados", count: counts.submitted },
               ]}
             />
+
+            {showBulkButton && (
+              <TouchableOpacity
+                onPress={handleBulkSubmit}
+                disabled={!!submittingId || busy || bulkSubmitting}
+                style={{
+                  marginTop: clamp(gap * 0.3, 4, 10),
+                  alignSelf: "flex-end",
+                  paddingHorizontal: clamp(minSide * 0.035, 12, 16),
+                  paddingVertical: clamp(minSide * 0.025, 8, 12),
+                  borderRadius: clamp(minSide * 0.024, 8, 12),
+                  borderWidth: 1,
+                  borderColor: colors.primary600,
+                  backgroundColor: !!submittingId || busy || bulkSubmitting ? "#E4F2E8" : "#E6F7EA",
+                  flexDirection: "row",
+                  gap: 8,
+                  alignItems: "center",
+                }}
+              >
+                {bulkSubmitting ? <ActivityIndicator /> : null}
+                <Text style={{ fontWeight: "800", color: colors.primary600 }}>
+                  Enviar todo ({readyForSubmit.length})
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           {(busy || submittingId) && (
             <View
@@ -510,9 +607,9 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
           {/* lista */}
           <FlatList
             contentContainerStyle={{ padding: pad, paddingBottom: pad * 0.5, gap }}
-            data={filtered}
+            data={filteredSorted}
             keyExtractor={(e) => e.id}
-            extraData={{ filtered, submittingId }} // fuerza rerender ante cambios locales
+            extraData={{ filteredSorted, submittingId }} // fuerza rerender ante cambios locales
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={() => (
               <View style={[cardStyle, { alignItems: "center" }]}>
@@ -534,11 +631,11 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
               } as const;
 
               const handleOptimisticSubmit = () => {
-                // 1) mover inmediatamente a "submitted"
                 setLocalEntries((prev) =>
-                  prev.map((e) => (e.id === item.id ? { ...e, status: "submitted" } : e))
+                  prev.map((e) =>
+                    e.id === item.id ? { ...e, status: "submitted", updatedAt: Date.now() } : e
+                  )
                 );
-                // 2) delegar la persistencia real al padre
                 onSubmit(item);
               };
 
@@ -592,22 +689,58 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                           </Text>
                         )}
                       </TouchableOpacity>
+
+                      {/* 👇 nuevo: eliminar */}
+                      {deleteButton && (
+                        <TouchableOpacity
+                          onPress={() => handleDelete(item)}
+                          disabled={!!submittingId || busy}
+                          style={[
+                            btnBase,
+                            {
+                              backgroundColor: "#FDECEA",
+                              borderColor: colors.border,
+                              opacity: !!submittingId || busy ? 0.7 : 1,
+                            },
+                          ]}
+                        >
+                          <Text style={{ fontWeight: "800", color: "#C0392B" }}>Eliminar</Text>
+                        </TouchableOpacity>
+                      )}
                     </>
                   );
                 }
 
                 // in_progress
                 return (
-                  <TouchableOpacity
-                    onPress={openThen(() => onOpen(item, "review"))}
-                    disabled={!!submittingId || busy || busy}
-                    style={[
-                      btnBase,
-                      { backgroundColor: "#FFF7E2", opacity: !!submittingId || busy ? 0.7 : 1 },
-                    ]}
-                  >
-                    <Text style={{ fontWeight: "800", color: colors.textTertiary }}>Revisar</Text>
-                  </TouchableOpacity>
+                  <>
+                    <TouchableOpacity
+                      onPress={openThen(() => onOpen(item, "review"))}
+                      disabled={!!submittingId || busy}
+                      style={[
+                        btnBase,
+                        { backgroundColor: "#FFF7E2", opacity: !!submittingId || busy ? 0.7 : 1 },
+                      ]}
+                    >
+                      <Text style={{ fontWeight: "800", color: colors.textTertiary }}>Revisar</Text>
+                    </TouchableOpacity>
+
+                    {/* 👇 nuevo: eliminar */}
+                    <TouchableOpacity
+                      onPress={() => handleDelete(item)}
+                      disabled={!!submittingId || busy}
+                      style={[
+                        btnBase,
+                        {
+                          backgroundColor: "#FDECEA",
+                          borderColor: colors.border,
+                          opacity: !!submittingId || busy ? 0.7 : 1,
+                        },
+                      ]}
+                    >
+                      <Text style={{ fontWeight: "800", color: "#C0392B" }}>Eliminar</Text>
+                    </TouchableOpacity>
+                  </>
                 );
               };
 
