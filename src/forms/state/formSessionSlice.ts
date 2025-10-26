@@ -3,6 +3,7 @@ import { createAsyncThunk, createSelector, createSlice, PayloadAction } from "@r
 import uuid from "react-native-uuid";
 
 import {
+  deleteEntry,
   getEntryById,
   listEntriesSummary,
   SavedEntry,
@@ -584,6 +585,16 @@ const slice = createSlice({
       if (!sess) return;
       sess.groups[payload.def.id_grupo] = payload.def;
     });
+    builder
+      .addCase(deleteLocalEntry.fulfilled, (state, { payload }) => {
+        const id = payload.local_id;
+        if (state.currentSessionId === id) state.currentSessionId = null;
+        delete state.sessions[id];
+        state.entriesSummary = (state.entriesSummary ?? []).filter((e) => e.local_id !== id);
+      })
+      .addCase(deleteLocalEntry.rejected, (state, { payload }) => {
+        state.error = payload ?? "Error al eliminar el registro";
+      });
   },
 });
 
@@ -732,3 +743,16 @@ export const selectCanSendForReview = (sessionId: string) =>
     }
     return true;
   });
+
+export const deleteLocalEntry = createAsyncThunk<
+  { local_id: string },
+  { local_id: string },
+  { state: { formSession: FormSessionsState }; rejectValue: string }
+>("formSession/deleteLocalEntry", async ({ local_id }, { rejectWithValue }) => {
+  try {
+    await deleteEntry(local_id); // ← usa la función nueva
+    return { local_id };
+  } catch (e: any) {
+    return rejectWithValue(e?.message ?? "No se pudo eliminar el registro local");
+  }
+});

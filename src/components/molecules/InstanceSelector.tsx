@@ -35,6 +35,7 @@ export type InstanceSelectorProps = {
   onNew: () => void;
   onOpen: (entry: EntryPreview, mode: "edit" | "review" | "view") => void;
   onSubmit: (entry: EntryPreview) => void;
+  onDelete?: (entry: EntryPreview) => void;
   onClose: () => void;
   referenceFrame: Frame;
   contentFrame: Frame;
@@ -43,6 +44,7 @@ export type InstanceSelectorProps = {
   banner?: Banner | null;
   busy?: boolean;
   busyText?: string;
+  deleteButton?: boolean;
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -261,6 +263,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   onNew,
   onOpen,
   onSubmit,
+  onDelete,
   onClose,
   formName,
   referenceFrame,
@@ -268,11 +271,57 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   banner = null,
   busy = false,
   busyText,
+  deleteButton = false,
 }) => {
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
+  const whenOf = (e: EntryPreview) => e.updatedAt ?? e.createdAt ?? 0;
 
   // ---------- ESTADO LOCAL (para update optimista) ----------
   const [localEntries, setLocalEntries] = useState<EntryPreview[]>(entries);
+  const [deleteTarget, setDeleteTarget] = useState<EntryPreview | null>(null);
+
+  // estado local para spinner de envío masivo
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+
+  // entradas en revisión que YA se pueden enviar
+  const readyForSubmit = useMemo(
+    () =>
+      localEntries.filter(
+        (e) => toUIStatus(e.status) === "reviewable" && e.status === "ready_for_submit"
+      ),
+    [localEntries]
+  );
+
+  const handleBulkSubmit = () => {
+    if (busy || submittingId || bulkSubmitting || readyForSubmit.length === 0) return;
+
+    setBulkSubmitting(true);
+
+    const readySet = new Set(readyForSubmit.map((e) => e.id));
+    const now = Date.now();
+
+    // 1) Actualización optimista local
+    setLocalEntries((prev) =>
+      prev.map((e) => (readySet.has(e.id) ? { ...e, status: "submitted", updatedAt: now } : e))
+    );
+
+    // 2) Delegar persistencia real al padre (uno por uno)
+    for (const entry of readyForSubmit) {
+      try {
+        onSubmit(entry);
+      } catch {
+        // si quieres, aquí puedes agregar manejo de error por item
+      }
+    }
+
+    // 3) Quitar spinner
+    setBulkSubmitting(false);
+  };
+
+  const handleDelete = (entry: EntryPreview) => {
+    if (busy || submittingId) return;
+    setDeleteTarget(entry);
+  };
 
   // sincroniza cuando cambian las props desde fuera (refetch del padre)
   useEffect(() => {
@@ -341,6 +390,9 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   type FilterKey = "reviewable" | "submitted";
   const [filter, setFilter] = useState<FilterKey>("reviewable");
 
+  // conviene saber si mostrar el botón: solo en la pestaña "En revisión"
+  const showBulkButton = filter === "reviewable" && readyForSubmit.length > 0;
+
   // ⚠️ usa localEntries para contar y filtrar
   const counts = useMemo(() => {
     let reviewable = 0;
@@ -352,15 +404,17 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
     return { reviewable, submitted, total: localEntries.length };
   }, [localEntries]);
 
-  const filtered = useMemo(
-    () =>
-      localEntries.filter((e) =>
-        filter === "submitted"
-          ? toUIStatus(e.status) === "submitted"
-          : toUIStatus(e.status) === "reviewable"
-      ),
-    [localEntries, filter]
-  );
+  const filteredSorted = useMemo(() => {
+    const base = localEntries.filter((e) =>
+      filter === "submitted"
+        ? toUIStatus(e.status) === "submitted"
+        : toUIStatus(e.status) === "reviewable"
+    );
+    // Orden: más recientes primero (desc)
+    return base
+      .slice() // evita mutar
+      .sort((a, b) => whenOf(b) - whenOf(a) || b.id.localeCompare(a.id)); // desempate por id
+  }, [localEntries, filter]);
 
   const cardStyle = {
     padding: cardPad,
@@ -411,150 +465,336 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={handleTapOverlay}>
-      {/* overlay */}
-      <Animated.View
-        style={{
-          flex: 1,
-          backgroundColor: "#000",
-          opacity: overlayA.interpolate({ inputRange: [0, 1], outputRange: [0, 0.5] }),
-        }}
-      >
-        <Pressable onPress={handleTapOverlay} style={{ flex: 1 }} />
-      </Animated.View>
-
-      {/* sheet */}
-      <Animated.View
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          transform: [
-            {
-              translateY: sheetA.interpolate({
-                inputRange: [0, 1],
-                outputRange: [referenceFrame.height * 0.9, 0],
-              }),
-            },
-          ],
-        }}
-      >
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: radius,
-            borderTopRightRadius: radius,
-            paddingBottom: pad,
-            maxHeight: referenceFrame.height * 0.88,
-            borderTopWidth: 1,
-            borderColor: colors.border,
-          }}
+    <>
+      {deleteTarget && (
+        <Modal
+          visible={!!deleteTarget}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => setDeleteTarget(null)}
         >
-          {/* handle */}
-          <View style={{ alignItems: "center", paddingTop: pad, paddingBottom: pad * 0.6 }}>
+          <Pressable
+            onPress={() => setDeleteTarget(null)}
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: 24,
+            }}
+          >
             <View
+              onStartShouldSetResponder={() => true} // evita que el tap burbujee al backdrop
               style={{
-                width: handleW,
-                height: handleH,
-                borderRadius: 999,
-                backgroundColor: colors.border,
-                opacity: 0.8,
-              }}
-            />
-          </View>
-
-          {/* header */}
-          <View style={{ paddingHorizontal: pad, gap: 8, marginBottom: clamp(gap * 0.5, 4, 12) }}>
-            <Text style={{ fontWeight: "800", fontSize: titleSize, color: colors.textPrimary }}>
-              Registros de {periodLabel} - {formName}
-            </Text>
-            <SegmentedPill
-              minSide={minSide}
-              valueKey={filter}
-              onChange={(key) => setFilter(key as FilterKey)}
-              segments={[
-                { key: "reviewable", label: "En revisión", count: counts.reviewable },
-                { key: "submitted", label: "Enviados", count: counts.submitted },
-              ]}
-            />
-          </View>
-          {(busy || submittingId) && (
-            <View
-              style={{
-                marginHorizontal: pad,
-                marginTop: clamp(gap * 0.4, 4, 10),
-                marginBottom: clamp(gap * 0.4, 4, 10),
-                padding: clamp(pad * 0.6, 8, 14),
-                borderRadius: 12,
+                width: "100%",
+                maxWidth: 380,
+                borderRadius: 16,
                 borderWidth: 1,
                 borderColor: colors.border,
-                backgroundColor: "#F7F7F7",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
+                backgroundColor: colors.surface, // opaco
+                padding: 24,
               }}
             >
-              <ActivityIndicator />
-              <Text style={{ fontWeight: "700", color: colors.textPrimary }} numberOfLines={1}>
-                {busyText || "Procesando…"}
+              <Text
+                style={{
+                  fontWeight: "800",
+                  fontSize: 18,
+                  color: colors.textPrimary,
+                  textAlign: "center",
+                  marginBottom: 12,
+                }}
+              >
+                Eliminar registro
               </Text>
+
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  textAlign: "center",
+                  marginBottom: 24,
+                }}
+              >
+                ¿Seguro que deseas eliminar “{deleteTarget?.instanceName?.trim() || "Registro"}”?
+                {"\n"}
+                Esta acción no se puede deshacer.
+              </Text>
+
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setDeleteTarget(null)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    backgroundColor: "#EEE",
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Text style={{ fontWeight: "700", color: colors.textPrimary }}>Cancelar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    const entry = deleteTarget!;
+                    setDeleteTarget(null);
+                    setLocalEntries((prev) => prev.filter((e) => e.id !== entry.id)); // optimista
+                    onDelete?.(entry); // acción real
+                  }}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    backgroundColor: "#FDECEA",
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Text style={{ fontWeight: "700", color: "#C0392B" }}>Eliminar</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
+          </Pressable>
+        </Modal>
+      )}
 
-          {/* BANNER */}
-          {renderBanner()}
+      <Modal visible={visible} transparent animationType="none" onRequestClose={handleTapOverlay}>
+        {/* overlay */}
+        <Animated.View
+          style={{
+            flex: 1,
+            backgroundColor: "#000",
+            opacity: overlayA.interpolate({ inputRange: [0, 1], outputRange: [0, 0.5] }),
+          }}
+        >
+          <Pressable onPress={handleTapOverlay} style={{ flex: 1 }} />
+        </Animated.View>
 
-          <Divider color={colors.border} opacity={0.4} />
+        {/* sheet */}
+        <Animated.View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            transform: [
+              {
+                translateY: sheetA.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [referenceFrame.height * 0.9, 0],
+                }),
+              },
+            ],
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: radius,
+              borderTopRightRadius: radius,
+              paddingBottom: pad,
+              maxHeight: referenceFrame.height * 0.88,
+              borderTopWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            {/* handle */}
+            <View style={{ alignItems: "center", paddingTop: pad, paddingBottom: pad * 0.6 }}>
+              <View
+                style={{
+                  width: handleW,
+                  height: handleH,
+                  borderRadius: 999,
+                  backgroundColor: colors.border,
+                  opacity: 0.8,
+                }}
+              />
+            </View>
 
-          {/* lista */}
-          <FlatList
-            contentContainerStyle={{ padding: pad, paddingBottom: pad * 0.5, gap }}
-            data={filtered}
-            keyExtractor={(e) => e.id}
-            extraData={{ filtered, submittingId }} // fuerza rerender ante cambios locales
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={() => (
-              <View style={[cardStyle, { alignItems: "center" }]}>
-                <Text style={{ color: colors.textSecondary }}>
-                  No hay registros para este filtro.
+            {/* header */}
+            <View style={{ paddingHorizontal: pad, gap: 8, marginBottom: clamp(gap * 0.5, 4, 12) }}>
+              <Text style={{ fontWeight: "800", fontSize: titleSize, color: colors.textPrimary }}>
+                Registros de {periodLabel} - {formName}
+              </Text>
+
+              <SegmentedPill
+                minSide={minSide}
+                valueKey={filter}
+                onChange={(key) => setFilter(key as FilterKey)}
+                segments={[
+                  { key: "reviewable", label: "En revisión", count: counts.reviewable },
+                  { key: "submitted", label: "Enviados", count: counts.submitted },
+                ]}
+              />
+
+              {showBulkButton && (
+                <TouchableOpacity
+                  onPress={handleBulkSubmit}
+                  disabled={!!submittingId || busy || bulkSubmitting}
+                  style={{
+                    marginTop: clamp(gap * 0.3, 4, 10),
+                    alignSelf: "flex-end",
+                    paddingHorizontal: clamp(minSide * 0.035, 12, 16),
+                    paddingVertical: clamp(minSide * 0.025, 8, 12),
+                    borderRadius: clamp(minSide * 0.024, 8, 12),
+                    borderWidth: 1,
+                    borderColor: colors.primary600,
+                    backgroundColor:
+                      !!submittingId || busy || bulkSubmitting ? "#E4F2E8" : "#E6F7EA",
+                    flexDirection: "row",
+                    gap: 8,
+                    alignItems: "center",
+                  }}
+                >
+                  {bulkSubmitting ? <ActivityIndicator /> : null}
+                  <Text style={{ fontWeight: "800", color: colors.primary600 }}>
+                    Enviar todo ({readyForSubmit.length})
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {(busy || submittingId) && (
+              <View
+                style={{
+                  marginHorizontal: pad,
+                  marginTop: clamp(gap * 0.4, 4, 10),
+                  marginBottom: clamp(gap * 0.4, 4, 10),
+                  padding: clamp(pad * 0.6, 8, 14),
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: "#F7F7F7",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <ActivityIndicator />
+                <Text style={{ fontWeight: "700", color: colors.textPrimary }} numberOfLines={1}>
+                  {busyText || "Procesando…"}
                 </Text>
               </View>
             )}
-            renderItem={({ item, index }) => {
-              const ui = toUIStatus(item.status);
-              const isSubmitting = submittingId === item.id;
 
-              const btnBase = {
-                paddingHorizontal: clamp(minSide * 0.035, 12, 16),
-                paddingVertical: clamp(minSide * 0.025, 8, 12),
-                borderRadius: clamp(minSide * 0.024, 8, 12),
-                borderWidth: 1,
-                borderColor: colors.border,
-              } as const;
+            {/* BANNER */}
+            {renderBanner()}
 
-              const handleOptimisticSubmit = () => {
-                // 1) mover inmediatamente a "submitted"
-                setLocalEntries((prev) =>
-                  prev.map((e) => (e.id === item.id ? { ...e, status: "submitted" } : e))
-                );
-                // 2) delegar la persistencia real al padre
-                onSubmit(item);
-              };
+            <Divider color={colors.border} opacity={0.4} />
 
-              const Buttons = () => {
-                if (ui === "submitted") {
-                  return (
-                    <TouchableOpacity
-                      onPress={openThen(() => onOpen(item, "view"))}
-                      style={[btnBase, { backgroundColor: "#F3F3F3" }]}
-                    >
-                      <Text style={{ fontWeight: "800", color: colors.textSecondary }}>Ver</Text>
-                    </TouchableOpacity>
+            {/* lista */}
+            <FlatList
+              contentContainerStyle={{ padding: pad, paddingBottom: pad * 0.5, gap }}
+              data={filteredSorted}
+              keyExtractor={(e) => e.id}
+              extraData={{ filteredSorted, submittingId }} // fuerza rerender ante cambios locales
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={() => (
+                <View style={[cardStyle, { alignItems: "center" }]}>
+                  <Text style={{ color: colors.textSecondary }}>
+                    No hay registros para este filtro.
+                  </Text>
+                </View>
+              )}
+              renderItem={({ item, index }) => {
+                const ui = toUIStatus(item.status);
+                const isSubmitting = submittingId === item.id;
+
+                const btnBase = {
+                  paddingHorizontal: clamp(minSide * 0.035, 12, 16),
+                  paddingVertical: clamp(minSide * 0.025, 8, 12),
+                  borderRadius: clamp(minSide * 0.024, 8, 12),
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                } as const;
+
+                const handleOptimisticSubmit = () => {
+                  setLocalEntries((prev) =>
+                    prev.map((e) =>
+                      e.id === item.id ? { ...e, status: "submitted", updatedAt: Date.now() } : e
+                    )
                   );
-                }
+                  onSubmit(item);
+                };
 
-                if (item.status === "ready_for_submit") {
+                const Buttons = () => {
+                  if (ui === "submitted") {
+                    return (
+                      <TouchableOpacity
+                        onPress={openThen(() => onOpen(item, "view"))}
+                        style={[btnBase, { backgroundColor: "#F3F3F3" }]}
+                      >
+                        <Text style={{ fontWeight: "800", color: colors.textSecondary }}>Ver</Text>
+                      </TouchableOpacity>
+                    );
+                  }
+
+                  if (item.status === "ready_for_submit") {
+                    return (
+                      <>
+                        <TouchableOpacity
+                          onPress={openThen(() => onOpen(item, "review"))}
+                          disabled={!!submittingId || busy}
+                          style={[
+                            btnBase,
+                            {
+                              backgroundColor: "#FFF7E2",
+                              opacity: !!submittingId || busy ? 0.7 : 1,
+                            },
+                          ]}
+                        >
+                          <Text style={{ fontWeight: "800", color: colors.textTertiary }}>
+                            Revisar
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={handleOptimisticSubmit}
+                          disabled={!!submittingId || busy}
+                          style={[
+                            btnBase,
+                            {
+                              backgroundColor: "#E6F7EA",
+                              opacity: !!submittingId || busy ? 0.7 : 1,
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 8,
+                            },
+                          ]}
+                        >
+                          {isSubmitting ? (
+                            <ActivityIndicator />
+                          ) : (
+                            <Text style={{ fontWeight: "800", color: colors.primary600 }}>
+                              Enviar
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+
+                        {/* 👇 nuevo: eliminar */}
+                        {deleteButton && (
+                          <TouchableOpacity
+                            onPress={() => handleDelete(item)}
+                            disabled={!!submittingId || busy}
+                            style={[
+                              btnBase,
+                              {
+                                backgroundColor: "#FDECEA",
+                                borderColor: colors.border,
+                                opacity: !!submittingId || busy ? 0.7 : 1,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontWeight: "800", color: "#C0392B" }}>Eliminar</Text>
+                          </TouchableOpacity>
+                        )}
+                      </>
+                    );
+                  }
+
+                  // in_progress
                   return (
                     <>
                       <TouchableOpacity
@@ -570,133 +810,114 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                         </Text>
                       </TouchableOpacity>
 
+                      {/* 👇 nuevo: eliminar */}
                       <TouchableOpacity
-                        onPress={handleOptimisticSubmit}
+                        onPress={() => handleDelete(item)}
                         disabled={!!submittingId || busy}
                         style={[
                           btnBase,
                           {
-                            backgroundColor: "#E6F7EA",
+                            backgroundColor: "#FDECEA",
+                            borderColor: colors.border,
                             opacity: !!submittingId || busy ? 0.7 : 1,
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 8,
                           },
                         ]}
                       >
-                        {isSubmitting ? (
-                          <ActivityIndicator />
-                        ) : (
-                          <Text style={{ fontWeight: "800", color: colors.primary600 }}>
-                            Enviar
-                          </Text>
-                        )}
+                        <Text style={{ fontWeight: "800", color: "#C0392B" }}>Eliminar</Text>
                       </TouchableOpacity>
                     </>
                   );
-                }
+                };
 
-                // in_progress
                 return (
-                  <TouchableOpacity
-                    onPress={openThen(() => onOpen(item, "review"))}
-                    disabled={!!submittingId || busy || busy}
-                    style={[
-                      btnBase,
-                      { backgroundColor: "#FFF7E2", opacity: !!submittingId || busy ? 0.7 : 1 },
-                    ]}
-                  >
-                    <Text style={{ fontWeight: "800", color: colors.textTertiary }}>Revisar</Text>
-                  </TouchableOpacity>
-                );
-              };
-
-              return (
-                <View style={cardStyle}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: clamp(gap * 0.4, 4, 12),
-                    }}
-                  >
-                    <View style={{ flexShrink: 1, paddingRight: 8 }}>
-                      <Text
-                        style={{ fontWeight: "700", color: colors.textPrimary }}
-                        numberOfLines={1}
-                      >
-                        {getDisplayName(index, item)}
-                      </Text>
-                      <Text
-                        style={{
-                          color: colors.textSecondary,
-                          marginTop: 2,
-                          fontSize: subtitleSize,
-                        }}
-                      >
-                        {formatDateTime(item.updatedAt || item.createdAt)}
-                      </Text>
+                  <View style={cardStyle}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: clamp(gap * 0.4, 4, 12),
+                      }}
+                    >
+                      <View style={{ flexShrink: 1, paddingRight: 8 }}>
+                        <Text
+                          style={{ fontWeight: "700", color: colors.textPrimary }}
+                          numberOfLines={1}
+                        >
+                          {getDisplayName(index, item)}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            marginTop: 2,
+                            fontSize: subtitleSize,
+                          }}
+                        >
+                          {formatDateTime(item.updatedAt || item.createdAt)}
+                        </Text>
+                      </View>
+                      <StatusPill ui={ui} size={clamp(minSide * 0.03, 10, 14)} />
                     </View>
-                    <StatusPill ui={ui} size={clamp(minSide * 0.03, 10, 14)} />
+
+                    <Divider inset />
+
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap,
+                        paddingTop: clamp(gap * 0.6, 6, 12),
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <Buttons />
+                    </View>
                   </View>
+                );
+              }}
+              ListFooterComponent={<View style={{ height: gap * 0.5 }} />}
+            />
 
-                  <Divider inset />
-
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap,
-                      paddingTop: clamp(gap * 0.6, 6, 12),
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <Buttons />
-                  </View>
-                </View>
-              );
-            }}
-            ListFooterComponent={<View style={{ height: gap * 0.5 }} />}
-          />
-
-          {/* acciones inferiores */}
-          <View style={{ paddingHorizontal: pad, gap: 8 }}>
-            {allowNew && (
+            {/* acciones inferiores */}
+            <View style={{ paddingHorizontal: pad, gap: 8 }}>
+              {allowNew && (
+                <TouchableOpacity
+                  onPress={openThen(onNew)}
+                  disabled={!!submittingId || busy}
+                  style={{
+                    height: btnH,
+                    borderRadius: 12,
+                    backgroundColor: !!submittingId || busy ? "#EEE" : colors.primary600,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: !!submittingId || busy ? colors.border : colors.primary600,
+                    opacity: !!submittingId || busy ? 0.8 : 1,
+                  }}
+                >
+                  <Text style={{ color: colors.neutral0, fontWeight: "800" }}>
+                    + Nuevo registro
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                onPress={openThen(onNew)}
+                onPress={handleTapOverlay}
                 disabled={!!submittingId || busy}
                 style={{
-                  height: btnH,
+                  height: Math.max(btnH * 0.9, 40),
                   borderRadius: 12,
-                  backgroundColor: !!submittingId || busy ? "#EEE" : colors.primary600,
                   alignItems: "center",
                   justifyContent: "center",
-                  borderWidth: 1,
-                  borderColor: !!submittingId || busy ? colors.border : colors.primary600,
                   opacity: !!submittingId || busy ? 0.8 : 1,
                 }}
               >
-                <Text style={{ color: colors.neutral0, fontWeight: "800" }}>+ Nuevo registro</Text>
+                <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>Cerrar</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              onPress={handleTapOverlay}
-              disabled={!!submittingId || busy}
-              style={{
-                height: Math.max(btnH * 0.9, 40),
-                borderRadius: 12,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: !!submittingId || busy ? 0.8 : 1,
-              }}
-            >
-              <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>Cerrar</Text>
-            </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </Animated.View>
-    </Modal>
+        </Animated.View>
+      </Modal>
+    </>
   );
 };
 

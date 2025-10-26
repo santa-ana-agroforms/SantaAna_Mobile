@@ -399,6 +399,7 @@ const FormRoute: React.FC = () => {
             layoutFrame={layoutFrame}
             page={currentPage}
             onPageChange={handlePageChange}
+            mode={mode}
           />
 
           {shouldShowFooter && (
@@ -427,7 +428,7 @@ const mapTipo = (t: any): "texto" | "booleano" | "numerico" | "imagen" | "group"
   if (["bool", "booleano", "boolean"].includes(s)) return "booleano";
   if (["num", "numero", "numerico", "number"].includes(s)) return "numerico";
   if (["img", "image", "imagen", "firma", "firm"].includes(s)) return "imagen";
-  if (["group", "grupo", "section", "seccion"].includes(s)) return "group";
+  if (["group", "grupo"].includes(s)) return "group";
   return "texto";
 };
 
@@ -443,8 +444,8 @@ const mapClase = (
   | "boolean"
   | "number"
   | "calc"
-  | "firm"
-  | "group" => {
+  | "group"
+  | "firm" => {
   const s = String(c || "").toLowerCase();
   if (["lista", "list"].includes(s)) return "list";
   if (["dataset", "fuente"].includes(s)) return "dataset";
@@ -455,6 +456,6 @@ const mapClase = (
   if (["calc", "calculado"].includes(s)) return "calc";
   if (["firma", "firm", "signature"].includes(s)) return "firm";
   if (["text", "textarea"].includes(s)) return "text";
-  if (["group", "grupo", "section", "seccion"].includes(s)) return "group";
+  if (["group", "grupo"].includes(s)) return "group";
   return "string";
 };

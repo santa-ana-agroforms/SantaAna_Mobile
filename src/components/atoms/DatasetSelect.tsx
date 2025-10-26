@@ -1,9 +1,14 @@
 import { Body } from "@/components/atoms/Typography";
 import { colors } from "@/theme/tokens";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
+  FlatList,
+  Modal,
+  Platform,
   Pressable,
-  ScrollView,
+  Text,
   TextStyle,
   useWindowDimensions,
   View,
@@ -24,30 +29,21 @@ type Props = {
   error?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
-
   allowDeselect?: boolean;
   showNoneOption?: boolean;
   noneLabel?: string;
-
-  /** Opcional: personalizar cómo se muestra cada valor */
   formatLabel?: (v: Primitive) => string;
+  title?: string;
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-
-const DEMO_ITEMS: Primitive[] = ["Manzanas", "Bananas", "Naranjas", "Peras", "Uvas"];
-
 const defaultLabel = (v: Primitive) => (typeof v === "boolean" ? (v ? "Sí" : "No") : String(v));
+const eqValue = (a: Primitive | undefined, b: Primitive | undefined) => String(a) === String(b);
 
-const normalize = (
-  arr?: Item[],
-  fmt?: (v: Primitive) => string
-): { label: string; value: Primitive }[] => {
-  const src = arr && arr.length ? arr : DEMO_ITEMS;
+const normalize = (arr?: Item[], fmt?: (v: Primitive) => string) => {
   const out: { label: string; value: Primitive }[] = [];
   const seen = new Set<string>();
-
-  for (const it of src) {
+  for (const it of arr ?? []) {
     const value =
       typeof it === "object" && it !== null && "value" in it
         ? ((it as any).value as Primitive)
@@ -58,7 +54,6 @@ const normalize = (
         : fmt
           ? fmt(value)
           : defaultLabel(value);
-
     const key = `${typeof value}:${String(value)}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -67,50 +62,38 @@ const normalize = (
   return out;
 };
 
-const eqValue = (a: Primitive | undefined, b: Primitive | undefined) => {
-  // console.log("➡️ eqValue() llamada con:");
-  // console.log("   a:", a, "(", typeof a, ")");
-  // console.log("   b:", b, "(", typeof b, ")");
-
-  const result = String(a) === String(b);
-  // console.log("🟢 Resultado:", result ? "IGUALES" : "DIFERENTES");
-  // console.log("---------------------------");
-
-  return result;
-};
-
-const DatasetSelect: React.FC<Props> = (props) => {
-  const {
-    frame,
-    value, // ← puede venir undefined en modo no controlado
-    onChange,
-    placeholder = "Selecciona una opción…",
-    items,
-    disabled = false,
-    error = false,
-    style,
-    textStyle,
-    allowDeselect = true,
-    showNoneOption = true,
-    noneLabel = "Ninguno",
-    formatLabel,
-  } = props;
-  console.log("DatasetSelect props.value:", value);
+const DatasetSelect: React.FC<Props> = ({
+  frame,
+  value,
+  onChange,
+  placeholder = "Selecciona una opción…",
+  items,
+  disabled = false,
+  error = false,
+  style,
+  textStyle,
+  allowDeselect = true,
+  showNoneOption = true,
+  noneLabel = "Ninguno",
+  formatLabel,
+  title = "Seleccionar",
+}) => {
   const { width: ww, height: hh } = useWindowDimensions();
   const baseFrame = frame ?? { width: ww, height: hh };
 
-  // Modo controlado / no controlado
   const isControlled = value !== undefined;
   const [internalValue, setInternalValue] = useState<Primitive | undefined>(value);
-  React.useEffect(() => {
+  useEffect(() => {
     if (isControlled) setInternalValue(value);
   }, [isControlled, value]);
   const currentValue = isControlled ? value : internalValue;
 
-  const [open, setOpen] = useState(false);
   const list = useMemo(() => normalize(items, formatLabel), [items, formatLabel]);
+  const data = useMemo(() => {
+    const head = showNoneOption ? [{ label: noneLabel, value: "__NONE__" as Primitive }] : [];
+    return [...head, ...list];
+  }, [list, showNoneOption, noneLabel]);
 
-  // Medidas + layout
   const dims = useMemo(() => {
     const minSide = Math.min(baseFrame.width, baseFrame.height);
     const baseRem = clamp(minSide * 0.042, 14, 18);
@@ -120,61 +103,112 @@ const DatasetSelect: React.FC<Props> = (props) => {
       padV: clamp(minSide * 0.01, 8, 14),
       minH: clamp(minSide * 0.06, 44, 62),
       font: clamp(baseRem * 1.05, 14, 20),
-      optionPadV: clamp(minSide * 0.01, 8, 14),
-      optionPadH: clamp(minSide * 0.014, 12, 18),
-      maxPanelH: clamp(minSide * 0.35, 160, 320),
-      minSide,
+      sheetMaxH: Math.round(baseFrame.height * 0.6),
     };
   }, [baseFrame.width, baseFrame.height]);
 
-  const borderColor = error ? colors.danger600 : open ? colors.primary600 : colors.border;
+  const borderColor = error ? colors.danger600 : colors.border;
 
   const selected = useMemo(
-    () => list.find((it) => eqValue(it.label, currentValue)),
+    () => list.find((it) => eqValue(it.value, currentValue)),
     [list, currentValue]
   );
 
-  const headerLabel = selected
-    ? selected.label
-    : currentValue != null && currentValue !== undefined
-      ? formatLabel
-        ? formatLabel(currentValue)
-        : defaultLabel(currentValue) === ""
-          ? placeholder
-          : defaultLabel(currentValue)
-      : placeholder;
-  console.log("DatasetSelect headerLabel:", headerLabel);
+  const headerLabel =
+    selected?.label ??
+    (currentValue != null && currentValue !== undefined
+      ? (formatLabel ? formatLabel(currentValue) : defaultLabel(currentValue)) || placeholder
+      : placeholder);
+
   const setValue = (v: Primitive | undefined) => {
-    console.log("DatasetSelect setValue:", v);
     if (!isControlled) setInternalValue(v);
     onChange?.(v);
   };
 
-  const selectValue = (v: Primitive) => {
-    console.log("DatasetSelect selectValue:", v);
-    if (allowDeselect && eqValue(v, currentValue)) {
-      // setValue(undefined);
-      setOpen(false);
+  /* ──────────────────────────
+   *  Modal + Animaciones
+   * ────────────────────────── */
+  const [open, setOpen] = useState(false);
+  const backdrop = useRef(new Animated.Value(0)).current; // 0 → transparente, 1 → oscuro
+  const sheetY = useRef(new Animated.Value(1)).current; // 1 → fuera abajo, 0 → visible
+
+  const openWithAnim = () => {
+    setOpen(true); // montar modal primero
+  };
+  const closeWithAnim = () => {
+    // animación de salida
+    Animated.parallel([
+      Animated.timing(backdrop, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetY, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) setOpen(false);
+    });
+  };
+
+  // Dispara la animación de entrada cuando open cambia a true
+  useEffect(() => {
+    if (!open) return;
+    backdrop.setValue(0);
+    sheetY.setValue(1);
+    Animated.parallel([
+      Animated.timing(backdrop, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetY, {
+        toValue: 0,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [open, backdrop, sheetY]);
+
+  // Interpolaciones
+  const backdropStyle = {
+    opacity: backdrop.interpolate({ inputRange: [0, 1], outputRange: [0, 0.35] }),
+  };
+  const sheetTranslate = {
+    transform: [
+      {
+        translateY: sheetY.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, dims.sheetMaxH + 40], // sale desde abajo
+        }),
+      },
+    ],
+  };
+
+  const handleSelect = (raw: Primitive) => {
+    if (String(raw) === "__NONE__") {
+      setValue(undefined);
+      closeWithAnim();
       return;
     }
-    setValue(v);
-    setOpen(false);
+    if (allowDeselect && eqValue(raw, currentValue)) {
+      closeWithAnim();
+      return;
+    }
+    setValue(raw);
+    closeWithAnim();
   };
-
-  const clearValue = () => {
-    setValue(undefined);
-    setOpen(false);
-  };
-
-  // Visibilidad de barra y hint “Desliza…”
-  const [containerH, setContainerH] = React.useState(0);
-  const [contentH, setContentH] = React.useState(0);
-  const canScroll = contentH > containerH + 1;
 
   return (
     <View style={style}>
-      {/* Header */}
-      <Pressable disabled={disabled} onPress={() => setOpen((v) => !v)} accessibilityRole="button">
+      {/* Header botón */}
+      <Pressable disabled={disabled} onPress={openWithAnim} accessibilityRole="button">
         {({ pressed }) => (
           <View
             style={{
@@ -204,134 +238,170 @@ const DatasetSelect: React.FC<Props> = (props) => {
         )}
       </Pressable>
 
-      {/* Panel */}
-      {open && !disabled ? (
-        <View
-          style={{
-            marginTop: 6,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: dims.radius,
-            backgroundColor: colors.neutral0,
-            shadowColor: "#000",
-            shadowOpacity: 0.12,
-            shadowRadius: 6,
-            elevation: 2,
-            overflow: "hidden",
-            position: "relative", // para overlay del hint
-          }}
-        >
-          <ScrollView
-            style={{ maxHeight: dims.maxPanelH, paddingRight: 2 }}
-            keyboardShouldPersistTaps="always"
-            nestedScrollEnabled
-            showsVerticalScrollIndicator
-            persistentScrollbar
-            indicatorStyle="black"
-            scrollIndicatorInsets={{ right: 2 }}
-            onLayout={(e) => setContainerH(e.nativeEvent.layout.height)}
-            onContentSizeChange={(_, h) => setContentH(h)}
-          >
-            {showNoneOption ? (
-              <Pressable
-                key="__none__"
-                onPress={clearValue}
-                android_ripple={{ color: "rgba(0,0,0,0.06)", borderless: false }}
-                pressRetentionOffset={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                {({ pressed }) => (
-                  <View
-                    style={{
-                      paddingVertical: dims.optionPadV,
-                      paddingHorizontal: dims.optionPadH,
-                      backgroundColor: pressed
-                        ? "rgba(45,138,36,0.15)"
-                        : currentValue == null
-                          ? "rgba(45,138,36,0.08)"
-                          : "transparent",
-                      transform: [{ scale: pressed ? 0.97 : 1 }],
-                    }}
-                  >
-                    <Body
-                      frame={baseFrame}
-                      size="md"
-                      style={{
-                        color: currentValue == null ? colors.primary600 : colors.textPrimary,
-                        opacity: pressed ? 0.9 : 1,
-                      }}
-                    >
-                      {noneLabel}
-                    </Body>
-                  </View>
-                )}
-              </Pressable>
-            ) : null}
+      {/* Modal: el fondo hace fade, el sheet sube desde abajo */}
+      <Modal
+        visible={open && !disabled}
+        transparent
+        animationType="none" // controlamos animación nosotros
+        onRequestClose={closeWithAnim}
+        statusBarTranslucent
+      >
+        {/* Backdrop oscuro con fade (no se mueve) */}
+        <Animated.View
+          style={[
+            {
+              flex: 1,
+              backgroundColor: "#000",
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+            },
+            backdropStyle,
+          ]}
+        />
 
-            {list.map((it) => {
-              const active = eqValue(it.label, currentValue);
+        {/* Área clickeable para cerrar (fuera del sheet) */}
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={closeWithAnim}
+          android_ripple={{ color: "transparent" }}
+        />
+
+        {/* Sheet: contenedor fijo abajo, solo este se anima desde abajo */}
+        <Animated.View
+          style={[
+            {
+              alignSelf: "stretch",
+              backgroundColor: colors.neutral0,
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: Platform.select({ ios: 24, android: 16 }),
+              maxHeight: dims.sheetMaxH,
+            },
+            sheetTranslate,
+          ]}
+        >
+          {!!title && (
+            <Text
+              style={{
+                fontWeight: "900",
+                fontSize: 16,
+                color: colors.textPrimary,
+                marginBottom: 8,
+              }}
+            >
+              {title}
+            </Text>
+          )}
+
+          <FlatList
+            data={data}
+            keyExtractor={(it) =>
+              String(it.value) === "__NONE__"
+                ? "__none__"
+                : `${typeof it.value}:${String(it.value)}`
+            }
+            ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
+            contentContainerStyle={{ paddingBottom: 8 }}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => {
+              const isNone = String(item.value) === "__NONE__";
+              const active = isNone ? currentValue == null : eqValue(item.value, currentValue);
+
+              const baseBg = active ? "rgba(45,138,36,0.08)" : "rgba(0,0,0,0.03)";
+              const pressedBg = active ? "rgba(45,138,36,0.12)" : "rgba(0,0,0,0.06)";
+              const borderCol = active ? colors.primary600 : colors.border;
+
               return (
                 <Pressable
-                  key={`${typeof it.value}:${String(it.value)}`}
-                  onPress={() => selectValue(it.label)}
-                  android_ripple={{ color: "rgba(0,0,0,0.06)", borderless: false }}
-                  pressRetentionOffset={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  onPress={() => handleSelect(item.value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
                 >
                   {({ pressed }) => (
                     <View
                       style={{
-                        paddingVertical: dims.optionPadV,
-                        paddingHorizontal: dims.optionPadH,
-                        backgroundColor: pressed
-                          ? "rgba(45,138,36,0.15)" // presionado
-                          : active
-                            ? "rgba(45,138,36,0.08)" // seleccionado
-                            : "transparent",
-                        transform: [{ scale: pressed ? 0.97 : 1 }],
+                        minHeight: 44,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        borderRadius: 12,
+                        backgroundColor: pressed ? pressedBg : baseBg,
+                        borderWidth: 1,
+                        borderColor: borderCol,
+                        overflow: "hidden",
                       }}
                     >
-                      <Body
-                        frame={baseFrame}
-                        size="md"
+                      {/* Barra lateral de selección (sin sombras) */}
+                      <View
                         style={{
-                          color: active ? colors.primary600 : colors.textPrimary,
-                          opacity: pressed ? 0.9 : 1,
+                          width: 8,
+                          right: 0,
+                          alignSelf: "stretch",
+                          backgroundColor: active ? colors.primary600 : "transparent",
                         }}
+                      />
+
+                      {/* Texto */}
+                      <Text
+                        style={{
+                          flex: 1,
+                          paddingVertical: 12,
+                          paddingHorizontal: 12,
+                          color: active ? colors.primary600 : colors.textPrimary,
+                          fontWeight: active ? "800" : "500",
+                        }}
+                        numberOfLines={1}
                       >
-                        {it.label}
-                      </Body>
+                        {item.label}
+                      </Text>
+
+                      {/* Indicador circular (sin íconos) */}
+                      <View
+                        style={{
+                          width: 16,
+                          height: 16,
+                          marginRight: 12,
+                          borderRadius: 8,
+                          borderWidth: 2,
+                          borderColor: active ? colors.primary600 : colors.border,
+                          backgroundColor: active ? colors.primary600 : "transparent",
+                        }}
+                      />
                     </View>
                   )}
                 </Pressable>
               );
-            })}
-            <View style={{ height: dims.minSide * 0.06 }} />
-          </ScrollView>
+            }}
+            ListEmptyComponent={
+              <View style={{ paddingVertical: 12 }}>
+                <Text style={{ color: colors.textSecondary }}>Sin opciones</Text>
+              </View>
+            }
+          />
 
-          {/* Hint “Desliza para ver más” cuando hay overflow */}
-          {canScroll ? (
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                bottom: 0,
-                left: 0,
-                right: 0,
-                alignItems: "center",
-                justifyContent: "flex-end",
-                paddingVertical: 6,
-                // leve fondo para sugerir continuidad
-                backgroundColor: "rgba(255,255,255,0.85)",
-              }}
-            >
-              <Body frame={baseFrame} size="xxs" style={{ color: colors.textSecondary }}>
-                Desliza para ver más
-              </Body>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
+          {/* Botón cerrar (tap fuera también cierra) */}
+          <Pressable
+            onPress={closeWithAnim}
+            style={{
+              marginTop: 8,
+              alignSelf: "stretch",
+              paddingVertical: 12,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: "#F3F3F3",
+            }}
+          >
+            <Text style={{ textAlign: "center", color: colors.textSecondary, fontWeight: "800" }}>
+              Cerrar
+            </Text>
+          </Pressable>
+        </Animated.View>
+      </Modal>
     </View>
   );
 };

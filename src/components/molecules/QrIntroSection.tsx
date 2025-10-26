@@ -81,8 +81,8 @@ const QrIntroSection: React.FC<Props> = ({
     }, [referenceFrame, scannerSize]);
 
   return (
-    <SafeAreaView style={{ width: "100%" }}>
-      <View style={[{ width: "100%", paddingHorizontal: pad }, containerStyle]}>
+    <SafeAreaView style={{ width: "100%", marginTop: pad }} edges={["bottom", "left", "right"]}>
+      <View style={[{ width: "100%", paddingHorizontal: pad * 0 }, containerStyle]}>
         <Body
           frame={referenceFrame}
           weight="bold"

@@ -10,8 +10,12 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Alert, InteractionManager, View } from "react-native";
 
 import { sendFormEntry } from "@/api/client";
-import InstanceSelector from "@/components/molecules/InstanceSelector";
-import { getJSONForm, initSessionFromSaved } from "@/forms/state/formSessionSlice";
+import InstanceSelector, { EntryPreview } from "@/components/molecules/InstanceSelector";
+import {
+  deleteLocalEntry,
+  getJSONForm,
+  initSessionFromSaved,
+} from "@/forms/state/formSessionSlice";
 import { useInstanceSelectorState } from "@/forms/state/useInstanceSelectorState";
 import { useAppDispatch } from "@/store/hooks";
 import { isOnline } from "@/utils/network";
@@ -350,6 +354,11 @@ const FormsByCategoryScreen: React.FC = () => {
       </PageScaffold>
     );
   }
+  const handleDeleteEntry = async (entry: EntryPreview) => {
+    dispatch(deleteLocalEntry({ local_id: entry.id }));
+    await refetch();
+    await refreshScreen();
+  };
 
   return (
     <PageScaffold title={headerTitle} variant="groups">
@@ -421,6 +430,7 @@ const FormsByCategoryScreen: React.FC = () => {
                 goOpen(selectedForm.formId, selectedForm.versionId, entry.id, mode);
               }}
               onSubmit={handleSubmitFromSelector}
+              onDelete={handleDeleteEntry}
               onClose={close}
               referenceFrame={referenceFrame}
               contentFrame={contentFrame}

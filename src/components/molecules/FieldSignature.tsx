@@ -34,12 +34,33 @@ const FieldSignature: React.FC<Props> = ({ referenceFrame, onChange, initialLock
   };
 
   const handleConfirm = async () => {
-    const empty = await ref.current?.isEmpty?.();
+    const empty = ref.current?.isEmpty?.();
     if (empty) {
       showToast("Dibuja tu firma primero", "err");
       return;
     }
-    setLocked(true);
+
+    try {
+      const base64 = await ref.current!.exportImage({
+        format: "png",
+        result: "base64",
+        quality: 1,
+        scale: 1, // ahora 1 = tamaño visual exacto; 2 = el doble de resolución
+        backgroundColor: "#FFF",
+      });
+
+      onChange?.({
+        strokes: [],
+        image: `data:image/png;base64,${base64}`,
+        // meta, // ← si tu tipo lo permite
+      });
+
+      setLocked(true);
+      showToast("Firma guardada", "ok");
+    } catch (e) {
+      console.error("Exportar firma falló:", e);
+      showToast("No se pudo exportar la firma", "err");
+    }
   };
 
   // Callback estable para evitar recrearse y causar renders en cadena

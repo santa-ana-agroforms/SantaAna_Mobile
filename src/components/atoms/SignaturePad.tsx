@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import {
   GestureResponderEvent,
+  LayoutChangeEvent,
   PanResponder,
   PanResponderInstance,
   StyleSheet,
@@ -29,13 +30,14 @@ export type SignaturePadHandle = {
     quality?: number;
     result?: "tmpfile" | "base64" | "data-uri";
     backgroundColor?: string;
-    scale?: number;
+    scale?: number; // factor de resolución adicional (1 = tal cual layout)
   }) => Promise<string>;
+  getCanvasSize?: () => { w: number; h: number }; // 👈 opcional
 };
 
 type Props = {
-  width: string | number;
-  height: number;
+  width: string | number; // puede ser "100%"
+  height: number; // alto en px
   strokeColor?: string;
   strokeWidth?: number;
   canvasBackground?: string;
@@ -85,13 +87,24 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(
     const [strokes, setStrokes] = useState<Stroke[]>([]);
     const [current, setCurrent] = useState<Stroke>([]);
 
-    // 🧠 Guardar la referencia del callback para evitar recrear el efecto
+    // ⬇️ Dimensiones reales del contenedor (lo que se ve en pantalla)
+    const [layoutW, setLayoutW] = useState(0);
+    const [layoutH, setLayoutH] = useState(0);
+
+    const onLayout = useCallback((e: LayoutChangeEvent) => {
+      const { width: lw, height: lh } = e.nativeEvent.layout;
+      if (lw > 0 && lh > 0) {
+        setLayoutW(lw);
+        setLayoutH(lh);
+      }
+    }, []);
+
+    // Callback estable
     const cbRef = useRef<typeof onChangeStrokes>(undefined);
     useEffect(() => {
       cbRef.current = onChangeStrokes;
     }, [onChangeStrokes]);
 
-    // 🔁 Efecto sólo cuando cambian los strokes (no la identidad del callback)
     useEffect(() => {
       cbRef.current?.(strokes as [number, number][][]);
     }, [strokes]);
@@ -138,37 +151,53 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(
         setStrokes((prev) => prev.slice(0, -1));
       },
       isEmpty: () => strokes.length === 0 && current.length === 0,
+
+      // ⬇️ Exporta con el MISMO tamaño visual del contenedor
       exportImage: async (opts) => {
         const {
           format = "png",
-          quality = 0.92,
+          quality = 1,
           result = "tmpfile",
-          backgroundColor = undefined,
-          scale = 1,
+          scale = 1, // si quieres más resolución, sube a 2; mantiene relación de aspecto
         } = opts ?? {};
+
         if (!viewRef.current) throw new Error("SignaturePad: viewRef vacío");
+
+        // Si por alguna razón aún no tenemos layout (raro), caemos a props numéricas
+        const numericW = layoutW > 0 ? layoutW : typeof width === "number" ? width : 0;
+        const numericH = layoutH > 0 ? layoutH : height;
+
+        const targetW = Math.max(1, Math.round(numericW * scale));
+        const targetH = Math.max(1, Math.round(numericH * scale));
 
         const uri = await captureRef(viewRef, {
           format,
           quality,
-          result,
-          // @ts-expect-error view-shot acepta undefined
-          backgroundColor,
-          width: Math.round(typeof width === "number" ? width : 1.5 * scale),
-          height: Math.round(height * scale),
+          result, // "base64" para tu caso
+          // backgroundColor, // "#FFF" si quieres fondo blanco
+          width: targetW,
+          height: targetH,
+          // usePlatformRenderer: true, // opcional
         });
         return uri;
       },
+
+      // opcional: útil para guardar meta y usar aspectRatio en preview
+      getCanvasSize: () => ({
+        w: layoutW > 0 ? layoutW : typeof width === "number" ? width : 0,
+        h: layoutH > 0 ? layoutH : height,
+      }),
     }));
 
     return (
       <View
         ref={viewRef}
         collapsable={false}
+        onLayout={onLayout} // 👈 importante
         style={[
           styles.container,
           {
-            width: "100%",
+            width: typeof width === "number" ? width : "100%",
             height,
             backgroundColor: canvasBackground,
           },
@@ -176,7 +205,8 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(
         onStartShouldSetResponder={() => true}
         {...pan.panHandlers}
       >
-        <Svg width={width} height={height}>
+        {/* El SVG llena el contenedor → lo que ves = lo que se exporta */}
+        <Svg width="100%" height="100%">
           {strokes.map((s, i) => (
             <Path
               key={i}

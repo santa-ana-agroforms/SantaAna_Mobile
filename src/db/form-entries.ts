@@ -240,3 +240,19 @@ export const findReadyToSubmitReminder = async (
   );
   return { title, body, count, oldestDays: ageDays };
 };
+
+/** Elimina definitivamente un registro local por su local_id */
+export const deleteEntry = async (local_id: string): Promise<void> => {
+  await ensureFormEntriesTables();
+  await run(`DELETE FROM form_entries WHERE local_id = ?`, [local_id]);
+};
+
+/** (Opcional) Elimina varios por lote */
+export const deleteEntries = async (ids: string[]): Promise<void> => {
+  if (!ids?.length) return;
+  await ensureFormEntriesTables();
+
+  // Construye placeholders (?, ?, ?, ...)
+  const qs = ids.map(() => "?").join(",");
+  await run(`DELETE FROM form_entries WHERE local_id IN (${qs})`, ids);
+};
