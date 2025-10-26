@@ -1,6 +1,17 @@
-// GroupEditor.tsx — Diseño compacto, claro y alineado al tema
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from "react-native";
+// GroupEditor.tsx — SOLO MODAL (bottom sheet) para ver/editar registros
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Easing,
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 import { getGroupOrFetch } from "@/api/groups";
 import type { GroupField, GroupTree } from "@/api/groups/types";
@@ -48,15 +59,7 @@ type Props = {
 
   pageIndex?: number;
 
-  /** Resumen de título (línea principal) */
-  getRowSummary?: (row: Record<string, any>, fields: GroupField[], idx: number) => string;
-
-  /** Campos que aparecerán en el resumen mini (debajo del título). Si no se define, se usan 2 requeridos. */
-  getKeyFields?: (fields: GroupField[]) => GroupField[];
-
   readOnly?: boolean;
-
-  /** Densidad visual: compact/comfortable (default compact) */
   density?: Density;
 };
 /* ───────────────────────────────────────────────────────── */
@@ -132,6 +135,8 @@ const GroupEditor: React.FC<Props> = ({
   const touch = Math.max(40, clamp(minSide * touchMul, 40, density === "compact" ? 48 : 56));
   const titleSize = density === "compact" ? minSide * 0.055 : minSide * 0.055;
 
+  const sheetMaxH = Math.round((referenceFrame?.height ?? 640) * 0.7);
+
   // Carga plantilla
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -179,13 +184,6 @@ const GroupEditor: React.FC<Props> = ({
     [onChange, readOnly]
   );
 
-  // Fila expandida (una a la vez)
-  const [open, setOpen] = useState<number | null>(entries.length ? 0 : null);
-  useEffect(() => {
-    if (entries.length === 0) setOpen(null);
-    else if (open != null && open >= entries.length) setOpen(entries.length - 1);
-  }, [entries.length]); // eslint-disable-line
-
   // Acciones
   const addRow = useCallback(() => {
     if (!canAddMore || readOnly) return;
@@ -197,10 +195,10 @@ const GroupEditor: React.FC<Props> = ({
     if (isReduxMode && h.addRow && h.setRowField) {
       h.addRow();
       for (const [k, v] of Object.entries(base)) h.setRowField(idx, k, v);
-      setOpen(idx);
+      setModalOpenIdx(idx);
     } else {
       emitChange([...entries, base]);
-      setOpen(idx);
+      setModalOpenIdx(idx);
     }
   }, [entries, fieldsTemplate, isReduxMode, h, canAddMore, readOnly, emitChange]);
 
@@ -216,7 +214,7 @@ const GroupEditor: React.FC<Props> = ({
         next.splice(idx, 1);
         emitChange(next);
       }
-      setOpen((cur) => (cur === idx ? null : cur != null && cur > idx ? cur - 1 : cur));
+      setModalOpenIdx((cur) => (cur === idx ? null : cur != null && cur > idx ? cur - 1 : cur));
     },
     [entries, minEntries, isReduxMode, h, readOnly, emitChange]
   );
@@ -233,6 +231,65 @@ const GroupEditor: React.FC<Props> = ({
     },
     [isReduxMode, h, readOnly, emitChange, entries]
   );
+
+  // ───────────────────────────────────────────────
+  //           MODAL / BOTTOM SHEET
+  // ───────────────────────────────────────────────
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalOpenIdx, setModalOpenIdx] = useState<number | null>(null);
+
+  const backdrop = useRef(new Animated.Value(0)).current; // 0 → transparente, 1 → oscuro
+  const sheetY = useRef(new Animated.Value(1)).current; // 1 → fuera, 0 → visible
+
+  const openModal = (focusIdx?: number | null) => {
+    if (focusIdx != null) setModalOpenIdx(focusIdx);
+    setModalVisible(true);
+  };
+
+  const animateIn = () => {
+    backdrop.setValue(0);
+    sheetY.setValue(1);
+    Animated.parallel([
+      Animated.timing(backdrop, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetY, {
+        toValue: 0,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeModal = () => {
+    Animated.parallel([
+      Animated.timing(backdrop, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetY, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        setModalVisible(false);
+        setModalOpenIdx(null);
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (modalVisible) animateIn();
+  }, [modalVisible]);
 
   // Estado vacío
   const EmptyState = () => (
@@ -254,6 +311,135 @@ const GroupEditor: React.FC<Props> = ({
     </View>
   );
 
+  const headerCounter = `${entries.length} registro${entries.length === 1 ? "" : "s"}`;
+
+  // Tarjeta para la lista del modal
+  const renderModalCard = (row: Record<string, any>, idx: number) => {
+    const missing = countMissingRequired(row, fieldsTemplate);
+    const isOpen = modalOpenIdx === idx;
+
+    return (
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: missing ? colors.danger600 : colors.border,
+          borderRadius: cardRadius,
+          backgroundColor: colors.neutral0,
+        }}
+      >
+        <View style={{ padding: cardPad, gap: 6 }}>
+          <View
+            style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
+          >
+            <Text
+              style={{
+                fontWeight: "800",
+                color: colors.textTertiary,
+                fontSize: titleSize * 0.8,
+              }}
+              numberOfLines={1}
+            >
+              {`Registro #${idx + 1}`}
+            </Text>
+            <StatusPill missing={missing} minSide={minSide} />
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
+            <TouchableOpacity
+              onPress={() => setModalOpenIdx(isOpen ? null : idx)}
+              activeOpacity={0.9}
+              style={{
+                flex: 1,
+                height: touch,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: colors.primary600,
+              }}
+              testID="row-edit-modal"
+            >
+              <Text style={{ color: "white", fontWeight: "900", fontSize: 13 }}>
+                {isOpen ? "Cerrar" : "Editar"}
+              </Text>
+            </TouchableOpacity>
+
+            {!readOnly && entries.length > minEntries && (
+              <TouchableOpacity
+                onPress={() => removeRow(idx)}
+                activeOpacity={0.9}
+                style={{
+                  paddingHorizontal: 12,
+                  height: touch,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "transparent",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                testID="row-delete-modal"
+              >
+                <Text style={{ color: colors.danger600, fontWeight: "900", fontSize: 13 }}>
+                  Eliminar
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {isOpen && (
+          <View
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+              padding: cardPad,
+              gap: 8,
+              backgroundColor: colors.neutral0,
+              borderBottomLeftRadius: cardRadius,
+              borderBottomRightRadius: cardRadius,
+            }}
+            pointerEvents="box-none"
+          >
+            {fieldsTemplate.map((f) => (
+              <View key={`${f.id_campo}-${idx}`} pointerEvents="box-none">
+                <FieldRenderer
+                  campo={f as unknown as Campo}
+                  referenceFrame={referenceFrame!}
+                  contentFrame={contentFrame!}
+                  pageIndex={pageIndex}
+                  external={{
+                    value: row[f.nombre_interno],
+                    onChange: (val) => setField(idx, f.nombre_interno, val),
+                  }}
+                />
+              </View>
+            ))}
+
+            <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+              <TouchableOpacity
+                onPress={() => setModalOpenIdx(null)}
+                activeOpacity={0.9}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 9,
+                  borderRadius: minSide * 0.02,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: "#F3F3F3",
+                }}
+                testID="row-done-modal"
+              >
+                <Text style={{ fontWeight: "800", color: colors.textSecondary, fontSize: 13 }}>
+                  Listo
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={{ gap }} pointerEvents="auto">
       {/* Header del grupo */}
@@ -265,11 +451,29 @@ const GroupEditor: React.FC<Props> = ({
         />
 
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 2 }}>
+          {/* contador “pill” */}
+          <TouchableOpacity
+            onPress={() => openModal(entries.length ? 0 : null)}
+            activeOpacity={0.9}
+            style={{
+              paddingHorizontal: minSide * 0.25,
+              paddingVertical: 10,
+              borderRadius: minSide * 0.02,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.neutral0,
+            }}
+            testID="group-open-modal"
+          >
+            <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 13 }}>
+              Ver registros
+            </Text>
+          </TouchableOpacity>
           <View
             style={{
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: "rgba(45,138,36,0.08)", // verde suave
+              backgroundColor: "rgba(45,138,36,0.08)",
               borderWidth: 1,
               borderColor: "rgba(45,138,36,0.25)",
               paddingHorizontal: 10,
@@ -277,9 +481,8 @@ const GroupEditor: React.FC<Props> = ({
               borderRadius: minSide * 0.02,
             }}
             accessibilityRole="text"
-            accessibilityLabel={`${entries.length} ${entries.length === 1 ? "registro" : "registros"}`}
+            accessibilityLabel={headerCounter}
           >
-            {/* puntito indicador */}
             <View
               style={{
                 width: 6,
@@ -289,31 +492,11 @@ const GroupEditor: React.FC<Props> = ({
                 marginRight: 6,
               }}
             />
-
-            {/* número en negrita + texto */}
             <Text style={{ color: colors.primary600, fontWeight: "900" }}>{entries.length}</Text>
             <Text style={{ color: colors.textSecondary, marginLeft: 4 }}>
               registro{entries.length === 1 ? "" : "s"}
             </Text>
           </View>
-
-          <TouchableOpacity
-            disabled={!canAddMore || readOnly}
-            onPress={addRow}
-            activeOpacity={0.9}
-            style={{
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              borderRadius: minSide * 0.02,
-              backgroundColor: canAddMore && !readOnly ? colors.primary600 : "#C9DCCA",
-              opacity: canAddMore && !readOnly ? 1 : 0.7,
-            }}
-            testID="group-add"
-          >
-            <Text style={{ color: "white", fontWeight: "900", fontSize: 13 }}>
-              Agregar registro
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -326,156 +509,160 @@ const GroupEditor: React.FC<Props> = ({
       )}
       {!!error && <Text style={{ color: colors.danger600 }}>{error}</Text>}
 
-      {/* Lista */}
-      <View style={{ gap }} pointerEvents="auto">
-        {entries.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <FlatList
-            data={entries}
-            scrollEnabled={false}
-            keyExtractor={(_r, i) => `row-${i}`}
-            ItemSeparatorComponent={() => <View style={{ height: gap }} />}
-            contentContainerStyle={{ gap }}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item: row, index: idx }) => {
-              const isOpen = open === idx;
-              const missing = countMissingRequired(row, fieldsTemplate);
+      {/* MODAL / BOTTOM SHEET de registros */}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="none"
+        onRequestClose={closeModal}
+        statusBarTranslucent
+      >
+        {/* Backdrop oscuro con fade */}
+        <Animated.View
+          style={[
+            {
+              flex: 1,
+              backgroundColor: "#000",
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+            },
+            { opacity: backdrop.interpolate({ inputRange: [0, 1], outputRange: [0, 0.35] }) },
+          ]}
+        />
 
-              return (
+        {/* Tap fuera cierra */}
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={closeModal}
+          android_ripple={{ color: "transparent" }}
+        />
+
+        {/* Sheet que sube desde abajo */}
+        <Animated.View
+          style={[
+            {
+              alignSelf: "stretch",
+              backgroundColor: colors.neutral0,
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: Platform.select({ ios: 24, android: 16 }),
+              maxHeight: sheetMaxH,
+            },
+            {
+              transform: [
+                {
+                  translateY: sheetY.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, sheetMaxH + 40],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          {/* Header del modal: título + contador + agregar */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 8,
+            }}
+          >
+            <Text style={{ fontWeight: "900", fontSize: 16, color: colors.textPrimary }}>
+              {title}
+            </Text>
+
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "rgba(45,138,36,0.08)",
+                  borderWidth: 1,
+                  borderColor: "rgba(45,138,36,0.25)",
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: minSide * 0.02,
+                }}
+              >
                 <View
                   style={{
-                    borderWidth: 1,
-                    borderColor: missing ? colors.danger600 : colors.border,
-                    borderRadius: cardRadius,
-                    backgroundColor: colors.neutral0,
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: colors.primary600,
+                    marginRight: 6,
                   }}
-                  pointerEvents="auto"
-                >
-                  {/* Encabezado de tarjeta (título + resumen compacto) */}
-                  <View style={{ padding: cardPad, gap: 6 }}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontWeight: "800",
-                          color: colors.textTertiary,
-                          fontSize: titleSize * 0.8,
-                        }}
-                        numberOfLines={1}
-                      >
-                        {`Registro #${idx + 1}`}
-                      </Text>
-                      <StatusPill missing={missing} minSide={minSide} />
-                    </View>
-                    {/* Acciones compactas */}
-                    <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
-                      <TouchableOpacity
-                        onPress={() => setOpen(isOpen ? null : idx)}
-                        activeOpacity={0.9}
-                        style={{
-                          flex: 1,
-                          height: touch,
-                          borderRadius: 10,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: colors.primary600,
-                        }}
-                        testID="row-edit"
-                      >
-                        <Text style={{ color: "white", fontWeight: "900", fontSize: 13 }}>
-                          {isOpen ? "Cerrar" : "Editar"}
-                        </Text>
-                      </TouchableOpacity>
+                />
+                <Text style={{ color: colors.primary600, fontWeight: "900" }}>
+                  {entries.length}
+                </Text>
+                <Text style={{ color: colors.textSecondary, marginLeft: 4 }}>
+                  registro{entries.length === 1 ? "" : "s"}
+                </Text>
+              </View>
 
-                      {!readOnly && entries.length > minEntries && (
-                        <TouchableOpacity
-                          onPress={() => removeRow(idx)}
-                          activeOpacity={0.9}
-                          style={{
-                            paddingHorizontal: 12,
-                            height: touch,
-                            borderRadius: 10,
-                            alignItems: "center",
-                            justifyContent: "center",
-                            backgroundColor: "transparent",
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                          }}
-                          testID="row-delete"
-                        >
-                          <Text
-                            style={{ color: colors.danger600, fontWeight: "900", fontSize: 13 }}
-                          >
-                            Eliminar
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
+              <TouchableOpacity
+                disabled={!canAddMore || readOnly}
+                onPress={addRow}
+                activeOpacity={0.9}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: minSide * 0.02,
+                  backgroundColor: canAddMore && !readOnly ? colors.primary600 : "#C9DCCA",
+                  opacity: canAddMore && !readOnly ? 1 : 0.7,
+                }}
+                testID="group-add-modal"
+              >
+                <Text style={{ color: "white", fontWeight: "900", fontSize: 13 }}>
+                  Agregar registro
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-                  {/* Contenido editable */}
-                  {isOpen && (
-                    <View
-                      style={{
-                        borderTopWidth: 1,
-                        borderTopColor: colors.border,
-                        padding: cardPad,
-                        gap: 8,
-                        borderRadius: cardRadius,
-                        backgroundColor: colors.neutral0,
-                      }}
-                      pointerEvents="box-none"
-                    >
-                      {fieldsTemplate.map((f) => (
-                        <View key={`${f.id_campo}-${idx}`} pointerEvents="box-none">
-                          <FieldRenderer
-                            campo={f as unknown as Campo}
-                            referenceFrame={referenceFrame!}
-                            contentFrame={contentFrame!}
-                            pageIndex={pageIndex}
-                            external={{
-                              value: row[f.nombre_interno],
-                              onChange: (val) => setField(idx, f.nombre_interno, val),
-                            }}
-                          />
-                        </View>
-                      ))}
+          {/* Lista o estado vacío */}
+          {entries.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <FlatList
+              data={entries}
+              keyExtractor={(_r, i) => `modal-row-${i}`}
+              ItemSeparatorComponent={() => <View style={{ height: gap }} />}
+              contentContainerStyle={{ paddingBottom: 8 }}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item: row, index: idx }) => renderModalCard(row, idx)}
+            />
+          )}
 
-                      <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-                        <TouchableOpacity
-                          onPress={() => setOpen(null)}
-                          activeOpacity={0.9}
-                          style={{
-                            paddingHorizontal: 14,
-                            paddingVertical: 9,
-                            borderRadius: minSide * 0.02,
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                            backgroundColor: "#F3F3F3",
-                          }}
-                          testID="row-done"
-                        >
-                          <Text
-                            style={{ fontWeight: "800", color: colors.textSecondary, fontSize: 13 }}
-                          >
-                            Listo
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              );
+          {/* Botón cerrar */}
+          <TouchableOpacity
+            onPress={closeModal}
+            activeOpacity={0.9}
+            style={{
+              marginTop: 8,
+              alignSelf: "stretch",
+              paddingVertical: 12,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: "#F3F3F3",
             }}
-          />
-        )}
-      </View>
+            testID="group-close-modal"
+          >
+            <Text style={{ textAlign: "center", color: colors.textSecondary, fontWeight: "800" }}>
+              Cerrar
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </Modal>
     </View>
   );
 };
