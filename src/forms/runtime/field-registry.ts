@@ -5,6 +5,8 @@ export type FieldKey =
   | "texto:date"
   | "numerico:number"
   | "numerico:calc"
+  | "texto:calc"
+  | "calc:calc"
   | "booleano:boolean"
   | "imagen:firm"
   | "grupo:group"
@@ -103,6 +105,8 @@ export const normalizers: Record<FieldKey, Normalizer> = {
   "texto:date": normalizeDate,
   "numerico:number": normalizeNumber,
   "numerico:calc": normalizeCalc,
+  "texto:calc": normalizeCalc,
+  "calc:calc": normalizeCalc,
   "booleano:boolean": normalizeBoolean,
   "imagen:firm": normalizeFirm,
   "grupo:group": normalizeGroup,
@@ -115,6 +119,8 @@ export const validators: Record<FieldKey, Validator> = {
   "texto:date": validateDate,
   "numerico:number": validateNumber,
   "numerico:calc": validateCalc,
+  "texto:calc": validateCalc,
+  "calc:calc": validateCalc,
   "booleano:boolean": validateBoolean,
   "imagen:firm": validateFirm,
   "grupo:group": validateGroup,
@@ -129,6 +135,8 @@ export const keyOf = (tipo?: string, clase?: string): FieldKey | null => {
     "texto:date",
     "numerico:number",
     "numerico:calc",
+    "texto:calc",
+    "calc:calc",
     "booleano:boolean",
     "imagen:firm",
     "grupo:group",

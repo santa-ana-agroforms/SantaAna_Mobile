@@ -163,6 +163,7 @@ const FormRoute: React.FC = () => {
         setFooterInfo({ type: "error", text: "No se pudo obtener el formulario." });
         return;
       }
+      console.log("Sending form entry JSON:", JSON.stringify(json, null, 2));
 
       // 🚀 Envío real
       await sendFormEntry(json, { signal: ctrl.signal });
