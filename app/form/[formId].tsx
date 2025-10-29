@@ -7,7 +7,7 @@ import type { Formulario } from "@/screens/FormPage";
 import FormScreen from "@/screens/FormScreen";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
 
 // Redux
 import { sendFormEntry } from "@/api/client";
@@ -132,29 +132,30 @@ const FormRoute: React.FC = () => {
     []
   );
 
-  /** Envío final (modo review) con loader + indicador + retorno */
+  /** Envío final directo (sin “enviar a revisión”) */
   const sendOne = useCallback(async () => {
     const ctrl = new AbortController();
-    console.log("[entries] Sending form entry for review...");
     try {
       if (!sessionId) {
-        Alert.alert("Error", "No se pudo obtener la sesión.");
+        setFooterInfo({ type: "error", text: "No se pudo obtener la sesión." });
         return;
       }
-      // Solo permitir en revisión cuando está listo
-      const isReady = currentSession?.status === "ready_to_submit";
-      if (!isReady) {
-        Alert.alert("No listo", "El formulario no está listo para ser enviado.");
+      // Para enviar directo, pedimos que el formulario esté completo
+      if (!canSendForReview) {
+        setFooterInfo({ type: "error", text: "Faltan campos requeridos para enviar." });
         return;
       }
       if (!(await isOnline())) {
-        Alert.alert("Sin conexión", "Conéctate a Internet para enviar el formulario.");
+        setFooterInfo({
+          type: "error",
+          text: "Sin conexión. Conéctate a Internet e inténtalo de nuevo.",
+        });
         return;
       }
 
       setFooterLoading(true); // 🔄 loader ON
 
-      // Asegura persistencia antes de construir el JSON
+      // Persiste antes de construir JSON
       await saveNow();
 
       const json = await dispatch(getJSONForm({ sessionId: sessionId as string })).unwrap();
@@ -164,8 +165,7 @@ const FormRoute: React.FC = () => {
       }
 
       // 🚀 Envío real
-      const resp = await sendFormEntry(json, { signal: ctrl.signal });
-      console.log("[entries] server response:", resp);
+      await sendFormEntry(json, { signal: ctrl.signal });
 
       // Marca como enviado/sincronizado localmente
       await dispatch(setStatus({ sessionId, status: "synced" }));
@@ -177,7 +177,41 @@ const FormRoute: React.FC = () => {
     } finally {
       setFooterLoading(false); // 🔄 loader OFF
     }
-  }, [currentSession, dispatch, sessionId, showSuccessThenBack, saveNow]);
+  }, [canSendForReview, dispatch, saveNow, sessionId, showSuccessThenBack]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const st = String(currentSession?.status ?? "");
+    const alreadyFinal = st === "submitted" || st === "synced";
+    if (alreadyFinal) return;
+
+    if (canSendForReview) {
+      if (st !== "ready_to_submit") {
+        dispatch(setStatus({ sessionId, status: "ready_to_submit" }));
+      }
+      // Muestra el banner y lo auto-cierra
+      setFooterInfo({ type: "info", text: "Formulario listo para enviar." });
+      const t = setTimeout(() => setFooterInfo(null), 2000);
+      return () => clearTimeout(t);
+    } else {
+      // Si antes estaba listo y ahora no, vuelve a pending y (opcional) muestra mensaje corto
+      if (st === "ready_to_submit") {
+        dispatch(setStatus({ sessionId, status: "pending" }));
+        setFooterInfo({ type: "info", text: "Hay campos requeridos vacíos." });
+        const t = setTimeout(() => setFooterInfo(null), 2000);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [canSendForReview, currentSession?.status, dispatch, sessionId]);
+
+  // 2) Si por cualquier razón disabledSend vuelve a true,
+  //    limpia banners informativos persistentes (no toca error/success)
+  useEffect(() => {
+    if (!canSendForReview) {
+      setFooterInfo((prev) => (prev?.type === "info" ? null : prev));
+    }
+  }, [canSendForReview]);
 
   // Cargar form (desde saved o server)
   useEffect(() => {
@@ -335,39 +369,15 @@ const FormRoute: React.FC = () => {
     );
   }
 
-  /** Envío a revisión (modo normal) con loader + indicador + retorno */
-  const handleSendForReview = async () => {
-    if (!sessionId) return;
-    if (!canSendForReview) {
-      setFooterInfo({ type: "error", text: "Faltan campos requeridos para enviar a revisión." });
-      return;
-    }
-    try {
-      setFooterLoading(true); // 🔄 loader ON
-      await saveNow(); // persiste fill_json + cursor
-      await showSuccessThenBack("¡Enviado a revisión!");
-    } catch {
-      setFooterInfo({ type: "error", text: "No se pudo enviar. Intenta nuevamente." });
-    } finally {
-      setFooterLoading(false); // 🔄 loader OFF
-    }
-  };
+  const isViewMode = mode === "view";
+  const isSubmittedLike = ["synced", "submitted"].includes(currentSession?.status ?? "");
+  const isReadonly = isViewMode || isSubmittedLike;
 
-  // Lógica de botón principal (label/habilitación/handler)
-  const disabledPrimary = isReviewMode ? !(canSendForReview && isLastPage) : !canSendForReview;
-  const primaryLabel = isReviewMode ? "Enviar" : "Enviar a revisión";
-  const onPrimary = isReviewMode ? sendOne : handleSendForReview;
+  // Muestra el footer si no es readonly o si tenemos mensajes/loader activos
+  const shouldShowFooter = !isReadonly || footerLoading || !!footerInfo;
 
-  // console.log(
-  //   "[UI] reviewMode:",
-  //   isReviewMode,
-  //   "isLastPage:",
-  //   isLastPage,
-  //   "canSendForReview:",
-  //   canSendForReview,
-  //   "disabledPrimary:",
-  //   isReviewMode ? !(canSendForReview && isLastPage) : !canSendForReview
-  // );
+  // Print the form with json data
+  console.log("JSON", JSON.stringify(form, null, 2));
 
   return (
     <PageScaffold
@@ -388,16 +398,21 @@ const FormRoute: React.FC = () => {
             layoutFrame={layoutFrame}
             page={currentPage}
             onPageChange={handlePageChange}
+            mode={mode}
           />
-          <FormStickyActions
-            referenceFrame={referenceFrame}
-            contentFrame={contentFrame}
-            disabledSend={disabledPrimary}
-            loading={footerLoading}
-            infoMessage={footerInfo}
-            onSendForReview={onPrimary}
-            sendLabel={primaryLabel}
-          />
+
+          {shouldShowFooter && (
+            <FormStickyActions
+              referenceFrame={referenceFrame}
+              contentFrame={contentFrame}
+              // botón Enviar activo solo si está listo
+              disabledSend={!canSendForReview || (isReviewMode && !isLastPage)}
+              loading={footerLoading}
+              infoMessage={footerInfo}
+              onSendForReview={sendOne} // ← envío directo
+              sendLabel="Enviar"
+            />
+          )}
         </View>
       )}
     </PageScaffold>
@@ -406,12 +421,13 @@ const FormRoute: React.FC = () => {
 
 export default FormRoute;
 
-/* --- mapeos mínimos, igual que tu versión --- */
-const mapTipo = (t: any): "texto" | "booleano" | "numerico" | "imagen" => {
+/* --- mapeos mínimos --- */
+const mapTipo = (t: any): "texto" | "booleano" | "numerico" | "imagen" | "group" => {
   const s = String(t || "").toLowerCase();
   if (["bool", "booleano", "boolean"].includes(s)) return "booleano";
   if (["num", "numero", "numerico", "number"].includes(s)) return "numerico";
   if (["img", "image", "imagen", "firma", "firm"].includes(s)) return "imagen";
+  if (["group", "grupo"].includes(s)) return "group";
   return "texto";
 };
 
@@ -427,6 +443,7 @@ const mapClase = (
   | "boolean"
   | "number"
   | "calc"
+  | "group"
   | "firm" => {
   const s = String(c || "").toLowerCase();
   if (["lista", "list"].includes(s)) return "list";
@@ -438,5 +455,6 @@ const mapClase = (
   if (["calc", "calculado"].includes(s)) return "calc";
   if (["firma", "firm", "signature"].includes(s)) return "firm";
   if (["text", "textarea"].includes(s)) return "text";
+  if (["group", "grupo"].includes(s)) return "group";
   return "string";
 };

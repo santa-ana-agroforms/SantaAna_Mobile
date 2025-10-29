@@ -29,11 +29,9 @@ export const ensureMigrated = async () => {
   const db = await getDb();
 
   await db.withTransactionAsync(async () => {
-    // Leer versión actual
     const uvRows = await db.getAllAsync<{ user_version: number }>("PRAGMA user_version;");
     let ver = (uvRows?.[0]?.user_version ?? 0) | 0;
 
-    // v1: esquema original
     if (ver < 1) {
       await db.execAsync(`
         CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
@@ -85,7 +83,6 @@ export const ensureMigrated = async () => {
       ver = 1;
     }
 
-    // v2: categorías + FK lógico (índice) + columna en form
     if (ver < 2) {
       await db.execAsync(`
         CREATE TABLE IF NOT EXISTS category (
@@ -94,7 +91,6 @@ export const ensureMigrated = async () => {
           descripcion TEXT
         );
       `);
-      // Agregar columna si no existe
       const cols = await db.getAllAsync<{ name: string }>("PRAGMA table_info(form);");
       const hasCategoria = cols.some((c) => c.name === "categoria_id");
       if (!hasCategoria) {
@@ -103,6 +99,44 @@ export const ensureMigrated = async () => {
       await db.execAsync(`CREATE INDEX IF NOT EXISTS idx_form_categoria_id ON form(categoria_id);`);
       await db.execAsync("PRAGMA user_version = 2;");
       ver = 2;
+    }
+
+    // v3: disponibilidad y periodicidad
+    if (ver < 3) {
+      const cols3 = await db.getAllAsync<{ name: string }>("PRAGMA table_info(form);");
+      const hasDesde = cols3.some((c) => c.name === "disponible_desde");
+      const hasHasta = cols3.some((c) => c.name === "disponible_hasta");
+      const hasPer = cols3.some((c) => c.name === "periodicidad");
+
+      if (!hasDesde) await db.execAsync(`ALTER TABLE form ADD COLUMN disponible_desde TEXT;`);
+      if (!hasHasta) await db.execAsync(`ALTER TABLE form ADD COLUMN disponible_hasta TEXT;`);
+      if (!hasPer) await db.execAsync(`ALTER TABLE form ADD COLUMN periodicidad INTEGER;`);
+
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_form_disp_desde ON form(disponible_desde);`
+      );
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_form_disp_hasta ON form(disponible_hasta);`
+      );
+      await db.execAsync(`CREATE INDEX IF NOT EXISTS idx_form_periodicidad ON form(periodicidad);`);
+
+      await db.execAsync("PRAGMA user_version = 3;");
+      ver = 3;
+    }
+
+    // v4: uso local (última vez llenado)
+    if (ver < 4) {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS form_usage (
+          form_id TEXT PRIMARY KEY,
+          last_filled_at TEXT NOT NULL
+        );
+      `);
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_form_usage_last ON form_usage(last_filled_at);`
+      );
+      await db.execAsync("PRAGMA user_version = 4;");
+      ver = 4;
     }
   });
 
@@ -146,57 +180,46 @@ const ensureGroupsTables = async () => {
   await run(`CREATE INDEX IF NOT EXISTS idx_lgf_pagina ON local_group_fields (pagina_id)`);
 };
 
-// Serialización de campos del grupo
-const serializeGroupField = (f: any) => {
-  return [
-    f.pagina?.id_pagina,
-    f.pagina?.nombre ?? "",
-    f.pagina?.secuencia ?? null,
-    f.id_campo,
-    f.sequence,
-    f.tipo,
-    f.clase,
-    f.nombre_interno,
-    f.etiqueta ?? null,
-    f.ayuda ?? null,
-    JSON.stringify(f.config ?? null),
-    f.requerido ? 1 : 0,
-  ];
-};
+const serializeGroupField = (f: any) => [
+  f.pagina?.id_pagina,
+  f.pagina?.nombre ?? "",
+  f.pagina?.secuencia ?? null,
+  f.id_campo,
+  f.sequence,
+  f.tipo,
+  f.clase,
+  f.nombre_interno,
+  f.etiqueta ?? null,
+  f.ayuda ?? null,
+  JSON.stringify(f.config ?? null),
+  f.requerido ? 1 : 0,
+];
 
-const rowToGroupField = (r: any) => {
-  return {
-    id_campo: r.id_campo,
-    sequence: Number(r.sequence),
-    tipo: r.tipo,
-    clase: r.clase,
-    nombre_interno: r.nombre_interno,
-    etiqueta: r.etiqueta ?? null,
-    ayuda: r.ayuda ?? null,
-    config: r.config_json ? JSON.parse(r.config_json) : null,
-    requerido: Number(r.requerido) === 1,
-    pagina: {
-      id_pagina: r.pagina_id,
-      nombre: r.pagina_nombre,
-      secuencia:
-        r.pagina_secuencia === null || r.pagina_secuencia === undefined
-          ? null
-          : Number(r.pagina_secuencia),
-    },
-  };
-};
+const rowToGroupField = (r: any) => ({
+  id_campo: r.id_campo,
+  sequence: Number(r.sequence),
+  tipo: r.tipo,
+  clase: r.clase,
+  nombre_interno: r.nombre_interno,
+  etiqueta: r.etiqueta ?? null,
+  ayuda: r.ayuda ?? null,
+  config: r.config_json ? JSON.parse(r.config_json) : null,
+  requerido: Number(r.requerido) === 1,
+  pagina: {
+    id_pagina: r.pagina_id,
+    nombre: r.pagina_nombre,
+    secuencia: r.pagina_secuencia == null ? null : Number(r.pagina_secuencia),
+  },
+});
 
 // Inserta/actualiza UN grupo y reemplaza sus campos
 export const upsertGroup = async (group: { id_grupo: string; nombre: string; campos: any[] }) => {
   await ensureGroupsTables();
-
   await run(
     `INSERT INTO local_groups (id_grupo, nombre) VALUES (?, ?)
      ON CONFLICT(id_grupo) DO UPDATE SET nombre = excluded.nombre`,
     [group.id_grupo, group.nombre]
   );
-
-  // Para simplificar: reemplazamos el set de campos completo
   await run(`DELETE FROM local_group_fields WHERE id_grupo = ?`, [group.id_grupo]);
 
   if (group.campos?.length) {
@@ -215,7 +238,6 @@ export const upsertGroup = async (group: { id_grupo: string; nombre: string; cam
   }
 };
 
-// Inserta/actualiza VARIOS grupos
 export const upsertGroups = async (
   groups: { id_grupo: string; nombre: string; campos: any[] }[]
 ) => {
@@ -223,25 +245,6 @@ export const upsertGroups = async (
   for (const g of groups) await upsertGroup(g);
 };
 
-// Limpia todos los grupos y campos locales
-export const clearGroups = async () => {
-  await ensureGroupsTables();
-  const db = await getDb();
-
-  await db.withTransactionAsync(async () => {
-    await db.runAsync(`DELETE FROM local_group_fields`);
-    await db.runAsync(`DELETE FROM local_groups`);
-  });
-};
-
-// Limpiar un grupo por id
-export const clearGroupById = async (id_grupo: string) => {
-  await ensureGroupsTables();
-  await run(`DELETE FROM local_group_fields WHERE id_grupo = ?`, [id_grupo]);
-  await run(`DELETE FROM local_groups WHERE id_grupo = ?`, [id_grupo]);
-};
-
-// Selecciona todos los grupos (con sus campos)
 export const selectGroups = async () => {
   await ensureGroupsTables();
 
@@ -292,19 +295,32 @@ export const selectGroupById = async (id_grupo: string) => {
   };
 };
 
+export const clearGroups = async () => {
+  await ensureGroupsTables();
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM local_group_fields`);
+    await db.runAsync(`DELETE FROM local_groups`);
+  });
+};
+
+export const clearGroupById = async (id_grupo: string) => {
+  await ensureGroupsTables();
+  await run(`DELETE FROM local_group_fields WHERE id_grupo = ?`, [id_grupo]);
+  await run(`DELETE FROM local_groups WHERE id_grupo = ?`, [id_grupo]);
+};
+
 // ---------------------------------------------
-// Opcional: utilidades de sincronización offline
+// Sync offline (formularios)
 // ---------------------------------------------
 
-// Crea un id estable a partir del nombre de categoría cuando la API no trae id.
-// Si tu backend empieza a enviar categoria_id, reemplaza el uso de esta función por el id real.
 const slugFromCategoryName = (name?: string | null) => {
   if (!name || !name.trim()) return "__SIN_CATEGORIA__";
   return name
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // quitar acentos
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 };
@@ -334,135 +350,478 @@ type ServerForm = {
   id_formulario: string;
   nombre: string;
   version_vigente: { id_index_version: string; fecha_creacion: string };
+  periodicidad: number | null;
+  disponibilidad: { desde: string | null; hasta: string | null };
+  disponible?: boolean;
   paginas: ServerPage[];
 };
 
-type ServerCategoryGroup = {
+export type ServerCategoryGroup = {
   nombre_categoria: string;
   descripcion: string | null;
   formularios: ServerForm[];
 };
 
-// Inserta/actualiza el payload agrupado por categoría tal como lo devuelve /forms/tree
-export const upsertGroupedForms = async (groups: ServerCategoryGroup[]) => {
+// ------------------ Uso local ------------------
+export const setFormLastFilled = async (formId: string, whenISO?: string) => {
   await ensureMigrated();
-  const db = await getDb();
+  const ts = whenISO ?? new Date().toISOString();
+  await run(
+    `INSERT INTO form_usage (form_id, last_filled_at)
+     VALUES (?, ?)
+     ON CONFLICT(form_id)
+     DO UPDATE SET last_filled_at = excluded.last_filled_at`,
+    [formId, ts]
+  );
+};
 
-  await db.withTransactionAsync(async () => {
-    for (const cat of groups) {
-      const catId = slugFromCategoryName(cat.nombre_categoria); // ⬅️ reemplaza por categoria_id real si lo tienes
+export const getFormLastFilledMap = async (): Promise<Record<string, string>> => {
+  await ensureMigrated();
+  const rows = await all<{ form_id: string; last_filled_at: string }>(
+    `SELECT form_id, last_filled_at FROM form_usage`
+  );
+  const map: Record<string, string> = {};
+  for (const r of rows) map[r.form_id] = r.last_filled_at;
+  return map;
+};
+
+// ---------- Helpers de tiempo (Guatemala, UTC-6 fijo) ----------
+const GT_OFFSET_MS = 6 * 60 * 60 * 1000;
+
+const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+const parseInGT = (s: string): Date | null => {
+  if (!s) return null;
+  if (isDateOnly(s)) return new Date(`${s}T00:00:00-06:00`);
+  const d = new Date(s);
+  return Number.isNaN(+d) ? null : d;
+};
+const toGtEpochDay = (d: Date) => Math.floor((d.getTime() - GT_OFFSET_MS) / 86400000);
+const fromGtEpochDayMidnight = (day: number) => new Date(day * 86400000 + GT_OFFSET_MS);
+const endOfDayGT = (d: Date) => new Date(fromGtEpochDayMidnight(toGtEpochDay(d) + 1).getTime() - 1);
+
+const getPeriodStartGT = (start: Date, periodDays: number, now: Date) => {
+  const startDay = toGtEpochDay(start);
+  const nowDay = toGtEpochDay(now);
+  const deltaDays = nowDay - startDay;
+  const k = Math.floor(deltaDays / periodDays);
+  const currStartDay = startDay + Math.max(0, k) * periodDays;
+  return fromGtEpochDayMidnight(currStartDay);
+};
+const isWithinWindowGT = (now: Date, desde?: Date | null, hasta?: Date | null) => {
+  if (desde && now < desde) return false;
+  if (hasta) {
+    const hastaEnd = endOfDayGT(hasta);
+    if (now > hastaEnd) return false;
+  }
+  return true;
+};
+const isFilledInCurrentPeriod = (lastFill: Date | null, periodStart: Date, periodDays: number) => {
+  if (!lastFill) return false;
+  const startMs = periodStart.getTime();
+  const endMs = fromGtEpochDayMidnight(toGtEpochDay(periodStart) + periodDays).getTime();
+  const t = lastFill.getTime();
+  return t >= startMs && t < endMs;
+};
+
+// ---------- upsert SIN transacción (uso interno) ----------
+const upsertGroupedFormsNoTx = async (db: SQLite.SQLiteDatabase, groups: ServerCategoryGroup[]) => {
+  for (const cat of groups) {
+    const catId = slugFromCategoryName(cat.nombre_categoria);
+    await db.runAsync(
+      `INSERT OR REPLACE INTO category (id, nombre, descripcion) VALUES (?, ?, ?);`,
+      [catId, cat.nombre_categoria, cat.descripcion ?? null]
+    );
+
+    for (const form of cat.formularios) {
+      // limpiar páginas/campos del form
       await db.runAsync(
-        `INSERT OR REPLACE INTO category (id, nombre, descripcion) VALUES (?, ?, ?);`,
-        [catId, cat.nombre_categoria, cat.descripcion ?? null]
+        `DELETE FROM field WHERE page_version_id IN (SELECT version_id FROM page WHERE form_id = ?);`,
+        [form.id_formulario]
+      );
+      await db.runAsync(`DELETE FROM page WHERE form_id = ?;`, [form.id_formulario]);
+
+      await db.runAsync(
+        `INSERT OR REPLACE INTO form
+          (id, nombre, index_version_id, index_version_fecha, categoria_id, disponible_desde, disponible_hasta, periodicidad)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          form.id_formulario,
+          form.nombre,
+          form.version_vigente.id_index_version,
+          form.version_vigente.fecha_creacion,
+          catId,
+          form.disponibilidad?.desde ?? null,
+          form.disponibilidad?.hasta ?? null,
+          form.periodicidad ?? null,
+        ]
       );
 
-      for (const form of cat.formularios) {
-        // Limpiar páginas/campos actuales del formulario para evitar basura histórica
+      for (const p of form.paginas) {
         await db.runAsync(
-          `DELETE FROM field WHERE page_version_id IN (SELECT version_id FROM page WHERE form_id = ?);`,
-          [form.id_formulario]
-        );
-        await db.runAsync(`DELETE FROM page WHERE form_id = ?;`, [form.id_formulario]);
-
-        // Upsert form con categoría
-        await db.runAsync(
-          `INSERT OR REPLACE INTO form (id, nombre, index_version_id, index_version_fecha, categoria_id)
-           VALUES (?, ?, ?, ?, ?);`,
+          `INSERT OR REPLACE INTO page (id, form_id, secuencia, nombre, descripcion, version_id, version_fecha)
+           VALUES (?, ?, ?, ?, ?, ?, ?);`,
           [
+            p.id_pagina,
             form.id_formulario,
-            form.nombre,
-            form.version_vigente.id_index_version,
-            form.version_vigente.fecha_creacion,
-            catId,
+            p.secuencia ?? null,
+            p.nombre,
+            p.descripcion ?? null,
+            p.pagina_version.id,
+            p.pagina_version.fecha_creacion,
           ]
         );
 
-        // Insertar páginas y campos
-        for (const p of form.paginas) {
+        for (const f of p.campos) {
           await db.runAsync(
-            `INSERT OR REPLACE INTO page (id, form_id, secuencia, nombre, descripcion, version_id, version_fecha)
-             VALUES (?, ?, ?, ?, ?, ?, ?);`,
+            `INSERT OR REPLACE INTO field
+             (id, page_version_id, sequence, tipo, clase, nombre_interno, etiqueta, ayuda, config, requerido)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
             [
-              p.id_pagina,
-              form.id_formulario,
-              p.secuencia ?? null,
-              p.nombre,
-              p.descripcion ?? null,
+              f.id_campo,
               p.pagina_version.id,
-              p.pagina_version.fecha_creacion,
+              f.sequence,
+              f.tipo,
+              f.clase,
+              f.nombre_interno,
+              f.etiqueta ?? null,
+              f.ayuda ?? null,
+              f.config == null ? null : JSON.stringify(f.config),
+              f.requerido ? 1 : 0,
             ]
           );
-
-          for (const f of p.campos) {
-            await db.runAsync(
-              `INSERT OR REPLACE INTO field
-               (id, page_version_id, sequence, tipo, clase, nombre_interno, etiqueta, ayuda, config, requerido)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-              [
-                f.id_campo,
-                p.pagina_version.id,
-                f.sequence,
-                f.tipo,
-                f.clase,
-                f.nombre_interno,
-                f.etiqueta ?? null,
-                f.ayuda ?? null,
-                f.config == null ? null : JSON.stringify(f.config),
-                f.requerido ? 1 : 0,
-              ]
-            );
-          }
         }
       }
+    }
+  }
+};
+
+// ---------- UPSERT (público) con UNA transacción ----------
+export const upsertGroupedForms = async (groups: ServerCategoryGroup[]) => {
+  await ensureMigrated();
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await upsertGroupedFormsNoTx(db, groups);
+  });
+};
+
+// ---------- REPLACE SNAPSHOT (autoritativo + poda atómica) ----------
+export const replaceFormsSnapshot = async (groups: ServerCategoryGroup[]) => {
+  await ensureMigrated();
+  const db = await getDb();
+
+  // Recolectar llaves “a conservar”
+  const keepCatIds: string[] = [];
+  const keepFormIds: string[] = [];
+  const keepPageIds: string[] = [];
+  const keepPageVersionIds: string[] = [];
+
+  for (const cat of groups ?? []) {
+    const catId = slugFromCategoryName(cat.nombre_categoria);
+    keepCatIds.push(catId);
+
+    for (const form of cat.formularios ?? []) {
+      keepFormIds.push(form.id_formulario);
+      for (const p of form.paginas ?? []) {
+        keepPageIds.push(p.id_pagina);
+        keepPageVersionIds.push(p.pagina_version.id);
+      }
+    }
+  }
+
+  const makeIn = (arr: any[]) => (arr.length ? `(${arr.map(() => "?").join(",")})` : null);
+
+  await db.withTransactionAsync(async () => {
+    // 1) Upsert TODO el snapshot (sin abrir otra transacción)
+    await upsertGroupedFormsNoTx(db, groups);
+
+    // 2) Podar lo que NO esté en el snapshot
+    if (keepPageVersionIds.length) {
+      await db.runAsync(
+        `DELETE FROM field WHERE page_version_id NOT IN ${makeIn(keepPageVersionIds)};`,
+        keepPageVersionIds
+      );
+    } else {
+      await db.runAsync(`DELETE FROM field;`);
+    }
+
+    if (keepPageIds.length) {
+      await db.runAsync(`DELETE FROM page WHERE id NOT IN ${makeIn(keepPageIds)};`, keepPageIds);
+    } else {
+      await db.runAsync(`DELETE FROM page;`);
+    }
+
+    if (keepFormIds.length) {
+      await db.runAsync(`DELETE FROM form WHERE id NOT IN ${makeIn(keepFormIds)};`, keepFormIds);
+    } else {
+      await db.runAsync(`DELETE FROM form;`);
+    }
+
+    if (keepCatIds.length) {
+      await db.runAsync(`DELETE FROM category WHERE id NOT IN ${makeIn(keepCatIds)};`, keepCatIds);
+    } else {
+      await db.runAsync(`DELETE FROM category;`);
     }
   });
 };
 
-// Funcion para limpiar los formularios y categorías (antes de un upsert completo)
-export const clearFormsAndCategories = async () => {
+// Guarda envío y devuelve disponibilidad recalculada (GT)
+export const markFormSubmitted = async (
+  formId: string,
+  when?: Date | string
+): Promise<{ form_id: string; last_filled_at: string; disponible: boolean }> => {
   await ensureMigrated();
   const db = await getDb();
 
-  await db.withTransactionAsync(async () => {
-    await db.runAsync(`DELETE FROM field`);
-    await db.runAsync(`DELETE FROM page`);
-    await db.runAsync(`DELETE FROM form`);
-    await db.runAsync(`DELETE FROM category`);
-  });
+  const ts =
+    when instanceof Date
+      ? when.toISOString()
+      : typeof when === "string"
+        ? new Date(when).toISOString()
+        : new Date().toISOString();
+
+  // 1) persistir última vez llenado
+  await db.runAsync(
+    `INSERT INTO form_usage (form_id, last_filled_at)
+     VALUES (?, ?)
+     ON CONFLICT(form_id) DO UPDATE SET last_filled_at = excluded.last_filled_at`,
+    [formId, ts]
+  );
+
+  // 2) traer metadatos del form para calcular disponibilidad
+  const [meta] = await db.getAllAsync<{
+    disponible_desde: string | null;
+    disponible_hasta: string | null;
+    periodicidad: number | null;
+  }>(
+    `SELECT disponible_desde, disponible_hasta, periodicidad
+       FROM form
+      WHERE id = ?
+      LIMIT 1`,
+    [formId]
+  );
+
+  // ---- helpers inline (GT: UTC-6, sin DST) ----
+  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const parseInGT = (s?: string | null): Date | null => {
+    if (!s) return null;
+    return isDateOnly(s) ? new Date(`${s}T00:00:00-06:00`) : new Date(s);
+  };
+  const GT_OFFSET_MS = 6 * 60 * 60 * 1000;
+  const toGtDay = (d: Date) => Math.floor((d.getTime() - GT_OFFSET_MS) / 86400000);
+  const fromGtDay = (day: number) => new Date(day * 86400000 + GT_OFFSET_MS);
+  const endOfDayGT = (d: Date) => new Date(fromGtDay(toGtDay(d) + 1).getTime() - 1);
+
+  const isWithinWindow = (now: Date, desde?: Date | null, hasta?: Date | null) => {
+    if (desde && now < desde) return false;
+    if (hasta && now > endOfDayGT(hasta)) return false;
+    return true;
+  };
+  const getPeriodStart = (start: Date, days: number, now: Date) => {
+    const k = Math.floor((toGtDay(now) - toGtDay(start)) / days);
+    const startDay = toGtDay(start) + Math.max(0, k) * days;
+    return fromGtDay(startDay);
+  };
+  const isFilledThisPeriod = (last: Date, periodStart: Date, days: number) => {
+    const startMs = periodStart.getTime();
+    const endMs = fromGtDay(toGtDay(periodStart) + days).getTime();
+    const t = last.getTime();
+    return t >= startMs && t < endMs;
+  };
+  // ---------------------------------------------
+
+  const now = new Date(ts);
+  const desde = parseInGT(meta?.disponible_desde ?? null);
+  const hasta = parseInGT(meta?.disponible_hasta ?? null);
+  const period = meta?.periodicidad ? Number(meta.periodicidad) : null;
+
+  const windowOK = isWithinWindow(now, desde, hasta);
+  let periodOK = true;
+  if (period && period > 0 && desde) {
+    const pStart = getPeriodStart(desde, period, now);
+    // como “acabas de llenar”, last = now → caerá en el periodo actual
+    periodOK = !isFilledThisPeriod(now, pStart, period);
+  }
+
+  const disponible = windowOK && periodOK; // normalmente false tras enviar si hay periodicidad
+
+  return { form_id: formId, last_filled_at: ts, disponible };
 };
 
-// Delete a form by id (and if category becomes empty, delete it too)
-export const deleteFormById = async (formId: string) => {
+// --- Notificaciones de disponibilidad por período/ventana (Guatemala) ---
+export const computeAvailabilityNotifications = async (): Promise<
+  { form_id: string; title: string; body: string }[]
+> => {
   await ensureMigrated();
   const db = await getDb();
 
-  await db.withTransactionAsync(async () => {
-    // 1) Borrar campos del form (vía versiones de página)
-    await db.runAsync(
-      `DELETE FROM field
-         WHERE page_version_id IN (
-           SELECT version_id
-             FROM page
-            WHERE form_id = ?
-         )`,
-      [formId]
-    );
+  // helpers GT (UTC-6, sin DST)
+  const GT_OFFSET_MS = 6 * 60 * 60 * 1000;
+  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const parseInGT = (s?: string | null): Date | null => {
+    if (!s) return null;
+    return isDateOnly(s) ? new Date(`${s}T00:00:00-06:00`) : new Date(s);
+  };
+  const toGtDay = (d: Date) => Math.floor((d.getTime() - GT_OFFSET_MS) / 86400000);
+  const fromGtDay = (day: number) => new Date(day * 86400000 + GT_OFFSET_MS);
+  const endOfDayGT = (d: Date) => new Date(fromGtDay(toGtDay(d) + 1).getTime() - 1);
 
-    // 2) Borrar páginas del form
-    await db.runAsync(`DELETE FROM page WHERE form_id = ?`, [formId]);
+  const isWithinWindow = (now: Date, desde?: Date | null, hasta?: Date | null) => {
+    if (desde && now < desde) return false;
+    if (hasta && now > endOfDayGT(hasta)) return false;
+    return true;
+  };
 
-    // 3) Borrar el form
-    await db.runAsync(`DELETE FROM form WHERE id = ?`, [formId]);
+  const forms = await db.getAllAsync<{
+    id: string;
+    nombre: string;
+    disponible_desde: string | null;
+    disponible_hasta: string | null;
+    periodicidad: number | null;
+  }>(`SELECT id, nombre, disponible_desde, disponible_hasta, periodicidad FROM form`);
 
-    // 4) Limpiar categorías huérfanas
-    await db.runAsync(
-      `DELETE FROM category
-         WHERE id NOT IN (SELECT DISTINCT categoria_id FROM form)`
-    );
-  });
+  const now = new Date();
+  const out: { form_id: string; title: string; body: string }[] = [];
+
+  for (const f of forms) {
+    const desde = parseInGT(f.disponible_desde);
+    const hasta = parseInGT(f.disponible_hasta);
+    const per = f.periodicidad ? Number(f.periodicidad) : null;
+
+    if (!desde) continue;
+    if (!isWithinWindow(now, desde, hasta)) continue;
+
+    const diffDays = toGtDay(now) - toGtDay(desde);
+    if (diffDays < 0) continue;
+
+    // ¿hoy arranca período?
+    let isStartToday = false;
+    if (per && per > 0) {
+      isStartToday = diffDays % per === 0;
+    } else {
+      // sin periodicidad → sólo el primer día de disponibilidad
+      isStartToday = diffDays === 0;
+    }
+    if (!isStartToday) continue;
+
+    // dedupe por (form, día-de-inicio-de-periodo)
+    const periodStartDay =
+      per && per > 0 ? toGtDay(desde) + Math.floor(diffDays / per) * per : toGtDay(desde);
+    const kvKey = `noti.periodStart.${f.id}.${periodStartDay}`;
+    const seen = await db.getAllAsync<{ v: string }>(`SELECT v FROM kv WHERE k = ? LIMIT 1`, [
+      kvKey,
+    ]);
+    if (seen.length) continue; // ya notificado este período
+
+    // guardar marca
+    await db.runAsync(`INSERT OR REPLACE INTO kv (k, v) VALUES (?, ?)`, [kvKey, now.toISOString()]);
+
+    const firstDay = diffDays === 0;
+    const title = "Formulario disponible";
+    const body = firstDay
+      ? `Hoy empezó a estar disponible el form “${f.nombre}”.`
+      : `Hola, recuerda que hay que llenar el form “${f.nombre}”.`;
+
+    out.push({ form_id: f.id, title, body });
+  }
+
+  return out;
 };
 
-// src/db/sqlite.ts
+// 🔁 1) Solo calcula las notis (NO escribe a la DB)
+export const planAvailabilityNotifications = async (): Promise<
+  { form_id: string; title: string; body: string; kvKey: string }[]
+> => {
+  await ensureMigrated();
+  const db = await getDb();
+
+  // helpers GT (UTC-6, sin DST)
+  const GT_OFFSET_MS = 6 * 60 * 60 * 1000;
+  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const parseInGT = (s?: string | null): Date | null => {
+    if (!s) return null;
+    return isDateOnly(s) ? new Date(`${s}T00:00:00-06:00`) : new Date(s);
+  };
+  const toGtDay = (d: Date) => Math.floor((d.getTime() - GT_OFFSET_MS) / 86400000);
+  const fromGtDay = (day: number) => new Date(day * 86400000 + GT_OFFSET_MS);
+  const endOfDayGT = (d: Date) => new Date(fromGtDay(toGtDay(d) + 1).getTime() - 1);
+  const isWithinWindow = (now: Date, desde?: Date | null, hasta?: Date | null) => {
+    if (desde && now < desde) return false;
+    if (hasta && now > endOfDayGT(hasta)) return false;
+    return true;
+  };
+
+  const forms = await db.getAllAsync<{
+    id: string;
+    nombre: string;
+    disponible_desde: string | null;
+    disponible_hasta: string | null;
+    periodicidad: number | null;
+    nombre_categoria: string | null;
+  }>(
+    `SELECT f.id, f.nombre, f.disponible_desde, f.disponible_hasta, f.periodicidad, c.nombre AS nombre_categoria
+       FROM form f
+       LEFT JOIN category c ON f.categoria_id = c.id`
+  );
+
+  const now = new Date();
+  const out: { form_id: string; title: string; body: string; kvKey: string }[] = [];
+
+  console.log(`Revisando ${forms.length} formularios...`);
+  for (const f of forms) {
+    const desde = parseInGT(f.disponible_desde);
+    const hasta = parseInGT(f.disponible_hasta);
+    const per = f.periodicidad ? Number(f.periodicidad) : null;
+    if (!desde) continue;
+    if (!isWithinWindow(now, desde, hasta)) continue;
+
+    const diffDays = toGtDay(now) - toGtDay(desde);
+    if (diffDays < 1) continue;
+
+    // ¿hoy arranca período?
+    let isStartToday = false;
+    if (per && per > 0) {
+      isStartToday = diffDays % per === 1;
+    } else {
+      // sin periodicidad → solo el primer día
+      isStartToday = diffDays === 1;
+    }
+    if (!isStartToday) continue;
+
+    // clave para dedupe por (form, día de inicio de período)
+    const periodStartDay =
+      per && per > 0 ? toGtDay(desde) + Math.floor(diffDays / per) * per : toGtDay(desde);
+    const kvKey = `noti.periodStart.${f.id}.${periodStartDay}`;
+
+    const firstDay = diffDays === 1;
+    const title = "Formulario disponible";
+    const body = firstDay
+      ? `Hoy empezó a estar disponible el form “${f.nombre}” en la categoría “${f.nombre_categoria ?? "n/a"}”.`
+      : `Hola, recuerda que hay que llenar el form “${f.nombre}” en la categoría “${f.nombre_categoria ?? "n/a"}”.`;
+
+    out.push({ form_id: f.id, title, body, kvKey });
+  }
+
+  return out;
+};
+
+// 🧷 2) Marca “ya enviada” de forma idempotente (si ya existía, devuelve false)
+export const tryMarkNotificationSent = async (kvKey: string): Promise<boolean> => {
+  await ensureMigrated();
+  const db = await getDb();
+  const exists = await db.getAllAsync<{ v: string }>(`SELECT v FROM kv WHERE k = ? LIMIT 1`, [
+    kvKey,
+  ]);
+  if (exists.length) return false;
+  try {
+    await db.runAsync(`INSERT INTO kv (k, v) VALUES (?, ?)`, [kvKey, new Date().toISOString()]);
+    return true;
+  } catch {
+    // si hubo race y otro hilo insertó primero, lo tomamos como NO-enviar
+    return false;
+  }
+};
+
+// Conteo rápido
 export const logDbCounts = async () => {
   const db = await getDb();
   const q = async (sql: string) => (await db.getAllAsync<any>(sql))[0]?.n ?? 0;
@@ -473,8 +832,19 @@ export const logDbCounts = async () => {
   console.log("[DB COUNTS] category:", c, "form:", f, "page:", p, "field:", d);
 };
 
-// Lee desde SQLite con el MISMO shape agrupado por categoría que entrega el backend
-export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGroup[]> => {
+export const clearFormsAndCategories = async () => {
+  await ensureMigrated();
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM field;`);
+    await db.runAsync(`DELETE FROM page;`);
+    await db.runAsync(`DELETE FROM form;`);
+    await db.runAsync(`DELETE FROM category;`);
+  });
+};
+
+// Lectura agrupada (con disponibilidad y filtro por defecto)
+export const selectFormsGroupedByCategory = async (opts?: { onlyAvailable?: boolean }) => {
   await ensureMigrated();
   const db = await getDb();
 
@@ -488,6 +858,10 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
       f.nombre           AS form_nombre,
       f.index_version_id AS form_index_version_id,
       f.index_version_fecha AS form_index_version_fecha,
+
+      f.disponible_desde AS form_disponible_desde,
+      f.disponible_hasta AS form_disponible_hasta,
+      f.periodicidad     AS form_periodicidad,
 
       p.id               AS page_id,
       p.secuencia        AS page_secuencia,
@@ -512,12 +886,18 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
     ORDER BY c.nombre, f.nombre, p.secuencia, fd.sequence, fd.id;
   `);
 
-  const catMap = new Map<string, ServerCategoryGroup>();
-  const formMap = new Map<string, ServerForm>();
+  const lastMap = await getFormLastFilledMap();
+  const now = new Date();
+
+  type FormNode = ServerForm;
+  const catMap = new Map<
+    string,
+    { nombre_categoria: string; descripcion: string | null; formularios: FormNode[] }
+  >();
+  const formMap = new Map<string, FormNode>();
   const pageMap = new Map<string, ServerPage>();
 
   for (const r of rows) {
-    // categoría
     if (!catMap.has(r.categoria_id)) {
       catMap.set(r.categoria_id, {
         nombre_categoria: r.nombre_categoria,
@@ -527,29 +907,47 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
     }
     const cat = catMap.get(r.categoria_id)!;
 
-    // si no hay form_id (categoría sin forms), sigue al siguiente row
     if (!r.form_id) continue;
 
-    // formulario
     if (!formMap.has(r.form_id)) {
-      const form: ServerForm = {
+      const desdeD = r.form_disponible_desde ? parseInGT(r.form_disponible_desde) : null;
+      const hastaD = r.form_disponible_hasta ? parseInGT(r.form_disponible_hasta) : null;
+      const period = r.form_periodicidad == null ? null : Number(r.form_periodicidad) || null;
+
+      const windowOK = isWithinWindowGT(now, desdeD, hastaD);
+      let periodOK = true;
+      if (period && period > 0 && desdeD) {
+        const start = getPeriodStartGT(desdeD, period, now);
+        const lastStr = lastMap[r.form_id] ?? null;
+        const last = lastStr ? new Date(lastStr) : null;
+        const filledThisPeriod = isFilledInCurrentPeriod(last, start, period);
+        periodOK = !filledThisPeriod;
+      }
+      const disponible = windowOK && periodOK;
+
+      const f: ServerForm = {
         id_formulario: r.form_id,
         nombre: r.form_nombre,
         version_vigente: {
           id_index_version: r.form_index_version_id,
           fecha_creacion: r.form_index_version_fecha,
         },
+        periodicidad: period,
+        disponibilidad: {
+          desde: r.form_disponible_desde ?? null,
+          hasta: r.form_disponible_hasta ?? null,
+        },
+        disponible,
         paginas: [],
       };
-      formMap.set(r.form_id, form);
-      cat.formularios.push(form);
+      formMap.set(r.form_id, f);
+      cat.formularios.push(f);
     }
     const form = formMap.get(r.form_id)!;
 
-    // puede no haber página (LEFT JOIN) → en ese caso, no push de page
     if (r.page_id) {
-      const pageKey = r.page_id;
-      if (!pageMap.has(pageKey)) {
+      const key = r.page_id;
+      if (!pageMap.has(key)) {
         const page: ServerPage = {
           id_pagina: r.page_id,
           secuencia: r.page_secuencia ?? null,
@@ -558,11 +956,10 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
           pagina_version: { id: r.page_version_id, fecha_creacion: r.page_version_fecha },
           campos: [],
         };
-        pageMap.set(pageKey, page);
+        pageMap.set(key, page);
         form.paginas.push(page);
       }
-      const page = pageMap.get(pageKey)!;
-
+      const page = pageMap.get(key)!;
       if (r.field_id) {
         page.campos.push({
           id_campo: r.field_id,
@@ -579,8 +976,11 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
     }
   }
 
-  const out = Array.from(catMap.values());
+  let out = Array.from(catMap.values());
   for (const cg of out) {
+    if (opts?.onlyAvailable !== false) {
+      cg.formularios = cg.formularios.filter((f) => f.disponible);
+    }
     cg.formularios.sort((a, b) => a.nombre.localeCompare(b.nombre));
     for (const f of cg.formularios) {
       f.paginas.sort(
@@ -591,21 +991,23 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
       }
     }
   }
+  if (opts?.onlyAvailable !== false) {
+    out = out.filter((cg) => (cg.formularios?.length ?? 0) > 0);
+  }
   return out;
 };
 
 export const selectFormFromGroupedById = async (formId: string) => {
-  const groups = await selectFormsGroupedByCategory();
+  const groups = await selectFormsGroupedByCategory({ onlyAvailable: false });
   for (const g of groups) {
     const f = g.formularios.find((x) => x.id_formulario === formId);
-    if (f) return f; // trae paginas y campos listos
+    if (f) return f;
   }
   return null;
 };
 
 // ===== Esquema local para DATASETS (por campo) =====
 const ensureDatasetsTables = async () => {
-  // Tabla de metadatos del dataset por campo
   await run(`
     CREATE TABLE IF NOT EXISTS local_dataset_field (
       campo_id        TEXT PRIMARY KEY,
@@ -619,7 +1021,6 @@ const ensureDatasetsTables = async () => {
     )
   `);
 
-  // Valores del dataset (opciones). Usamos key_text normalizado para permitir NULL como ''.
   await run(`
     CREATE TABLE IF NOT EXISTS local_dataset_value (
       campo_id      TEXT NOT NULL,
@@ -640,7 +1041,6 @@ const ensureDatasetsTables = async () => {
   );
 };
 
-// Tipos (alineados al backend)
 export type DatasetTableRow = {
   key: string | null;
   label: string;
@@ -660,7 +1060,6 @@ export type DatasetTable = {
   rows: DatasetTableRow[];
 };
 
-// Serializadores
 const serializeDatasetValue = (campo_id: string, r: DatasetTableRow) => {
   const key_text = r.key ?? "";
   return [
@@ -679,12 +1078,6 @@ const rowToDatasetValue = (r: any): DatasetTableRow => ({
   extras: r.extras_json ? JSON.parse(r.extras_json) : null,
 });
 
-// ------------ Descarga/Upsert (reemplazo completo por campo) -------------
-/**
- * Reemplaza por completo el contenido local de cada dataset por campo.
- * - Si el campo no existe, lo crea.
- * - Elimina las filas anteriores del campo y carga las nuevas.
- */
 export const upsertDatasets = async (tables: DatasetTable[]) => {
   if (!tables?.length) return;
   await ensureDatasetsTables();
@@ -692,7 +1085,6 @@ export const upsertDatasets = async (tables: DatasetTable[]) => {
 
   await db.withTransactionAsync(async () => {
     for (const t of tables) {
-      // Upsert metadatos del campo
       await db.runAsync(
         `INSERT INTO local_dataset_field
           (campo_id, nombre_interno, etiqueta, fuente_id, version, columna, mode, total_items)
@@ -717,7 +1109,6 @@ export const upsertDatasets = async (tables: DatasetTable[]) => {
         ]
       );
 
-      // Reemplazar filas del dataset para ese campo
       await db.runAsync(`DELETE FROM local_dataset_value WHERE campo_id = ?`, [t.campo_id]);
 
       if (Array.isArray(t.rows) && t.rows.length) {
@@ -733,7 +1124,6 @@ export const upsertDatasets = async (tables: DatasetTable[]) => {
   });
 };
 
-// Limpiar Datasets
 export const clearDatasets = async () => {
   await ensureDatasetsTables();
   const db = await getDb();
@@ -743,10 +1133,6 @@ export const clearDatasets = async () => {
   });
 };
 
-// ------------- Selects/lecturas -------------
-/**
- * Devuelve el dataset completo de un campo (metadatos + filas).
- */
 export const selectDatasetTableByFieldId = async (
   campo_id: string
 ): Promise<DatasetTable | null> => {
@@ -780,11 +1166,6 @@ export const selectDatasetTableByFieldId = async (
   };
 };
 
-/**
- * Busca filas del dataset por campo. Admite:
- * - q: filtro por label (LIKE, case-insensitive)
- * - limit/offset: paginación simple
- */
 export const selectDatasetRowsByFieldId = async (
   campo_id: string,
   opts?: { q?: string; limit?: number; offset?: number }
@@ -818,9 +1199,6 @@ export const selectDatasetRowsByFieldId = async (
   return rows.map(rowToDatasetValue);
 };
 
-/**
- * Devuelve un arreglo value/label (útil para <Select/>), mapeando key->value.
- */
 export const selectDatasetPairOptions = async (
   campo_id: string,
   opts?: { q?: string; limit?: number; offset?: number }
@@ -829,9 +1207,6 @@ export const selectDatasetPairOptions = async (
   return items.map((r) => ({ value: (r.key ?? "").toString(), label: r.label }));
 };
 
-/**
- * Obtiene el label de una key específica del dataset de un campo.
- */
 export const selectDatasetLabelByKey = async (campo_id: string, key: string | null) => {
   await ensureDatasetsTables();
   const key_text = key ?? "";
@@ -845,11 +1220,6 @@ export const selectDatasetLabelByKey = async (campo_id: string, key: string | nu
   return rows.length ? rows[0].label : null;
 };
 
-/**
- * Variante estricta “por columna”:
- * Útil si querés asegurarte de usar el dataset correcto cuando el campo tiene columna específica.
- * Si la columna no coincide, devuelve [].
- */
 export const selectDatasetByFieldAndColumn = async (
   campo_id: string,
   columna: string | null,
@@ -862,29 +1232,40 @@ export const selectDatasetByFieldAndColumn = async (
   );
   if (!meta.length) return [];
   const col = meta[0].columna ?? null;
-  if ((col ?? null) !== (columna ?? null)) return []; // no coincide
+  if ((col ?? null) !== (columna ?? null)) return [];
   return selectDatasetRowsByFieldId(campo_id, opts);
 };
 
-// API pública mínima anterior (por compatibilidad)
+// API pública
 export const DB = {
   run,
   all,
   ensureMigrated,
+  // snapshot autoritativo
+  replaceFormsSnapshot,
+  // upsert (sin podar) para otros usos
   upsertGroupedForms,
+  // lecturas
   selectFormsGroupedByCategory,
   selectFormFromGroupedById,
   logDbCounts,
   clearFormsAndCategories,
 
+  // grupos
   upsertGroup,
   upsertGroups,
   selectGroups,
   selectGroupById,
+
+  // datasets
   upsertDatasets,
   selectDatasetTableByFieldId,
   selectDatasetRowsByFieldId,
   selectDatasetPairOptions,
   selectDatasetLabelByKey,
   selectDatasetByFieldAndColumn,
+
+  // uso local
+  setFormLastFilled,
+  getFormLastFilledMap,
 };

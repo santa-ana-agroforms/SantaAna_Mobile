@@ -4,18 +4,25 @@ import { Body } from "@/components/atoms/Typography";
 import FormListItem from "@/components/molecules/FormListItem";
 import PageScaffold, { type ScaffoldDimensions } from "@/components/templates/PageScaffold";
 import { DB } from "@/db/sqlite";
-import { useFocusEffect } from "@react-navigation/native"; // ⬅️ NUEVO
+import { useFocusEffect } from "@react-navigation/native";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { InteractionManager, View } from "react-native";
+import { Alert, InteractionManager, View } from "react-native";
 
-// NEW: selector + hook de estado visual
-import InstanceSelector from "@/components/molecules/InstanceSelector";
+import { sendFormEntry } from "@/api/client";
+import InstanceSelector, { EntryPreview } from "@/components/molecules/InstanceSelector";
+import {
+  deleteLocalEntry,
+  getJSONForm,
+  initSessionFromSaved,
+} from "@/forms/state/formSessionSlice";
 import { useInstanceSelectorState } from "@/forms/state/useInstanceSelectorState";
+import { useAppDispatch } from "@/store/hooks";
+import { isOnline } from "@/utils/network";
 
-/** -----------------------------------------
- * Tipos locales
- * ----------------------------------------- */
+import { getEntryById, markSynced } from "@/db/form-entries";
+
+/** tipos locales */
 type VersionVigente = { id_index_version: string; fecha_creacion: string };
 type Formulario = { id_formulario: string; nombre: string; version_vigente: VersionVigente };
 export type FormCategoryGroup = {
@@ -24,9 +31,7 @@ export type FormCategoryGroup = {
   formularios: { id_formulario: string; nombre: string; version_vigente: VersionVigente }[];
 };
 
-/** -----------------------------------------
- * Helpers de estado/fecha (se mantienen)
- * ----------------------------------------- */
+/** helpers de estado/fecha (igual que tenías) */
 const getEstado = (
   f: Formulario
 ): { texto: "Pendiente" | "En progreso" | "Completado"; color: string } => {
@@ -48,9 +53,7 @@ const getFechaDisponibleHasta = (asignado: Date | null): Date | null => {
   return d;
 };
 
-/** -----------------------------------------
- * PRELOAD local (igual que antes)
- * ----------------------------------------- */
+/** preload (igual que tenías) */
 const pickGroupIdFromConfig = (cfg: any): string | null => {
   if (!cfg) return null;
   const cand =
@@ -103,7 +106,7 @@ const preloadFormScreenAndData = async (formId: string, versionId: string) => {
     );
 
     InteractionManager.runAfterInteractions(() => {
-      // precarga opcional de assets
+      // opcional
     });
   })();
 
@@ -122,33 +125,61 @@ const requestPreloadWithDebounce = (formId: string, versionId: string, wait = 40
   debounceTimers.set(key, t);
 };
 
-/** -----------------------------------------
- * Pantalla
- * ----------------------------------------- */
+const waitUntilSynced = async (
+  sessionId: string,
+  { timeout = 8000, interval = 150 }: { timeout?: number; interval?: number } = {}
+) => {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      const row = await getEntryById(sessionId);
+      if (row?.status === "synced") return true;
+    } catch {}
+    await new Promise((r) => setTimeout(r, interval));
+  }
+  return false;
+};
+
+/** pantalla */
 const FormsByCategoryScreen: React.FC = () => {
   const { category } = useLocalSearchParams<{ category: string }>();
   const [loading, setLoading] = useState(true);
   const [grupo, setGrupo] = useState<FormCategoryGroup | null>(null);
+  const [modalBusy, setModalBusy] = useState(false);
+  const [modalBusyText, setModalBusyText] = useState<string | null>(null);
+  const {
+    visible,
+    entries,
+    allowNew,
+    periodLabel,
+    openForForm,
+    close,
+    computeDecorators,
+    refetch,
+    optimisticMarkSubmitted, // ← importante
+  } = useInstanceSelectorState();
 
-  const { visible, entries, allowNew, periodLabel, openForForm, close, computeDecorators } =
-    useInstanceSelectorState();
-  const [selectedForm, setSelectedForm] = useState<{ formId: string; versionId: string } | null>(
+  const [selectedForm, setSelectedForm] = useState<{
+    formId: string;
+    versionId: string;
+    formName: string;
+  } | null>(null);
+
+  const dispatch = useAppDispatch();
+
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [banner, setBanner] = useState<{ type: "info" | "success" | "error"; text: string } | null>(
     null
   );
 
   const [countsByForm, setCountsByForm] = useState<
     Record<
       string,
-      {
-        draftCount: number;
-        readyCount: number;
-        submittedCount: number;
-        periodLabel?: string;
-      }
+      { draftCount: number; readyCount: number; submittedCount: number; periodLabel?: string }
     >
   >({});
 
-  /** Carga el grupo actual y lo retorna */
+  /** carga grupo + contadores */
   const loadLocal = useCallback(async (): Promise<FormCategoryGroup | null> => {
     const groups = await DB.selectFormsGroupedByCategory();
     const found = (groups ?? []).find((g) => g.nombre_categoria === category) ?? null;
@@ -156,7 +187,6 @@ const FormsByCategoryScreen: React.FC = () => {
     return found;
   }, [category]);
 
-  /** Recalcula contadores para todos los formularios del grupo dado */
   const recomputeCounts = useCallback(
     async (targetGroup: FormCategoryGroup | null) => {
       if (!targetGroup?.formularios?.length) {
@@ -167,7 +197,7 @@ const FormsByCategoryScreen: React.FC = () => {
       await Promise.all(
         targetGroup.formularios.map(async (f) => {
           const formId = f.id_formulario;
-          const deco = await computeDecorators(formId, "daily"); // mismo periodo que muestras
+          const deco = await computeDecorators(formId, "daily");
           acc[formId] = deco;
         })
       );
@@ -176,13 +206,11 @@ const FormsByCategoryScreen: React.FC = () => {
     [computeDecorators]
   );
 
-  /** Hace reload del grupo y luego recomputa los contadores */
   const refreshScreen = useCallback(async () => {
     const freshGroup = await loadLocal();
     await recomputeCounts(freshGroup);
   }, [loadLocal, recomputeCounts]);
 
-  // Primer load (skeletons, etc.)
   useEffect(() => {
     (async () => {
       try {
@@ -194,7 +222,6 @@ const FormsByCategoryScreen: React.FC = () => {
     })();
   }, [loadLocal, recomputeCounts]);
 
-  // Limpieza de debounces
   useEffect(() => {
     return () => {
       for (const t of debounceTimers.values()) clearTimeout(t);
@@ -202,7 +229,6 @@ const FormsByCategoryScreen: React.FC = () => {
     };
   }, []);
 
-  // ⬇️ Refresco cada vez que la pantalla gana foco
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
@@ -214,6 +240,75 @@ const FormsByCategoryScreen: React.FC = () => {
         active = false;
       };
     }, [refreshScreen])
+  );
+
+  /** ✅ update optimista de los contadores de la tarjeta del formulario */
+  const bumpCountsAfterSubmit = useCallback((formId: string) => {
+    setCountsByForm((prev) => {
+      const cur = prev[formId] ?? { draftCount: 0, readyCount: 0, submittedCount: 0 };
+      // En InstanceSelector solo se puede enviar si estaba "ready_for_submit"
+      const next = {
+        ...cur,
+        readyCount: Math.max(0, (cur.readyCount ?? 0) - 1),
+        submittedCount: (cur.submittedCount ?? 0) + 1,
+      };
+      return { ...prev, [formId]: next };
+    });
+  }, []);
+
+  const handleSubmitFromSelector = useCallback(
+    async (entry: { id: string }) => {
+      try {
+        if (!(await isOnline())) {
+          Alert.alert("Sin conexión", "Conéctate a Internet para enviar el formulario.");
+          return;
+        }
+        if (!selectedForm) return;
+
+        // 🔵 loader del botón + loader global del modal
+        setSubmittingId(entry.id);
+        setModalBusy(true);
+        setModalBusyText("Enviando al servidor…");
+
+        // 1) cargar sesión local
+        await dispatch(initSessionFromSaved({ local_id: entry.id })).unwrap();
+
+        // 2) envío remoto (mantén busy del modal durante todo este paso)
+        const json = await dispatch(getJSONForm({ sessionId: entry.id })).unwrap();
+        if (!json) throw new Error("No se pudo preparar el formulario para envío.");
+        await sendFormEntry(json); // ← aquí sigue visible el loader global
+
+        // 3) UI optimista en el modal
+        optimisticMarkSubmitted(entry.id);
+        bumpCountsAfterSubmit(selectedForm.formId);
+
+        // 4) persiste en BD local y espera confirmación
+        await markSynced(entry.id);
+        const ok = await waitUntilSynced(entry.id, { timeout: 8000, interval: 150 });
+
+        // 5) ya puedes soltar el spinner del botón, pero mantener el global si quieres más pasos
+        setSubmittingId(null);
+        setModalBusyText("Sincronizando datos locales…");
+
+        if (ok) {
+          await refetch();
+          await refreshScreen();
+          setBanner({ type: "success", text: "¡Formulario enviado!" });
+        } else {
+          setBanner({
+            type: "info",
+            text: "El envío fue exitoso, pero la sincronización local tardó más de lo esperado.",
+          });
+        }
+      } catch (e: any) {
+        setBanner({ type: "error", text: e?.message ?? "No se pudo enviar el formulario." });
+      } finally {
+        // 🔵 suelta el loader global al final
+        setModalBusy(false);
+        setModalBusyText(null);
+      }
+    },
+    [dispatch, selectedForm, optimisticMarkSubmitted, bumpCountsAfterSubmit, refetch, refreshScreen]
   );
 
   const headerTitle = String(category);
@@ -259,6 +354,11 @@ const FormsByCategoryScreen: React.FC = () => {
       </PageScaffold>
     );
   }
+  const handleDeleteEntry = async (entry: EntryPreview) => {
+    dispatch(deleteLocalEntry({ local_id: entry.id }));
+    await refetch();
+    await refreshScreen();
+  };
 
   return (
     <PageScaffold title={headerTitle} variant="groups">
@@ -300,14 +400,15 @@ const FormsByCategoryScreen: React.FC = () => {
                     availableUntil={disponibleHasta}
                     onPreload={() => requestPreloadWithDebounce(formId, versionId, 400)}
                     onPress={() => {
-                      setSelectedForm({ formId, versionId });
-                      openForForm(formId);
+                      setSelectedForm({ formId, versionId, formName: f.nombre });
+                      openForForm(formId); // abre modal y carga entries
+                      setBanner(null); // limpia banner previo
                     }}
                     referenceFrame={referenceFrame}
                     contentFrame={contentFrame}
                     periodLabel={deco.periodLabel}
-                    draftCount={deco.draftCount ?? 0}
-                    readyCount={deco.readyCount ?? 0}
+                    // En la tarjeta muestras drafts + ready como "En revisión"
+                    readyCount={(deco.draftCount ?? 0) + (deco.readyCount ?? 0)}
                     submittedCount={deco.submittedCount ?? 0}
                   />
                 );
@@ -317,6 +418,7 @@ const FormsByCategoryScreen: React.FC = () => {
             <InstanceSelector
               visible={visible}
               periodLabel={periodLabel}
+              formName={selectedForm?.formName ?? ""}
               entries={entries}
               allowNew={allowNew}
               onNew={() => {
@@ -327,9 +429,15 @@ const FormsByCategoryScreen: React.FC = () => {
                 if (!selectedForm) return;
                 goOpen(selectedForm.formId, selectedForm.versionId, entry.id, mode);
               }}
+              onSubmit={handleSubmitFromSelector}
+              onDelete={handleDeleteEntry}
               onClose={close}
               referenceFrame={referenceFrame}
               contentFrame={contentFrame}
+              submittingId={submittingId}
+              banner={banner}
+              busy={modalBusy}
+              busyText={modalBusyText ?? undefined}
             />
           </>
         );

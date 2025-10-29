@@ -10,7 +10,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 export type Campo = {
   id_campo: string;
   sequence: number;
-  tipo: "texto" | "booleano" | "numerico" | "imagen";
+  tipo: "texto" | "booleano" | "numerico" | "imagen" | "group";
   clase: string; // string | text | list | dataset | hour | date | boolean | number | calc | firm
   nombre_interno: string;
   etiqueta: string;
@@ -40,11 +40,12 @@ type Props = {
   formName?: string;
   referenceFrame: Frame; // escala tipográfica/geométrica
   contentFrame: Frame; // ancho/alto útil del body
+  mode?: "edit" | "review" | "view";
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, contentFrame }) => {
+const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, contentFrame, mode }) => {
   const dispatch = useAppDispatch();
   const sessionId = useAppSelector(selectCurrentSessionId);
 
@@ -75,6 +76,7 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
       {fields.map((f) => (
         <View key={f.id_campo} style={{ marginBottom: fieldGap }}>
           <FieldRenderer
+            // key={f.id_campo}
             campo={f}
             formName={formName}
             referenceFrame={referenceFrame}
@@ -83,6 +85,7 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
             onChangeValue={(name, value) =>
               sessionId && dispatch(setFieldValue({ sessionId, nombreInterno: name, value }))
             }
+            mode={mode}
           />
         </View>
       ))}

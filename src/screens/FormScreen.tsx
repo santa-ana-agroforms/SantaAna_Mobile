@@ -25,6 +25,7 @@ type Props = {
   layoutFrame?: Frame;
   page?: number;
   onPageChange?: (index: number) => void;
+  mode?: "edit" | "review" | "view";
 };
 
 const FormScreen: React.FC<Props> = ({
@@ -33,6 +34,7 @@ const FormScreen: React.FC<Props> = ({
   contentFrame,
   page,
   onPageChange,
+  mode,
 }) => {
   const dispatch = useAppDispatch();
   const sessionId = useAppSelector(selectCurrentSessionId);
@@ -148,6 +150,7 @@ const FormScreen: React.FC<Props> = ({
           formName={form?.nombre}
           referenceFrame={referenceFrame}
           contentFrame={contentFrame}
+          mode={mode}
         />
       ))}
     </PagerView>

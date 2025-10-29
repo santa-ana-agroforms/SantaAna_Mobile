@@ -78,7 +78,7 @@ const Button: React.FC<Props> = ({
 
   if (variant === "ghost") {
     bg = "transparent";
-    borderColor = colors.border;
+    borderColor = colors.primary600;
     borderWidth = 1;
   } else if (variant === "danger") {
     bg = colors.danger600;

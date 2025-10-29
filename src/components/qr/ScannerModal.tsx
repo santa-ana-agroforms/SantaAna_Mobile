@@ -249,12 +249,12 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
                 }}
                 frame={referenceFrame}
               >
-                SANTA ANA APP
+                - Santa Ana -
               </Body>
 
               <View
                 style={{
-                  marginTop: clamp(baseRem * 0.5, 6, 12),
+                  marginTop: baseRem * 9.5,
                   backgroundColor: "rgba(0,0,0,0.65)",
                   paddingHorizontal: bubblePadH,
                   paddingVertical: bubblePadV,
@@ -287,7 +287,7 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
                     paddingVertical: pillPadV,
                     flexDirection: "row",
                     alignItems: "center",
-                    marginBottom: clamp(baseRem * 0.6, 8, 14),
+                    marginBottom: baseRem * 8,
                   }}
                 >
                   {statusText ? (
@@ -322,8 +322,14 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
                     title={torch ? "Apagar linterna" : "Encender linterna"}
                     onPress={() => setTorch((t) => !t)}
                     variant="ghost"
+                    textStyle={{ color: "white" }}
                   />
-                  <Button title="Cerrar" onPress={onClose} variant="ghost" />
+                  <Button
+                    title="Cerrar"
+                    onPress={onClose}
+                    variant="ghost"
+                    textStyle={{ color: "white" }}
+                  />
                 </View>
 
                 <Body
@@ -351,7 +357,7 @@ const ScannerModal: React.FC<Props> = ({ visible, onClose, onQr, statusText, ref
             >
               Necesitamos permiso de cámara para escanear el QR.
             </Body>
-            <Button title="Conceder permiso" onPress={requestPermission} />
+            <Button title="Conceder permiso" onPress={requestPermission} variant="ghost" />
             <View style={{ height: clamp(baseRem * 0.6, 8, 12) }} />
             <Button title="Cerrar" onPress={onClose} variant="ghost" />
           </View>
