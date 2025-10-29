@@ -1,8 +1,7 @@
-// src/components/molecules/FieldSignature.tsx
 import Button from "@/components/atoms/Button";
 import SignaturePad, { type SignaturePadHandle } from "@/components/atoms/SignaturePad";
 import { colors } from "@/theme/tokens";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
 type Frame = { width: number; height: number };
@@ -19,17 +18,11 @@ const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(ma
 const FieldSignature: React.FC<Props> = ({ referenceFrame, onChange, initialLocked = true }) => {
   const ref = useRef<SignaturePadHandle>(null);
   const [locked, setLocked] = useState(initialLocked);
-  const [toast, setToast] = useState<{
-    text: string;
-    kind: "ok" | "err";
-  } | null>(null);
+  const [toast, setToast] = useState<{ text: string; kind: "ok" | "err" } | null>(null);
 
-  // Escalas responsivas
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
   const pad = clamp(minSide * 0.02, 12, 20);
   const height = clamp(minSide * 0.5, 140, 260);
-
-  // Toolbar interna (dentro del lienzo)
   const tbGap = clamp(minSide * 0.012, 6, 12);
   const toastPadH = clamp(minSide * 0.012, 8, 14);
   const toastPadV = clamp(minSide * 0.008, 6, 10);
@@ -49,21 +42,28 @@ const FieldSignature: React.FC<Props> = ({ referenceFrame, onChange, initialLock
     setLocked(true);
   };
 
+  // Callback estable para evitar recrearse y causar renders en cadena
+  const handleStrokes = useCallback(
+    (strokes: any[]) => {
+      if (!strokes || strokes.length === 0) return;
+      onChange?.({ strokes });
+    },
+    [onChange]
+  );
+
   return (
     <View style={{ width: "100%" }}>
       <View style={{ position: "relative" }}>
-        {/* Lienzo */}
         <SignaturePad
           ref={ref}
           width={"100%"}
           height={height}
           strokeColor={colors.textPrimary}
           strokeWidth={2.5}
-          onChangeStrokes={(strokes: any[]) => onChange?.({ strokes })}
+          onChangeStrokes={handleStrokes}
           disabled={locked}
         />
 
-        {/* Overlay: toolbar + toasts */}
         <View
           pointerEvents="box-none"
           style={{
@@ -73,7 +73,6 @@ const FieldSignature: React.FC<Props> = ({ referenceFrame, onChange, initialLock
             bottom: pad,
           }}
         >
-          {/* Toast centrado */}
           {toast ? (
             <View
               style={{
@@ -89,6 +88,7 @@ const FieldSignature: React.FC<Props> = ({ referenceFrame, onChange, initialLock
               }}
             >
               <Text
+                allowFontScaling={false}
                 style={{
                   color: toast.kind === "ok" ? colors.textPrimary : colors.danger600,
                   fontSize: clamp(minSide * 0.038, 12, 16),
@@ -99,7 +99,6 @@ const FieldSignature: React.FC<Props> = ({ referenceFrame, onChange, initialLock
             </View>
           ) : null}
 
-          {/* Toolbar (derecha) */}
           <View style={{ alignSelf: "flex-end", flexDirection: "row", gap: tbGap }}>
             {!locked ? (
               <Button title="Confirmar" size="sm" onPress={handleConfirm} />
@@ -110,7 +109,6 @@ const FieldSignature: React.FC<Props> = ({ referenceFrame, onChange, initialLock
         </View>
       </View>
 
-      {/* Controles fuera (solo cuando NO está bloqueado) */}
       {!locked && (
         <View
           style={{

@@ -1,6 +1,5 @@
-// src/components/forms/FieldRenderer.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
 
 import Boolean from "@/components/atoms/Boolean";
 import DatasetSelect from "@/components/atoms/DatasetSelect";
@@ -9,12 +8,21 @@ import Label from "@/components/atoms/Label";
 import { Body } from "@/components/atoms/Typography";
 import DateTimeField from "@/components/molecules/DateTimeField";
 import FieldSignature from "@/components/molecules/FieldSignature";
-import RepeatableGroup, { type GroupEntry } from "@/components/molecules/RepeatableGroup";
+import RepeatableGroup, { type GroupRow } from "@/components/molecules/RepeatableGroup";
 import { colors } from "@/theme/tokens";
 
 import { getGroupOrFetch } from "@/api/groups";
-import { FormSession } from "@/forms/runtime/FormSession";
 import type { Campo } from "./FormPage";
+
+// ⬇️ Redux
+import DatasetField from "@/components/molecules/DatasetField";
+import {
+  selectCurrentSession,
+  selectCurrentSessionId,
+  selectFieldValue,
+  setFieldValue,
+} from "@/forms/state/formSessionSlice";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 type Frame = { width: number; height: number };
 type GroupTreeLite = { fields?: Campo[]; campos?: Campo[]; nombre?: string; name?: string };
@@ -24,11 +32,14 @@ type Props = {
   formName?: string;
   referenceFrame: Frame;
   contentFrame: Frame;
-  onChangeValue?: (name: string, value: unknown) => void;
-  formSession: FormSession; // sesión del formulario (para guardar/leer valores)
+  onChangeValue?: (name: string, value: unknown) => void; // para integraciones custom
+  pageIndex?: number;
+  /** Si se usa dentro de un grupo, se inyecta el valor/commit externos y NO se toca Redux */
+  external?: { value: any; onChange: (v: any) => void };
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+const DEBUG_FR = false;
 
 const pickGroupIdFromConfig = (cfg: any): string | null => {
   if (!cfg) return null;
@@ -43,20 +54,43 @@ const pickGroupIdFromConfig = (cfg: any): string | null => {
   return cand != null ? String(cand) : null;
 };
 
-const shallowEqualEntries = (a?: GroupEntry[] | any, b?: GroupEntry[] | any) => {
-  if (a === b) return true;
-  if (!Array.isArray(a) || !Array.isArray(b)) return false;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const ea = a[i],
-      eb = b[i];
-    if (ea.id !== eb.id) return false;
-    const ka = Object.keys(ea.values);
-    const kb = Object.keys(eb.values);
-    if (ka.length !== kb.length) return false;
-    for (const k of ka) if (!Object.is(ea.values[k], eb.values[k])) return false;
-  }
-  return true;
+/** =========================
+ *  🔎 DEBUG HELPERS
+ *  ========================= */
+const useDebugLogger = (label: string) => {
+  const idRef = useRef(Math.random().toString(36).slice(2, 8));
+  const renders = useRef(0);
+  const startedAt = useRef(Date.now());
+
+  const prefix = (suffix = "") => `FR:${label}#${idRef.current}${suffix ? ` ${suffix}` : ""}`;
+
+  const log = (...args: any[]) => {
+    if (!DEBUG_FR) return;
+    // @ts-ignore
+    console.log(prefix(), ...args);
+  };
+
+  const group = (title: string, fn: () => void) => {
+    if (!DEBUG_FR) return fn();
+    // @ts-ignore
+    console.groupCollapsed(prefix(` ${title}`));
+    try {
+      fn();
+    } finally {
+      // @ts-ignore
+      console.groupEnd();
+    }
+  };
+
+  const onRender = (extra?: Record<string, unknown>) => {
+    renders.current += 1;
+    const since = ((Date.now() - startedAt.current) / 1000).toFixed(2) + "s";
+    group("render", () => {
+      log({ renders: renders.current, since, ...extra });
+    });
+  };
+
+  return { log, group, onRender, id: idRef.current, renders };
 };
 
 const FieldRenderer: React.FC<Props> = ({
@@ -64,29 +98,61 @@ const FieldRenderer: React.FC<Props> = ({
   referenceFrame,
   contentFrame,
   onChangeValue,
-  formSession,
+  pageIndex,
+  external,
 }) => {
+  const dispatch = useAppDispatch();
+  // useAppSelector expects a selector with a different state signature; forward the store state as `any`
+  const sessionId = useAppSelector((state: any) => selectCurrentSessionId(state));
+  const currentSession = useAppSelector((state: any) => selectCurrentSession(state));
+  const currentIndex = currentSession?.currentPageIndex ?? 0;
+  const effectivePage = pageIndex ?? currentIndex;
+
   const label = campo.etiqueta || campo.nombre_interno;
   const help = campo.ayuda;
 
-  const [value, setValue] = useState<any>(undefined);
+  const dbg = useDebugLogger(`${campo.nombre_interno}@p${effectivePage}`);
 
-  const setAndEmit = useCallback(
+  // Valor: si hay 'external', úsalo; si no, Redux
+  const valueFromRedux = useAppSelector((state: any) => {
+    if (!sessionId) return undefined;
+    const sel = selectFieldValue(sessionId, campo.nombre_interno, effectivePage);
+    // console.warn("[FR] valueFromRedux selector", {
+    //   sessionId,
+    //   field: campo.nombre_interno,
+    //   page: effectivePage,
+    //   sel,
+    // });
+    // console.warn("[FR] valueFromRedux selector result:", sel(state));
+    return sel(state);
+  });
+  const value = external ? external.value : valueFromRedux;
+
+  // Commit → si hay external, usarlo; si no, dispatch al slice (+ evento opcional al padre)
+  const onCommit = useCallback(
     (v: any) => {
-      setValue((prev: any) => {
-        const same =
-          Array.isArray(prev) && Array.isArray(v)
-            ? shallowEqualEntries(prev, v)
-            : Object.is(prev, v);
-
-        if (!same) {
-          onChangeValue?.(campo.nombre_interno, v);
-          return v;
-        }
-        return prev;
-      });
+      console.warn("[FR] onCommit", v);
+      if (external) {
+        external.onChange(v);
+        onChangeValue?.(campo.nombre_interno, v);
+        return;
+      }
+      if (!sessionId) {
+        console.error("[FR] onCommit: no sessionId available");
+        return;
+      }
+      // console.error("[FR] onCommit: dispatching to Redux");
+      dispatch(
+        setFieldValue({
+          sessionId,
+          nombreInterno: campo.nombre_interno,
+          value: v,
+          pageIndex: effectivePage,
+        })
+      );
+      onChangeValue?.(campo.nombre_interno, v);
     },
-    [onChangeValue, campo.nombre_interno]
+    [dispatch, campo.nombre_interno, effectivePage, onChangeValue, sessionId, external]
   );
 
   const dims = useMemo(() => {
@@ -100,6 +166,14 @@ const FieldRenderer: React.FC<Props> = ({
       minSide,
     };
   }, [referenceFrame]);
+
+  // 🚨 LOG: cada render
+  dbg.onRender({
+    hasExternal: !!external,
+    sessionId,
+    currentIndex,
+    effectivePage,
+  });
 
   const LabelBlock = (
     <Label frame={referenceFrame} text={label} required={campo.requerido} help={help} />
@@ -127,14 +201,14 @@ const FieldRenderer: React.FC<Props> = ({
     </View>
   );
 
-  // --- renders simples ---
+  // ---------- Renders simples ----------
   const renderText = () => (
     <Input
       frame={referenceFrame}
       label={label}
       required={campo.requerido}
       value={value ?? ""}
-      onChangeText={setAndEmit}
+      onChangeText={(t) => onCommit(t)}
       placeholder={campo.ayuda ? campo.ayuda : "Escribe aquí…"}
     />
   );
@@ -144,9 +218,12 @@ const FieldRenderer: React.FC<Props> = ({
       frame={referenceFrame}
       label={label}
       required={campo.requerido}
-      value={value?.toString() ?? ""}
+      value={value?.toString?.() ?? ""}
       keyboardType="numeric"
-      onChangeText={(t) => setAndEmit(t.replace(/[^0-9.,-]/g, ""))}
+      onChangeText={(t) => {
+        const sanitized = t.replace(/[^0-9.,-]/g, "");
+        onCommit(sanitized);
+      }}
       placeholder={campo.ayuda ? campo.ayuda : "0"}
     />
   );
@@ -156,8 +233,8 @@ const FieldRenderer: React.FC<Props> = ({
       {LabelBlock}
       <Boolean
         frame={referenceFrame}
-        value={value}
-        onChange={setAndEmit}
+        value={!!value}
+        onChange={(v) => onCommit(v)}
         yesLabel="Sí"
         noLabel="No"
         showAccentBars
@@ -165,14 +242,16 @@ const FieldRenderer: React.FC<Props> = ({
     </>
   );
 
-  const renderList = (items: any[]) => (
+  const listItems = useMemo(() => campo.config?.items || [], [campo.config?.items]);
+
+  const renderList = () => (
     <>
       <Label frame={referenceFrame} text={label} required={campo.requerido} help={help} />
       <DatasetSelect
         frame={referenceFrame}
-        items={items}
+        items={listItems}
         value={value}
-        onChange={setAndEmit}
+        onChange={(v) => onCommit(v)}
         placeholder="Selecciona una opción…"
         allowDeselect
         showNoneOption
@@ -183,81 +262,195 @@ const FieldRenderer: React.FC<Props> = ({
   const renderDataset = () => (
     <>
       {LabelBlock}
-      <DatasetSelect
-        frame={referenceFrame}
+      <DatasetField
+        campoId={campo.id_campo}
         value={value}
-        onChange={setAndEmit}
+        onChange={(v) => onCommit(v)}
+        frame={referenceFrame}
         placeholder="Selecciona un valor…"
       />
-      <Body frame={referenceFrame} color="secondary" size="xs" style={{ marginTop: 6 }}>
-        Fuente externa (CSV)
-        {"\n"}archivo: {campo.config?.file || "—"}
-        {"\n"}columna: {campo.config?.column || "—"}
-      </Body>
     </>
   );
+  // ────────────────────────── Date / Hour ──────────────────────────
+  const renderDate = (kind: "date" | "hour") => {
+    const toUiDate = (raw?: unknown): Date | null => {
+      if (raw == null) return null;
 
-  const renderDate = (mode: "date" | "hour") => (
-    <DateTimeField
-      mode={mode === "date" ? "date" : "time"}
-      value={value ?? null}
-      onChange={setAndEmit}
-      label={label}
-      required={campo.requerido}
-      placeholder={mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"}
-      frame={referenceFrame}
-    />
-  );
+      if (DEBUG_FR) {
+        console.log("[FR] toUiDate.in", {
+          kind,
+          type: typeof raw,
+          isDate: raw instanceof Date,
+          val: raw,
+        });
+      }
+
+      // 1) Date válido
+      if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
+
+      // 2) epoch number
+      if (typeof raw === "number") {
+        const d = new Date(raw);
+        return isNaN(d.getTime()) ? null : d;
+      }
+
+      // 3) strings
+      if (typeof raw === "string") {
+        const s = raw.trim();
+
+        if (kind === "date") {
+          // YYYY-MM-DD
+          const m1 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+          if (m1) {
+            const y = Number(m1[1]),
+              m = Number(m1[2]),
+              d = Number(m1[3]);
+            const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
+            if (!isNaN(dt.getTime())) return dt;
+          }
+          // ISO
+          const iso = new Date(s);
+          if (!isNaN(iso.getTime())) return iso;
+        } else {
+          // kind === "hour"
+          // HH:mm o HH:mm:ss
+          const m2 = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(s);
+          if (m2) {
+            const H = Number(m2[1]),
+              M = Number(m2[2]),
+              S = Number(m2[3] ?? 0);
+            const dt = new Date(2000, 0, 1, H, M, S, 0);
+            if (!isNaN(dt.getTime())) return dt;
+          }
+          // ISO con hora
+          const iso = new Date(s);
+          if (!isNaN(iso.getTime())) return iso;
+        }
+      }
+
+      return null;
+    };
+
+    const toStoreStr = (d: Date | null): string | null => {
+      if (!d) return null;
+      if (kind === "date") {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      } else {
+        const H = String(d.getHours()).padStart(2, "0");
+        const M = String(d.getMinutes()).padStart(2, "0");
+        return `${H}:${M}`; // estandariza a HH:mm
+      }
+    };
+
+    const uiValue: Date | null = toUiDate(value);
+
+    if (DEBUG_FR) {
+      console.log("[FR] renderDate()", {
+        field: campo.nombre_interno,
+        kind,
+        rawType: value instanceof Date ? "Date" : value === null ? "null" : typeof value,
+        rawVal: value,
+        uiValueType: uiValue ? "Date" : "null",
+        uiISO: uiValue?.toISOString?.(),
+        uiLocal: uiValue?.toString?.(),
+      });
+    }
+
+    return (
+      <DateTimeField
+        mode={kind === "date" ? "date" : "time"}
+        value={uiValue}
+        onChange={(d) => {
+          const out = toStoreStr(d);
+          if (DEBUG_FR) {
+            console.log("[FR] onChange from DateTimeField", {
+              field: campo.nombre_interno,
+              kind,
+              pickedISO: d?.toISOString?.(),
+              pickedLocal: d?.toString?.(),
+              willStore: out,
+            });
+          }
+          onCommit(out);
+        }}
+        label={label}
+        required={campo.requerido}
+        placeholder={kind === "date" ? "Seleccionar fecha" : "Seleccionar hora"}
+        frame={referenceFrame}
+      />
+    );
+  };
 
   const renderCalc = () => {
-    // Mostrar el valor calculado desde la sesión (si no hay, mostramos la operación)
-    const calcValue = formSession.getFieldValue(campo.nombre_interno);
+    const calcValue = value;
     return (
       <>
         {LabelBlock}
         <Box>
           <Body frame={referenceFrame} color="secondary" size="sm">
-            {
-              calcValue ?? `(calculado) ${campo.config?.operation ?? "—"}`
-              /* Nota: si querés refresco inmediato aquí,
-                 luego podemos pasar un "tick" desde el padre para forzar rerender */
-            }
+            {calcValue ?? `(calculado) ${campo.config?.operation ?? "—"}`}
           </Body>
         </Box>
       </>
     );
   };
 
-  const renderFirm = () => (
-    <>
-      {LabelBlock}
-      <FieldSignature
-        referenceFrame={referenceFrame}
-        contentFrame={contentFrame}
-        onChange={(payload: any) => setAndEmit(payload.image ?? payload.strokes)}
-      />
-    </>
-  );
+  const renderFirm = () => {
+    // Throttle simple
+    let t: any = null;
+    let lastRef: any = null;
 
-  // --- grupo ---
+    const throttledCommit = (next: any) => {
+      if (typeof next === "string" && next === lastRef) return;
+      if (Array.isArray(next) && Array.isArray(lastRef) && next.length === lastRef.length) return;
+      if (t) return;
+      t = setTimeout(() => {
+        t = null;
+      }, 150);
+      lastRef = next;
+      onCommit(next);
+    };
+
+    return (
+      <>
+        {LabelBlock}
+        <FieldSignature
+          referenceFrame={referenceFrame}
+          contentFrame={contentFrame}
+          onChange={(payload: any) => {
+            const next = payload?.image ?? payload?.strokes;
+            throttledCommit(next);
+          }}
+        />
+      </>
+    );
+  };
+
+  // ---------- Grupo ----------
   const groupId = useMemo(() => pickGroupIdFromConfig(campo?.config), [campo?.config]);
-  const isGroup = !!groupId;
-
   const [groupLoading, setGroupLoading] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
   const [groupData, setGroupData] = useState<GroupTreeLite | null>(null);
+  const lastGroupIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (lastGroupIdRef.current === groupId) return;
+    lastGroupIdRef.current = groupId;
+
     let cancelled = false;
-    if (!isGroup || !groupId) {
+    if (!groupId) {
       setGroupLoading(false);
       setGroupError(null);
       setGroupData(null);
       return;
     }
+
     setGroupLoading(true);
     setGroupError(null);
-    setGroupData(null);
+
     (async () => {
       try {
         const g = await getGroupOrFetch(groupId);
@@ -268,21 +461,51 @@ const FieldRenderer: React.FC<Props> = ({
         if (!cancelled) setGroupLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
-  }, [isGroup, groupId]);
+  }, [groupId]);
 
   const groupFields = useMemo(
     () => (groupData ? groupData.fields || groupData.campos || [] : []),
     [groupData]
   );
 
-  const renderGroup = () => {
-    const entries: GroupEntry[] = Array.isArray(value) ? value : [];
+  // Valor de grupo (array de filas planas). Aseguramos __id en UI.
+  const groupRows: GroupRow[] = useMemo(() => {
+    const raw = Array.isArray(value) ? (value as any[]) : [];
+    return raw.map((r, i) => ({
+      ...r,
+      __id: r?.__id ?? `${campo.nombre_interno}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+    }));
+  }, [value, campo.nombre_interno]);
 
+  // Primer render con filas sin __id → escribirlas de vuelta con __id para fijarlas
+  useEffect(() => {
+    if (!Array.isArray(value)) return;
+    const missing = value.some((r: any) => !r || !r.__id);
+    if (!missing) return;
+
+    const withIds = groupRows; // ya trae __id
+    const commit = external
+      ? external.onChange
+      : (v: any) =>
+          dispatch(
+            setFieldValue({
+              sessionId: sessionId!,
+              nombreInterno: campo.nombre_interno,
+              value: v,
+              pageIndex: effectivePage,
+            })
+          );
+    commit(withIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // una vez
+
+  const renderGroup = () => {
     return (
-      <View style={{ gap: clamp(dims.minSide * 0.9, 0, 0) /* solo para mantener estructura */ }}>
+      <View style={{ gap: 0 }}>
         <Label
           frame={referenceFrame}
           text={label}
@@ -293,9 +516,12 @@ const FieldRenderer: React.FC<Props> = ({
         />
 
         {groupLoading ? (
-          <Body frame={referenceFrame} color="secondary" size="sm">
-            Cargando grupo…
-          </Body>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6 }}>
+            <ActivityIndicator size="small" />
+            <Body frame={referenceFrame} color="secondary" size="sm">
+              Cargando grupo…
+            </Body>
+          </View>
         ) : groupError ? (
           <Body frame={referenceFrame} size="sm" style={{ color: colors.danger600 }}>
             {groupError}
@@ -304,19 +530,39 @@ const FieldRenderer: React.FC<Props> = ({
 
         {groupFields.length ? (
           <RepeatableGroup
-            fieldsTemplate={groupFields}
-            entries={entries}
-            onChange={(next) => setAndEmit(next)}
+            required={!!campo.requerido}
+            fieldsTemplate={groupFields as any}
+            entries={groupRows}
+            minEntries={1}
             referenceFrame={referenceFrame}
             contentFrame={contentFrame}
+            onChange={(nextRows) => {
+              const commit = external
+                ? external.onChange
+                : (v: any) =>
+                    dispatch(
+                      setFieldValue({
+                        sessionId: sessionId!,
+                        nombreInterno: campo.nombre_interno,
+                        value: v,
+                        pageIndex: effectivePage,
+                      })
+                    );
+
+              commit(nextRows);
+              onChangeValue?.(campo.nombre_interno, nextRows);
+            }}
           >
-            {({ campo: subCampo, onChange }) => (
+            {({ campo: subCampo, row, setField }) => (
               <FieldRenderer
-                campo={subCampo}
+                campo={subCampo as any}
                 referenceFrame={referenceFrame}
                 contentFrame={contentFrame}
-                onChangeValue={(_n, v) => onChange(v)}
-                formSession={formSession}
+                external={{
+                  value: row[subCampo.nombre_interno],
+                  onChange: (val) => setField(subCampo.nombre_interno, val),
+                }}
+                pageIndex={effectivePage}
               />
             )}
           </RepeatableGroup>
@@ -325,31 +571,39 @@ const FieldRenderer: React.FC<Props> = ({
     );
   };
 
-  // --- switch principal ---
+  // ---------- Switch principal ----------
+  const isGroup = !!groupId;
   if (isGroup) return renderGroup();
 
   if (campo.tipo === "booleano") return renderBoolean();
-  if (campo.tipo === "numerico") {
-    if (campo.clase === "calc") return renderCalc();
-    return renderNumber();
-  }
+
+  if (campo.tipo === "numerico") return renderNumber();
+
   if (campo.tipo === "imagen" && campo.clase === "firm") return renderFirm();
+
   if (campo.tipo === "texto") {
+    // console.warn("[FR] campo texto clase:", campo.clase);
+    // console.warn("[FR] campo config:", campo.tipo);
+    // console.warn("[FR] campo valor:", campo.etiqueta);
+    // console.warn("[FR] campo nombre interno:", campo.nombre_interno);
     switch (campo.clase) {
       case "string":
       case "text":
         return renderText();
       case "list":
-        return renderList(campo.config?.items || []);
+        return renderList();
       case "dataset":
         return renderDataset();
       case "date":
         return renderDate("date");
       case "hour":
         return renderDate("hour");
+      case "calc":
+        return renderCalc();
     }
   }
 
+  // Fallback
   return (
     <>
       {LabelBlock}

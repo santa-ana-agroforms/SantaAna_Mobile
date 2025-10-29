@@ -1,4 +1,3 @@
-// src/components/atoms/SignaturePad.tsx
 import { colors } from "@/theme/tokens";
 import React, {
   forwardRef,
@@ -86,11 +85,16 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(
     const [strokes, setStrokes] = useState<Stroke[]>([]);
     const [current, setCurrent] = useState<Stroke>([]);
 
+    // 🧠 Guardar la referencia del callback para evitar recrear el efecto
+    const cbRef = useRef<typeof onChangeStrokes>(undefined);
     useEffect(() => {
-      if (onChangeStrokes) {
-        onChangeStrokes(strokes as [number, number][][]);
-      }
-    }, [strokes, onChangeStrokes]);
+      cbRef.current = onChangeStrokes;
+    }, [onChangeStrokes]);
+
+    // 🔁 Efecto sólo cuando cambian los strokes (no la identidad del callback)
+    useEffect(() => {
+      cbRef.current?.(strokes as [number, number][][]);
+    }, [strokes]);
 
     const start = useCallback((x: number, y: number) => {
       setCurrent([[x, y]]);

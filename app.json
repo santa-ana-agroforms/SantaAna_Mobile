@@ -1,26 +1,25 @@
 {
   "expo": {
-    "name": "SantaAna_Mobile",
+    "name": "SANTA ANA",
     "slug": "SantaAna_Mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/LOGO.png",
     "scheme": "santaanamobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": { "UIBackgroundModes": ["processing"] }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/LOGO.png",
+        "backgroundColor": "#F9F6EE"
       },
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "pan",
-      "permissions": [
-        "android.permission.CAMERA"
-      ],
+      "permissions": ["android.permission.CAMERA", "android.permission.POST_NOTIFICATIONS"],
       "package": "com.anonymous.SantaAna_Mobile"
     },
     "web": {
@@ -33,19 +32,15 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/LOGO.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#F9F6EE"
         }
       ],
       "expo-font",
-      [
-        "expo-secure-store"
-      ],
-      [
-        "expo-sqlite"
-      ],
+      ["expo-secure-store"],
+      ["expo-sqlite"],
       [
         "expo-build-properties",
         {
@@ -57,7 +52,9 @@
             "javaVersion": "17"
           }
         }
-      ]
+      ],
+      "expo-background-task",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

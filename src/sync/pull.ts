@@ -24,7 +24,9 @@ const pullUserAndForms = async (user: AuthUser) => {
   // Formularios visibles
   const { data } = await api.get<FormTree[]>(`/forms/tree`);
 
-  const db = await (await import("expo-sqlite")).openDatabaseAsync("forms.db");
+  const db = await (
+    await import("expo-sqlite")
+  ).openDatabaseAsync("forms.db", { useNewConnection: true });
   await db.withTransactionAsync(async () => {
     await db.runAsync(`DELETE FROM form`);
     await db.runAsync(`DELETE FROM page`);

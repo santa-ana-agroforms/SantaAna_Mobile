@@ -1,8 +1,6 @@
-// src/screens/FormScreen.tsx
 import AnimatedPage from "@/components/atoms/AnimatedPage";
-import { FormSession } from "@/forms/runtime/FormSession";
 import { colors } from "@/theme/tokens";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import PagerView, {
   type PagerViewOnPageScrollEvent,
   type PagerViewOnPageSelectedEvent,
@@ -10,53 +8,58 @@ import PagerView, {
 import { useSharedValue } from "react-native-reanimated";
 import { type Formulario, type Pagina } from "./FormPage";
 
+// Redux
+import {
+  goToPage,
+  selectCurrentSession,
+  selectCurrentSessionId,
+} from "@/forms/state/formSessionSlice";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+
 type Frame = { width: number; height: number };
 
 type Props = {
   form: Formulario;
   referenceFrame: Frame;
   contentFrame: Frame;
-  layoutFrame: Frame;
+  layoutFrame?: Frame;
   page?: number;
   onPageChange?: (index: number) => void;
-  formSession: FormSession;
 };
 
-// ✅ Hook para el estilo animado
 const FormScreen: React.FC<Props> = ({
   form,
   referenceFrame,
   contentFrame,
   page,
   onPageChange,
-  formSession,
 }) => {
-  const rawPages = useMemo(() => form?.paginas ?? [], [form?.paginas]);
+  const dispatch = useAppDispatch();
+  const sessionId = useAppSelector(selectCurrentSessionId);
+  const curFromSlice = useAppSelector(selectCurrentSession)?.currentPageIndex ?? 0;
 
-  const pagesRef = useRef<Pagina[]>([]);
-  const [pagesVersion, setPagesVersion] = useState(0);
-  useEffect(() => {
-    const sorted = rawPages.slice().sort((a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0));
-    pagesRef.current = sorted;
-    setPagesVersion((v) => v + 1);
-  }, [form?.id_formulario, rawPages]);
-
-  const pages = pagesRef.current;
+  // Páginas estables
+  const pages: Pagina[] = useMemo(
+    () => (form?.paginas ?? []).slice().sort((a, b) => (a.secuencia ?? 0) - (b.secuencia ?? 0)),
+    [form?.paginas]
+  );
   const pagesCount = pages.length;
 
+  // Controlado vs no controlado
   const isControlled = typeof page === "number";
-  const [uPage, setUPage] = useState(0);
-  const curPage = isControlled ? (page as number) : uPage;
+  const curPage = isControlled ? (page as number) : curFromSlice;
 
   const pagerRef = useRef<PagerView>(null);
-  const pageRef = useRef(curPage);
-  pageRef.current = curPage;
+
+  // Track de página “nativa” del Pager y flag de sincronización
+  const nativePageRef = useRef<number>(curPage);
+  const isSyncingRef = useRef<boolean>(false);
 
   const W = Math.max(1, Math.round(referenceFrame.width || 1));
   const H = Math.max(1, Math.round(referenceFrame.height || 1));
   const padX = referenceFrame.width * 0.04;
 
-  // 🎯 Posición fraccional compartida para animar
+  // Reanimated shared value para animaciones (no en deps)
   const current = useSharedValue(curPage);
 
   const onPageScroll = (e: PagerViewOnPageScrollEvent) => {
@@ -64,43 +67,64 @@ const FormScreen: React.FC<Props> = ({
     current.value = (position ?? 0) + (offset ?? 0);
   };
 
-  useEffect(() => {
-    if (!pagesCount) return;
-    if (!isControlled) setUPage(0);
-    requestAnimationFrame(() => {
-      pagerRef.current?.setPageWithoutAnimation(0);
-      current.value = 0;
-    });
-  }, [form?.id_formulario, pagesCount, isControlled, current]);
-
-  useEffect(() => {
-    if (!isControlled || pagesCount === 0) return;
-    const target = Math.max(0, Math.min(pagesCount - 1, page ?? 0));
-    requestAnimationFrame(() => {
-      pagerRef.current?.setPage(target);
-      current.value = target;
-    });
-  }, [isControlled, pagesCount, page, current]);
-
-  useEffect(() => {
-    if (!pagesCount) return;
-    requestAnimationFrame(() => {
-      pagerRef.current?.setPageWithoutAnimation(pageRef.current);
-      current.value = pageRef.current;
-    });
-  }, [W, H, pagesCount, pagesVersion, current]);
-
-  const emitPageChange = (next: number) => {
-    if (!isControlled) setUPage(next);
-    onPageChange?.(next);
-  };
-
+  // Sincroniza Pager -> Store (solo si cambia realmente y no estamos sincronizando)
   const onSelected = (e: PagerViewOnPageSelectedEvent) => {
     const next = e.nativeEvent.position ?? 0;
-    if (next !== pageRef.current) emitPageChange(next);
+
+    // Ignora eventos provocados por nuestra propia sync
+    if (isSyncingRef.current) return;
+
+    if (next !== nativePageRef.current) {
+      nativePageRef.current = next;
+    }
+
+    // Despacha solo si difiere del valor del store/controlado
+    if (next !== curPage && sessionId) {
+      dispatch(goToPage({ sessionId, index: next }));
+      onPageChange?.(next);
+    }
+
     current.value = next;
   };
 
+  // Sincroniza Store -> Pager (solo si difiere)
+  useEffect(() => {
+    if (!pagesCount) return;
+
+    if (nativePageRef.current !== curPage) {
+      isSyncingRef.current = true;
+      requestAnimationFrame(() => {
+        // setPageWithoutAnimation puede disparar onPageSelected en algunos targets
+        pagerRef.current?.setPageWithoutAnimation(curPage);
+        nativePageRef.current = curPage;
+        current.value = curPage;
+        // suelta el flag en el próximo frame para ignorar el evento que pueda venir
+        requestAnimationFrame(() => {
+          isSyncingRef.current = false;
+        });
+      });
+    } else {
+      // Si ya coincide, solo actualiza la animación
+      current.value = curPage;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curPage, pagesCount]);
+
+  // Re-sincroniza por cambios de tamaño (sin bucle)
+  useEffect(() => {
+    if (!pagesCount) return;
+    isSyncingRef.current = true;
+    requestAnimationFrame(() => {
+      pagerRef.current?.setPageWithoutAnimation(nativePageRef.current);
+      current.value = nativePageRef.current;
+      requestAnimationFrame(() => {
+        isSyncingRef.current = false;
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [W, H, pagesCount]);
+
+  // console.log("form", JSON.stringify(form, null, 2));
   return (
     <PagerView
       ref={pagerRef}
@@ -110,7 +134,7 @@ const FormScreen: React.FC<Props> = ({
       onPageScroll={onPageScroll}
       offscreenPageLimit={1}
       overScrollMode="never"
-      key={`w${W}-h${H}-v${pagesVersion}`}
+      // Sin key volátil
     >
       {pages.map((p, i) => (
         <AnimatedPage
@@ -124,7 +148,6 @@ const FormScreen: React.FC<Props> = ({
           formName={form?.nombre}
           referenceFrame={referenceFrame}
           contentFrame={contentFrame}
-          formSession={formSession}
         />
       ))}
     </PagerView>

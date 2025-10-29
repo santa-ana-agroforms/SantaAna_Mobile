@@ -247,6 +247,7 @@ const QrLoginScanner: React.FC<Props> = ({
               ) : raw && !statusMsg ? (
                 <View style={styles.codeBlock}>
                   <Text
+                    allowFontScaling={false}
                     selectable
                     style={[styles.codeText, { fontSize: rem * 1.25, color: colors.textPrimary }]}
                   >
@@ -285,6 +286,7 @@ const QrLoginScanner: React.FC<Props> = ({
               API base URL
             </Body>
             <TextInput
+              allowFontScaling={false}
               value={apiUrlInput}
               onChangeText={setApiUrlInput}
               placeholder="http://192.168.x.x:3000"

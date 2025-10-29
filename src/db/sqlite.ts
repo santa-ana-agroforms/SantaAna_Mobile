@@ -4,7 +4,7 @@ import * as SQLite from "expo-sqlite";
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 export const getDb = async () => {
   if (!dbPromise) {
-    dbPromise = SQLite.openDatabaseAsync("forms.db");
+    dbPromise = SQLite.openDatabaseAsync("forms.db", { useNewConnection: true });
     const db = await dbPromise;
     await db.execAsync("PRAGMA foreign_keys = ON;");
     await db.execAsync("PRAGMA journal_mode = WAL;");
@@ -223,6 +223,24 @@ export const upsertGroups = async (
   for (const g of groups) await upsertGroup(g);
 };
 
+// Limpia todos los grupos y campos locales
+export const clearGroups = async () => {
+  await ensureGroupsTables();
+  const db = await getDb();
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM local_group_fields`);
+    await db.runAsync(`DELETE FROM local_groups`);
+  });
+};
+
+// Limpiar un grupo por id
+export const clearGroupById = async (id_grupo: string) => {
+  await ensureGroupsTables();
+  await run(`DELETE FROM local_group_fields WHERE id_grupo = ?`, [id_grupo]);
+  await run(`DELETE FROM local_groups WHERE id_grupo = ?`, [id_grupo]);
+};
+
 // Selecciona todos los grupos (con sus campos)
 export const selectGroups = async () => {
   await ensureGroupsTables();
@@ -400,12 +418,66 @@ export const upsertGroupedForms = async (groups: ServerCategoryGroup[]) => {
   });
 };
 
+// Funcion para limpiar los formularios y categorías (antes de un upsert completo)
+export const clearFormsAndCategories = async () => {
+  await ensureMigrated();
+  const db = await getDb();
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM field`);
+    await db.runAsync(`DELETE FROM page`);
+    await db.runAsync(`DELETE FROM form`);
+    await db.runAsync(`DELETE FROM category`);
+  });
+};
+
+// Delete a form by id (and if category becomes empty, delete it too)
+export const deleteFormById = async (formId: string) => {
+  await ensureMigrated();
+  const db = await getDb();
+
+  await db.withTransactionAsync(async () => {
+    // 1) Borrar campos del form (vía versiones de página)
+    await db.runAsync(
+      `DELETE FROM field
+         WHERE page_version_id IN (
+           SELECT version_id
+             FROM page
+            WHERE form_id = ?
+         )`,
+      [formId]
+    );
+
+    // 2) Borrar páginas del form
+    await db.runAsync(`DELETE FROM page WHERE form_id = ?`, [formId]);
+
+    // 3) Borrar el form
+    await db.runAsync(`DELETE FROM form WHERE id = ?`, [formId]);
+
+    // 4) Limpiar categorías huérfanas
+    await db.runAsync(
+      `DELETE FROM category
+         WHERE id NOT IN (SELECT DISTINCT categoria_id FROM form)`
+    );
+  });
+};
+
+// src/db/sqlite.ts
+export const logDbCounts = async () => {
+  const db = await getDb();
+  const q = async (sql: string) => (await db.getAllAsync<any>(sql))[0]?.n ?? 0;
+  const c = await q(`SELECT COUNT(*) n FROM category`);
+  const f = await q(`SELECT COUNT(*) n FROM form`);
+  const p = await q(`SELECT COUNT(*) n FROM page`);
+  const d = await q(`SELECT COUNT(*) n FROM field`);
+  console.log("[DB COUNTS] category:", c, "form:", f, "page:", p, "field:", d);
+};
+
 // Lee desde SQLite con el MISMO shape agrupado por categoría que entrega el backend
 export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGroup[]> => {
   await ensureMigrated();
   const db = await getDb();
 
-  // Traer todo en un solo shot
   const rows = await db.getAllAsync<any>(`
     SELECT
       c.id               AS categoria_id,
@@ -434,18 +506,18 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
       fd.config          AS field_config,
       fd.requerido       AS field_requerido
     FROM category c
-    JOIN form f ON f.categoria_id = c.id
-    JOIN page p ON p.form_id = f.id
+    LEFT JOIN form  f  ON f.categoria_id = c.id
+    LEFT JOIN page  p  ON p.form_id      = f.id
     LEFT JOIN field fd ON fd.page_version_id = p.version_id
     ORDER BY c.nombre, f.nombre, p.secuencia, fd.sequence, fd.id;
   `);
 
-  // Armar shape agrupado
   const catMap = new Map<string, ServerCategoryGroup>();
   const formMap = new Map<string, ServerForm>();
   const pageMap = new Map<string, ServerPage>();
 
   for (const r of rows) {
+    // categoría
     if (!catMap.has(r.categoria_id)) {
       catMap.set(r.categoria_id, {
         nombre_categoria: r.nombre_categoria,
@@ -455,6 +527,10 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
     }
     const cat = catMap.get(r.categoria_id)!;
 
+    // si no hay form_id (categoría sin forms), sigue al siguiente row
+    if (!r.form_id) continue;
+
+    // formulario
     if (!formMap.has(r.form_id)) {
       const form: ServerForm = {
         id_formulario: r.form_id,
@@ -470,39 +546,39 @@ export const selectFormsGroupedByCategory = async (): Promise<ServerCategoryGrou
     }
     const form = formMap.get(r.form_id)!;
 
-    if (!pageMap.has(r.page_id)) {
-      const page: ServerPage = {
-        id_pagina: r.page_id,
-        secuencia: r.page_secuencia ?? null,
-        nombre: r.page_nombre,
-        descripcion: r.page_descripcion ?? null,
-        pagina_version: {
-          id: r.page_version_id,
-          fecha_creacion: r.page_version_fecha,
-        },
-        campos: [],
-      };
-      pageMap.set(r.page_id, page);
-      form.paginas.push(page);
-    }
-    const page = pageMap.get(r.page_id)!;
+    // puede no haber página (LEFT JOIN) → en ese caso, no push de page
+    if (r.page_id) {
+      const pageKey = r.page_id;
+      if (!pageMap.has(pageKey)) {
+        const page: ServerPage = {
+          id_pagina: r.page_id,
+          secuencia: r.page_secuencia ?? null,
+          nombre: r.page_nombre,
+          descripcion: r.page_descripcion ?? null,
+          pagina_version: { id: r.page_version_id, fecha_creacion: r.page_version_fecha },
+          campos: [],
+        };
+        pageMap.set(pageKey, page);
+        form.paginas.push(page);
+      }
+      const page = pageMap.get(pageKey)!;
 
-    if (r.field_id) {
-      page.campos.push({
-        id_campo: r.field_id,
-        sequence: r.field_sequence,
-        tipo: r.field_tipo,
-        clase: r.field_clase,
-        nombre_interno: r.field_nombre_interno,
-        etiqueta: r.field_etiqueta ?? null,
-        ayuda: r.field_ayuda ?? null,
-        config: r.field_config ? JSON.parse(r.field_config) : null,
-        requerido: !!r.field_requerido,
-      });
+      if (r.field_id) {
+        page.campos.push({
+          id_campo: r.field_id,
+          sequence: r.field_sequence,
+          tipo: r.field_tipo,
+          clase: r.field_clase,
+          nombre_interno: r.field_nombre_interno,
+          etiqueta: r.field_etiqueta ?? null,
+          ayuda: r.field_ayuda ?? null,
+          config: r.field_config ? JSON.parse(r.field_config) : null,
+          requerido: !!r.field_requerido,
+        });
+      }
     }
   }
 
-  // Orden final coherente por si alguna inserción vino desordenada
   const out = Array.from(catMap.values());
   for (const cg of out) {
     cg.formularios.sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -527,6 +603,269 @@ export const selectFormFromGroupedById = async (formId: string) => {
   return null;
 };
 
+// ===== Esquema local para DATASETS (por campo) =====
+const ensureDatasetsTables = async () => {
+  // Tabla de metadatos del dataset por campo
+  await run(`
+    CREATE TABLE IF NOT EXISTS local_dataset_field (
+      campo_id        TEXT PRIMARY KEY,
+      nombre_interno  TEXT NOT NULL,
+      etiqueta        TEXT,
+      fuente_id       TEXT,
+      version         INTEGER,
+      columna         TEXT,
+      mode            TEXT,
+      total_items     INTEGER
+    )
+  `);
+
+  // Valores del dataset (opciones). Usamos key_text normalizado para permitir NULL como ''.
+  await run(`
+    CREATE TABLE IF NOT EXISTS local_dataset_value (
+      campo_id      TEXT NOT NULL,
+      key_text      TEXT NOT NULL DEFAULT '',
+      label         TEXT NOT NULL,
+      valor_raw_json TEXT,
+      extras_json    TEXT,
+      PRIMARY KEY (campo_id, key_text, label),
+      FOREIGN KEY (campo_id) REFERENCES local_dataset_field(campo_id) ON DELETE CASCADE
+    )
+  `);
+
+  await run(
+    `CREATE INDEX IF NOT EXISTS idx_ldv_field_label ON local_dataset_value (campo_id, label COLLATE NOCASE)`
+  );
+  await run(
+    `CREATE INDEX IF NOT EXISTS idx_ldv_field_key ON local_dataset_value (campo_id, key_text)`
+  );
+};
+
+// Tipos (alineados al backend)
+export type DatasetTableRow = {
+  key: string | null;
+  label: string;
+  valor_raw: unknown;
+  extras: unknown;
+};
+
+export type DatasetTable = {
+  campo_id: string;
+  nombre_interno: string;
+  etiqueta: string;
+  fuente_id: string | null;
+  version: number | null;
+  columna: string | null;
+  mode: string | null;
+  total_items: number;
+  rows: DatasetTableRow[];
+};
+
+// Serializadores
+const serializeDatasetValue = (campo_id: string, r: DatasetTableRow) => {
+  const key_text = r.key ?? "";
+  return [
+    campo_id,
+    key_text,
+    r.label,
+    r.valor_raw == null ? null : JSON.stringify(r.valor_raw),
+    r.extras == null ? null : JSON.stringify(r.extras),
+  ];
+};
+
+const rowToDatasetValue = (r: any): DatasetTableRow => ({
+  key: r.key_text === "" ? null : r.key_text,
+  label: r.label,
+  valor_raw: r.valor_raw_json ? JSON.parse(r.valor_raw_json) : null,
+  extras: r.extras_json ? JSON.parse(r.extras_json) : null,
+});
+
+// ------------ Descarga/Upsert (reemplazo completo por campo) -------------
+/**
+ * Reemplaza por completo el contenido local de cada dataset por campo.
+ * - Si el campo no existe, lo crea.
+ * - Elimina las filas anteriores del campo y carga las nuevas.
+ */
+export const upsertDatasets = async (tables: DatasetTable[]) => {
+  if (!tables?.length) return;
+  await ensureDatasetsTables();
+  const db = await getDb();
+
+  await db.withTransactionAsync(async () => {
+    for (const t of tables) {
+      // Upsert metadatos del campo
+      await db.runAsync(
+        `INSERT INTO local_dataset_field
+          (campo_id, nombre_interno, etiqueta, fuente_id, version, columna, mode, total_items)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(campo_id) DO UPDATE SET
+           nombre_interno = excluded.nombre_interno,
+           etiqueta       = excluded.etiqueta,
+           fuente_id      = excluded.fuente_id,
+           version        = excluded.version,
+           columna        = excluded.columna,
+           mode           = excluded.mode,
+           total_items    = excluded.total_items`,
+        [
+          t.campo_id,
+          t.nombre_interno,
+          t.etiqueta ?? null,
+          t.fuente_id ?? null,
+          t.version ?? null,
+          t.columna ?? null,
+          t.mode ?? null,
+          Number.isFinite(t.total_items) ? t.total_items : (t.rows?.length ?? 0),
+        ]
+      );
+
+      // Reemplazar filas del dataset para ese campo
+      await db.runAsync(`DELETE FROM local_dataset_value WHERE campo_id = ?`, [t.campo_id]);
+
+      if (Array.isArray(t.rows) && t.rows.length) {
+        const sql = `INSERT INTO local_dataset_value
+          (campo_id, key_text, label, valor_raw_json, extras_json)
+          VALUES (?, ?, ?, ?, ?)`;
+        for (const r of t.rows) {
+          const params = serializeDatasetValue(t.campo_id, r);
+          await db.runAsync(sql, params);
+        }
+      }
+    }
+  });
+};
+
+// Limpiar Datasets
+export const clearDatasets = async () => {
+  await ensureDatasetsTables();
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM local_dataset_value`);
+    await db.runAsync(`DELETE FROM local_dataset_field`);
+  });
+};
+
+// ------------- Selects/lecturas -------------
+/**
+ * Devuelve el dataset completo de un campo (metadatos + filas).
+ */
+export const selectDatasetTableByFieldId = async (
+  campo_id: string
+): Promise<DatasetTable | null> => {
+  await ensureDatasetsTables();
+  const meta = await all<any>(
+    `SELECT campo_id, nombre_interno, etiqueta, fuente_id, version, columna, mode, total_items
+       FROM local_dataset_field WHERE campo_id = ? LIMIT 1`,
+    [campo_id]
+  );
+  if (!meta.length) return null;
+
+  const rows = await all<any>(
+    `SELECT campo_id, key_text, label, valor_raw_json, extras_json
+       FROM local_dataset_value
+      WHERE campo_id = ?
+      ORDER BY label COLLATE NOCASE ASC`,
+    [campo_id]
+  );
+
+  const m = meta[0];
+  return {
+    campo_id: m.campo_id,
+    nombre_interno: m.nombre_interno,
+    etiqueta: m.etiqueta ?? null,
+    fuente_id: m.fuente_id ?? null,
+    version: m.version == null ? null : Number(m.version),
+    columna: m.columna ?? null,
+    mode: m.mode ?? null,
+    total_items: m.total_items == null ? rows.length : Number(m.total_items),
+    rows: rows.map(rowToDatasetValue),
+  };
+};
+
+/**
+ * Busca filas del dataset por campo. Admite:
+ * - q: filtro por label (LIKE, case-insensitive)
+ * - limit/offset: paginación simple
+ */
+export const selectDatasetRowsByFieldId = async (
+  campo_id: string,
+  opts?: { q?: string; limit?: number; offset?: number }
+): Promise<DatasetTableRow[]> => {
+  await ensureDatasetsTables();
+
+  const q = (opts?.q ?? "").trim();
+  const limit = Math.max(0, Math.floor(opts?.limit ?? 0));
+  const offset = Math.max(0, Math.floor(opts?.offset ?? 0));
+
+  const params: any[] = [campo_id];
+  let where = `WHERE campo_id = ?`;
+  if (q) {
+    where += ` AND label LIKE ? COLLATE NOCASE`;
+    params.push(`%${q}%`);
+  }
+
+  let tail = ` ORDER BY label COLLATE NOCASE ASC`;
+  if (limit > 0) {
+    tail += ` LIMIT ${limit}`;
+    if (offset > 0) tail += ` OFFSET ${offset}`;
+  }
+
+  const rows = await all<any>(
+    `SELECT key_text, label, valor_raw_json, extras_json
+       FROM local_dataset_value
+       ${where}
+       ${tail}`,
+    params
+  );
+  return rows.map(rowToDatasetValue);
+};
+
+/**
+ * Devuelve un arreglo value/label (útil para <Select/>), mapeando key->value.
+ */
+export const selectDatasetPairOptions = async (
+  campo_id: string,
+  opts?: { q?: string; limit?: number; offset?: number }
+): Promise<{ value: string; label: string }[]> => {
+  const items = await selectDatasetRowsByFieldId(campo_id, opts);
+  return items.map((r) => ({ value: (r.key ?? "").toString(), label: r.label }));
+};
+
+/**
+ * Obtiene el label de una key específica del dataset de un campo.
+ */
+export const selectDatasetLabelByKey = async (campo_id: string, key: string | null) => {
+  await ensureDatasetsTables();
+  const key_text = key ?? "";
+  const rows = await all<{ label: string }>(
+    `SELECT label
+       FROM local_dataset_value
+      WHERE campo_id = ? AND key_text = ?
+      LIMIT 1`,
+    [campo_id, key_text]
+  );
+  return rows.length ? rows[0].label : null;
+};
+
+/**
+ * Variante estricta “por columna”:
+ * Útil si querés asegurarte de usar el dataset correcto cuando el campo tiene columna específica.
+ * Si la columna no coincide, devuelve [].
+ */
+export const selectDatasetByFieldAndColumn = async (
+  campo_id: string,
+  columna: string | null,
+  opts?: { q?: string; limit?: number; offset?: number }
+) => {
+  await ensureDatasetsTables();
+  const meta = await all<{ columna: string | null }>(
+    `SELECT columna FROM local_dataset_field WHERE campo_id = ? LIMIT 1`,
+    [campo_id]
+  );
+  if (!meta.length) return [];
+  const col = meta[0].columna ?? null;
+  if ((col ?? null) !== (columna ?? null)) return []; // no coincide
+  return selectDatasetRowsByFieldId(campo_id, opts);
+};
+
 // API pública mínima anterior (por compatibilidad)
 export const DB = {
   run,
@@ -535,9 +874,17 @@ export const DB = {
   upsertGroupedForms,
   selectFormsGroupedByCategory,
   selectFormFromGroupedById,
+  logDbCounts,
+  clearFormsAndCategories,
 
   upsertGroup,
   upsertGroups,
   selectGroups,
   selectGroupById,
+  upsertDatasets,
+  selectDatasetTableByFieldId,
+  selectDatasetRowsByFieldId,
+  selectDatasetPairOptions,
+  selectDatasetLabelByKey,
+  selectDatasetByFieldAndColumn,
 };

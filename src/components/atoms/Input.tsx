@@ -1,7 +1,15 @@
 // src/components/atoms/Input.tsx
 import { colors } from "@/theme/tokens";
 import React, { useMemo, useState } from "react";
-import { TextInput, TextInputProps, View, useWindowDimensions } from "react-native";
+import {
+  LayoutChangeEvent,
+  Platform,
+  Text,
+  TextInput,
+  TextInputProps,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import Label from "./Label";
 import { Caption } from "./Typography";
 
@@ -11,9 +19,7 @@ type Props = TextInputProps & {
   label?: string;
   required?: boolean;
   error?: string;
-  /** Recomendado: pásale el referenceFrame del PageScaffold */
   frame?: Frame;
-  /** Fuerza estado de enfoque visual (útil si controlas foco afuera) */
   focusedOverride?: boolean;
 };
 
@@ -29,14 +35,24 @@ const Input: React.FC<Props> = ({
   focusedOverride,
   onFocus,
   onBlur,
+  onChangeText,
+  value,
+  placeholder,
   ...rest
 }) => {
-  // fallback si no pasan frame
   const { width, height } = useWindowDimensions();
   const baseFrame = frame ?? { width, height };
 
   const [focused, setFocused] = useState(false);
+  const [uncontrolledText, setUncontrolledText] = useState("");
+  const [measuredHeight, setMeasuredHeight] = useState(0);
+
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [innerWidth, setInnerWidth] = useState(0);
+
   const isFocused = focusedOverride ?? focused;
+  const textValue = value ?? uncontrolledText;
+  const displayText = (textValue?.length ?? 0) > 0 ? textValue : (placeholder ?? " "); // ← medimos placeholder si no hay texto
 
   const dims = useMemo(() => {
     const minSide = Math.min(baseFrame.width, baseFrame.height);
@@ -51,9 +67,10 @@ const Input: React.FC<Props> = ({
     const errorGap = clamp(minSide * 0.006, 4, 10);
 
     const fontSize = clamp(baseRem * 1.05, 14, 20);
-    const minH = clamp(minSide * 0.06, 44, 62);
+    const lineH = Math.round(fontSize * 1.25);
+    const minH = Math.max(44, padV * 2 + lineH);
 
-    return { radius, padH, padV, borderW, labelGap, errorGap, fontSize, minH };
+    return { radius, padH, padV, borderW, labelGap, errorGap, fontSize, lineH, minH };
   }, [baseFrame.height, baseFrame.width]);
 
   const borderColor = !editable
@@ -66,10 +83,71 @@ const Input: React.FC<Props> = ({
 
   const bg = editable ? colors.neutral0 : "#F2F2F2";
 
+  const handleContainerLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w !== containerWidth) {
+      setContainerWidth(w);
+      setInnerWidth(Math.max(0, w - dims.padH * 2));
+    }
+  };
+
+  const textStyleBase = useMemo(
+    () => ({
+      fontSize: dims.fontSize,
+      lineHeight: dims.lineH,
+      fontFamily: "Inter_400Regular" as const,
+    }),
+    [dims.fontSize, dims.lineH]
+  );
+
+  const Measure = (
+    <View
+      // fuera de pantalla y sin interacción
+      style={{
+        position: "absolute",
+        left: -9999,
+        top: -9999,
+        width: innerWidth || 0,
+        opacity: 0,
+        pointerEvents: "none",
+      }}
+      // Forzamos remedir si cambia ancho o contenido
+      key={`${innerWidth}-${displayText.length}-${dims.fontSize}-${dims.lineH}`}
+    >
+      <Text
+        allowFontScaling={false}
+        onLayout={(ev) => {
+          const h = ev.nativeEvent.layout.height;
+          if (h > 0) {
+            const fix = Platform.OS === "android" ? 1 : 0; // evita px residuales en Android
+            setMeasuredHeight(Math.max(dims.lineH, Math.ceil(h) - fix));
+          } else {
+            setMeasuredHeight(dims.lineH);
+          }
+        }}
+        style={[
+          textStyleBase,
+          {
+            flexWrap: "wrap",
+          },
+        ]}
+      >
+        {displayText || " "}
+      </Text>
+    </View>
+  );
+
+  const handleChangeText = (t: string) => {
+    if (value === undefined) setUncontrolledText(t);
+    onChangeText?.(t);
+  };
+
   return (
     <View style={{ width: "100%" }}>
       <Label frame={frame} text={label} required={required} />
+
       <View
+        onLayout={handleContainerLayout}
         style={{
           borderColor,
           borderWidth: dims.borderW,
@@ -81,9 +159,15 @@ const Input: React.FC<Props> = ({
           justifyContent: "center",
         }}
       >
+        {Measure}
         <TextInput
+          allowFontScaling={false}
           {...rest}
           editable={editable}
+          multiline
+          scrollEnabled={false}
+          value={textValue}
+          onChangeText={handleChangeText}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);
@@ -94,13 +178,16 @@ const Input: React.FC<Props> = ({
           }}
           style={[
             {
-              fontSize: dims.fontSize,
-              fontFamily: "Inter_400Regular",
+              ...textStyleBase,
               color: colors.textPrimary,
               padding: 0,
+              textAlignVertical: "top",
+              height: Math.max(dims.lineH, measuredHeight || dims.lineH),
+              width: innerWidth || undefined,
             },
             style,
           ]}
+          placeholder={placeholder}
           placeholderTextColor={colors.textSecondary}
         />
       </View>

@@ -1,12 +1,11 @@
-// ============================================
-// src/components/forms/FormPage.tsx
-// Página vertical scrolleable que pinta cada campo con FieldRenderer
-// ============================================
 import { Body } from "@/components/atoms/Typography";
-import { FormSession } from "@/forms/runtime/FormSession";
 import React, { useMemo } from "react";
 import { View } from "react-native";
 import FieldRenderer from "./FieldRenderer";
+
+// ⬇️ Redux
+import { selectCurrentSessionId, setFieldValue } from "@/forms/state/formSessionSlice";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 export type Campo = {
   id_campo: string;
@@ -41,32 +40,26 @@ type Props = {
   formName?: string;
   referenceFrame: Frame; // escala tipográfica/geométrica
   contentFrame: Frame; // ancho/alto útil del body
-  formSession: FormSession; // sesión del formulario (para guardar/leer valores)
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-const FormPageView: React.FC<Props> = ({
-  page,
-  formName,
-  referenceFrame,
-  contentFrame,
-  formSession,
-}) => {
-  // Ordena campos una sola vez
+const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, contentFrame }) => {
+  const dispatch = useAppDispatch();
+  const sessionId = useAppSelector(selectCurrentSessionId);
+
+  // Ordena campos una sola vez por 'sequence'
   const fields = useMemo(
     () => [...(page?.campos || [])].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)),
     [page?.campos]
   );
-
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
-  // const padX = clamp(contentFrame.width * 0.04, 12, 24);
   const padBottom = clamp(minSide * 0.02, 12, 24);
   const headerGap = clamp(minSide * 0.012, 8, 16);
   const fieldGap = clamp(minSide * 0.016, 10, 22);
-  console.log(page);
+
   return (
-    <View style={{ paddingRight: 0, paddingBottom: padBottom * 0 }}>
+    <View style={{ paddingRight: 0, paddingBottom: padBottom * 1.1 }}>
       <Body weight="bold" size="xl">
         {page?.nombre}
       </Body>
@@ -86,7 +79,10 @@ const FormPageView: React.FC<Props> = ({
             formName={formName}
             referenceFrame={referenceFrame}
             contentFrame={contentFrame}
-            formSession={formSession}
+            // Interceptar (opcional) además de persistir en slice:
+            onChangeValue={(name, value) =>
+              sessionId && dispatch(setFieldValue({ sessionId, nombreInterno: name, value }))
+            }
           />
         </View>
       ))}
