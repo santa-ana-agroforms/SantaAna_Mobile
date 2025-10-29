@@ -1,6 +1,7 @@
 // src/db/form-entries.ts
 import { all, ensureMigrated, getDb, run } from "@/db/sqlite";
 import { FieldConfig } from "@/forms/runtime/field-registry";
+import { scheduleTodayAt } from "@/notifications";
 
 // Tipos mínimos (alineados a tu runtime)
 export type Campo = {
@@ -124,6 +125,18 @@ export const saveEntry = async (local_id: string, p: SavePayload) => {
       Number.isFinite(p.cursor_page_index as number) ? (p.cursor_page_index as number) : 0,
     ]
   );
+
+  const reminder = await findReadyToSubmitReminder(0.1);
+  // verificar si hoy es entre lunes a viernes
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  if (reminder && dayOfWeek >= 1 && dayOfWeek <= 5) {
+    // notificar a las 4 de la tarde
+    await scheduleTodayAt(16, 0, reminder.title, reminder.body);
+  } else if (reminder && dayOfWeek === 6) {
+    // notificar a las 2 de la tarde
+    await scheduleTodayAt(14, 0, reminder.title, reminder.body);
+  }
 };
 
 export const listEntriesSummary = async (): Promise<EntrySummary[]> => {
@@ -202,8 +215,8 @@ export const updateCursor = async (local_id: string, pageIndex: number) => {
 // Recordatorio cuando hay ready_to_submit viejos (basado en el más antiguo)
 // Dedup: máximo 1 noti por día (key: noti.ready.<YYYY-MM-DD>)
 export const findReadyToSubmitReminder = async (
-  thresholdDays = 2
-): Promise<{ title: string; body: string; count: number; oldestDays: number } | null> => {
+  thresholdHours = 48
+): Promise<{ title: string; body: string; count: number; oldestHours: number } | null> => {
   await ensureFormEntriesTables();
   await ensureMigrated();
   const db = await getDb();
@@ -219,9 +232,10 @@ export const findReadyToSubmitReminder = async (
   if (!count || !row?.oldest) return null;
 
   const oldest = new Date(row.oldest);
-  const ageDays = Math.floor((Date.now() - oldest.getTime()) / 86400000);
-  if (ageDays < thresholdDays) return null;
+  const ageHours = Math.floor((Date.now() - oldest.getTime()) / 3600000);
+  if (ageHours < thresholdHours) return null;
 
+  // Solo una notificación por día
   const today = new Date().toISOString().slice(0, 10);
   const kvKey = `noti.ready.${today}`;
   const seen = await db.getAllAsync<{ v: string }>(`SELECT v FROM kv WHERE k = ? LIMIT 1`, [kvKey]);
@@ -230,15 +244,35 @@ export const findReadyToSubmitReminder = async (
   await db.runAsync(`INSERT OR REPLACE INTO kv (k, v) VALUES (?, ?)`, [kvKey, String(Date.now())]);
 
   const title = "Tienes formularios por enviar";
+
+  // Mostrar 3 más viejos si hay ≥3; si no, 2 si hay ≥2; si no, 1.
+  const listCount = count >= 3 ? 3 : count >= 2 ? 2 : 1;
+
+  const forms = await db.getAllAsync<{ form_name: string; filled_at_local: string }>(
+    `
+    SELECT form_name, filled_at_local
+      FROM form_entries
+     WHERE status = 'pending'
+     ORDER BY datetime(filled_at_local) ASC
+     LIMIT ?
+    `,
+    [listCount]
+  );
+
+  const namesList = forms
+    .map((f) => `- ${f.form_name} (completado el ${new Date(f.filled_at_local).toLocaleString()})`)
+    .join("\n");
+
   const body =
     count === 1
-      ? `Tienes 1 formulario listo para enviar desde hace ${ageDays} día${ageDays > 1 ? "s" : ""}.`
-      : `Tienes ${count} formularios listos para enviar; el más antiguo tiene ${ageDays} días.`;
+      ? `Tienes 1 formulario listo para enviar desde hace ${ageHours} hora${ageHours !== 1 ? "s" : ""}:\n${namesList}`
+      : `Tienes ${count} formularios listos para enviar; el más antiguo tiene ${ageHours} hora${ageHours !== 1 ? "s" : ""}. ${listCount === 3 ? "Los 3 más antiguos" : "Los 2 más antiguos"}:\n${namesList}`;
 
   console.log(
-    `Notificación de recordatorio creada para ${count} formularios ready_to_submit (el más viejo tiene ${ageDays} días).`
+    `Notificación de recordatorio creada para ${count} formularios ready_to_submit (el más viejo tiene ${ageHours} horas).`
   );
-  return { title, body, count, oldestDays: ageDays };
+
+  return { title, body, count, oldestHours: ageHours };
 };
 
 /** Elimina definitivamente un registro local por su local_id */

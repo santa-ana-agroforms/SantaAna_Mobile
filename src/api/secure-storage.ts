@@ -4,30 +4,30 @@ import * as SecureStore from "expo-secure-store";
 import { ACCESS_KEY, API_BASE_KEY, REFRESH_KEY } from "./secure-keys";
 
 // ---- helpers ----
-export async function setApiBase(url: string) {
+export const setApiBase = async (url: string) => {
   await SecureStore.setItemAsync(API_BASE_KEY, url);
-}
+};
 
-export async function getApiBase(): Promise<string> {
+export const getApiBase = async (): Promise<string> => {
   const v = await SecureStore.getItemAsync(API_BASE_KEY);
   if (!v) throw new Error("API base url no configurada");
   return v;
-}
+};
 
-export async function setTokens(access: string, refresh?: string) {
+export const setTokens = async (access: string, refresh?: string) => {
   await SecureStore.setItemAsync(ACCESS_KEY, access);
   if (refresh) await SecureStore.setItemAsync(REFRESH_KEY, refresh);
-}
+};
 
-export async function getAccessToken() {
+export const getAccessToken = async () => {
   return SecureStore.getItemAsync(ACCESS_KEY);
-}
+};
 
-export async function getRefreshToken() {
+export const getRefreshToken = async () => {
   return SecureStore.getItemAsync(REFRESH_KEY);
-}
+};
 
-export async function clearTokens() {
+export const clearTokens = async () => {
   await SecureStore.deleteItemAsync(ACCESS_KEY);
   await SecureStore.deleteItemAsync(REFRESH_KEY);
-}
+};

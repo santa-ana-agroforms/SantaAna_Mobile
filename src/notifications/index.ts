@@ -121,6 +121,32 @@ export const scheduleWeeklyAt = async (
   });
 };
 
+// Notifical a una hora específica del día de hoy (si ya pasó, no notifica)
+export const scheduleTodayAt = async (
+  hour: number,
+  minute: number,
+  title: string,
+  body?: string
+) => {
+  const now = new Date();
+  const target = new Date();
+  target.setHours(hour, minute, 0, 0);
+  const diffMs = target.getTime() - now.getTime();
+  if (diffMs <= 0) {
+    // ya pasó hoy
+    return null;
+  }
+  return Notifications.scheduleNotificationAsync({
+    content: { title, body, sound: true },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: Math.floor(diffMs / 1000),
+      repeats: false,
+      channelId: Platform.OS === "android" ? "default" : undefined,
+    },
+  });
+};
+
 export const cancelNotification = async (id: string) => {
   await Notifications.cancelScheduledNotificationAsync(id);
 };

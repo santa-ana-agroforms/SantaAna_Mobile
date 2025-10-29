@@ -4,13 +4,18 @@ import { syncAllDatasets } from "@/api/datasets";
 import { fetchAndSaveForms } from "@/api/forms";
 import type { FormCategoryGroup } from "@/api/forms/types";
 import { pullAndCacheGroups } from "@/api/groups";
+import {
+  ensureDailyMaintenanceRegistered,
+  runMidnightCatchUpIfNeeded,
+} from "@/background/dailyMaintenance";
+
 import Button from "@/components/atoms/Button";
 import SkeletonLoader from "@/components/atoms/SkeletonLoader";
 import CategoryCard from "@/components/molecules/CategoryCard";
 import PageScaffold from "@/components/templates/PageScaffold";
 import { findReadyToSubmitReminder } from "@/db/form-entries";
 import { DB, planAvailabilityNotifications, tryMarkNotificationSent } from "@/db/sqlite";
-import { notifyNow } from "@/notifications";
+import { cancelAllNotifications, notifyNow, scheduleTodayAt } from "@/notifications";
 import { onActiveWithInternet } from "@/utils/appstate";
 import { isOnline, onReconnectOnce } from "@/utils/network";
 import { router, useFocusEffect } from "expo-router";
@@ -72,8 +77,20 @@ const Home: React.FC = () => {
       }
     }
 
-    const reminder = await findReadyToSubmitReminder(2);
-    if (reminder) await notifyNow(reminder.title, reminder.body);
+    // Cancelar notificaciones de ready_to_submit si ya no hay
+    await cancelAllNotifications();
+
+    const reminder = await findReadyToSubmitReminder(1);
+    // verificar si hoy es entre lunes a viernes
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    if (reminder && dayOfWeek >= 1 && dayOfWeek <= 5) {
+      // notificar a las 4 de la tarde
+      await scheduleTodayAt(16, 0, reminder.title, reminder.body);
+    } else if (reminder && dayOfWeek === 6) {
+      // notificar a las 2 de la tarde
+      await scheduleTodayAt(14, 0, reminder.title, reminder.body);
+    }
 
     try {
       const plans = await planAvailabilityNotifications();
@@ -86,6 +103,9 @@ const Home: React.FC = () => {
     } catch (e) {
       console.log("[home/revalidate] error notificando disponibilidad:", e);
     }
+
+    ensureDailyMaintenanceRegistered(); // registra el task
+    runMidnightCatchUpIfNeeded(); // por si ya cruzó medianoche y no se ejecutó aún
   }, [loadLocal]);
 
   // 1) Montaje: asegúrate de marcar initialized SIEMPRE
