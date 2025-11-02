@@ -104,7 +104,7 @@ const FormHeader: React.FC<Props> = ({
             <PaginationDots
               total={totalPages}
               activeIndex={activeIndex}
-              arrows={totalPages > 2}
+              arrows={totalPages >= 2}
               pill
               onChange={(nextIndex) => {
                 if (onGoToPage) {

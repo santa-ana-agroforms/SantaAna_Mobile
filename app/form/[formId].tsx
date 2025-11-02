@@ -379,7 +379,7 @@ const FormRoute: React.FC = () => {
   const shouldShowFooter = !isReadonly || footerLoading || !!footerInfo;
 
   // Print the form with json data
-  console.log("JSON", JSON.stringify(form, null, 2));
+  // console.log("JSON", JSON.stringify(form, null, 2));
 
   return (
     <PageScaffold
@@ -389,7 +389,7 @@ const FormRoute: React.FC = () => {
       totalPages={pagesCount}
       onPrevPage={handlePrev}
       onNextPage={handleNext}
-      canNext={!canGoNext}
+      canNext={canGoNext}
     >
       {({ referenceFrame, contentFrame, layoutFrame }) => (
         <View style={{ flex: 1 }}>
@@ -401,6 +401,7 @@ const FormRoute: React.FC = () => {
             page={currentPage}
             onPageChange={handlePageChange}
             mode={mode}
+            canGoNext={canGoNext}
           />
 
           {shouldShowFooter && (

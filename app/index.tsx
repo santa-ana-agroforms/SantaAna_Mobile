@@ -22,6 +22,9 @@ import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 
+// ✅ Reusar decorators
+import { useInstanceSelectorState } from "@/forms/state/useInstanceSelectorState";
+
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const Home: React.FC = () => {
@@ -30,7 +33,13 @@ const Home: React.FC = () => {
   const [loadingRemote, setLoadingRemote] = useState(false); // estoy trayendo del server
   const isRefreshingRef = useRef(false);
 
-  // Lee lo que haya en SQLite
+  // ← usaremos computeDecorators para obtener submittedCount por formId
+  const { computeDecorators } = useInstanceSelectorState();
+
+  // Mapa global de enviados por formulario (formId → submittedCount)
+  const [submittedMap, setSubmittedMap] = useState<Record<string, number>>({});
+
+  // Lee lo que haya en SQLite y calcula submittedMap con decorators
   const loadLocal = useCallback(async () => {
     try {
       await DB.logDbCounts?.();
@@ -38,10 +47,29 @@ const Home: React.FC = () => {
     const groups = await DB.selectFormsGroupedByCategory();
     const safeGroups = Array.isArray(groups) ? groups : [];
     setData(safeGroups);
-    return safeGroups;
-  }, []);
 
-  // Revalidación remota segura
+    // Construir lista de formIds y calcular submittedCount usando decorators
+    const allFormIds = safeGroups.flatMap((g) => g.formularios?.map((f) => f.id_formulario) ?? []);
+    if (allFormIds.length > 0) {
+      const acc: Record<string, number> = {};
+      await Promise.all(
+        allFormIds.map(async (formId) => {
+          try {
+            const deco = await computeDecorators(formId, "daily");
+            acc[formId] = deco?.submittedCount ?? 0;
+          } catch {
+            acc[formId] = 0;
+          }
+        })
+      );
+      setSubmittedMap(acc);
+    } else {
+      setSubmittedMap({});
+    }
+
+    return safeGroups;
+  }, [computeDecorators]);
+
   // Revalidación remota segura
   const revalidateFromServer = useCallback(async () => {
     console.log("[home/revalidate] iniciando revalidación desde server...");
@@ -55,40 +83,34 @@ const Home: React.FC = () => {
     }
 
     isRefreshingRef.current = true;
-
-    // 🔥 Enciende el skeleton inmediatamente (antes de cualquier await)
-    setLoadingRemote(true);
+    setLoadingRemote(true); // 🔥 enciende skeleton
 
     console.log("\n\n[home/revalidate] online, revalidando...");
 
     try {
-      await fetchAndSaveForms(); // /forms/tree -> SQLite (sin callback)
+      await fetchAndSaveForms(); // /forms/tree -> SQLite
       console.log("\n\n[home/revalidate] forms revalidados");
-      await pullAndCacheGroups(); // /groups -> SQLite (si aplica)
+      await pullAndCacheGroups(); // /groups -> SQLite
       await syncAllDatasets(); // otros datasets
     } catch (e: any) {
       console.log("[home/revalidate] fallo:", e?.message ?? e);
     } finally {
       try {
-        await loadLocal(); // pinta lo último que quedó en DB
+        await loadLocal(); // repinta desde DB y recalcula submittedMap
       } finally {
-        setLoadingRemote(false); // ✅ apaga al final de TODO el pipeline
+        setLoadingRemote(false);
         isRefreshingRef.current = false;
       }
     }
 
-    // Cancelar notificaciones de ready_to_submit si ya no hay
+    // Notificaciones
     await cancelAllNotifications();
-
     const reminder = await findReadyToSubmitReminder(1);
-    // verificar si hoy es entre lunes a viernes
     const today = new Date();
     const dayOfWeek = today.getDay();
     if (reminder && dayOfWeek >= 1 && dayOfWeek <= 5) {
-      // notificar a las 4 de la tarde
       await scheduleTodayAt(16, 0, reminder.title, reminder.body);
     } else if (reminder && dayOfWeek === 6) {
-      // notificar a las 2 de la tarde
       await scheduleTodayAt(14, 0, reminder.title, reminder.body);
     }
 
@@ -96,16 +118,14 @@ const Home: React.FC = () => {
       const plans = await planAvailabilityNotifications();
       for (const p of plans) {
         const ok = await tryMarkNotificationSent(p.kvKey);
-        if (ok) {
-          await notifyNow(p.title, p.body);
-        }
+        if (ok) await notifyNow(p.title, p.body);
       }
     } catch (e) {
       console.log("[home/revalidate] error notificando disponibilidad:", e);
     }
 
-    ensureDailyMaintenanceRegistered(); // registra el task
-    runMidnightCatchUpIfNeeded(); // por si ya cruzó medianoche y no se ejecutó aún
+    ensureDailyMaintenanceRegistered();
+    runMidnightCatchUpIfNeeded();
   }, [loadLocal]);
 
   // 1) Montaje: asegúrate de marcar initialized SIEMPRE
@@ -125,11 +145,11 @@ const Home: React.FC = () => {
     };
   }, [loadLocal]);
 
-  // 2) Enfoque pantalla: recarga local + revalida remoto
+  // 2) Enfoque pantalla: recarga local
   useFocusEffect(
     useCallback(() => {
       loadLocal();
-      // revalidateFromServer();
+      // revalidateFromServer(); // si quisieras revalidar al enfocar
       return () => {};
     }, [loadLocal])
   );
@@ -183,9 +203,8 @@ const Home: React.FC = () => {
           );
         }
 
-        // 2) MOSTRAR SKELETON TAMBIÉN CUANDO YA HAY DATOS
+        // 2) Skeleton mientras refresca remoto
         if (loadingRemote) {
-          // Si ya hay datos, igual mostramos un skeleton “del mismo tamaño”
           const minRows = 3;
           const skeletonCount = Math.max(data.length, minRows * columns);
           const skeletonItems = Array.from({ length: skeletonCount });
@@ -201,7 +220,6 @@ const Home: React.FC = () => {
                   </View>
                 ))}
               </View>
-              {/* (Opcional) botón skeleton mientras refresca */}
               <View style={{ alignItems: "flex-end", marginTop: gap }}>
                 <SkeletonLoader preset="button" frame={referenceFrame} width="40%" />
               </View>
@@ -213,26 +231,36 @@ const Home: React.FC = () => {
         return (
           <>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
-              {data.map((item) => (
-                <CategoryCard
-                  key={item.nombre_categoria}
-                  name={item.nombre_categoria}
-                  totalForms={item.formularios.length}
-                  completedForms={item.formularios.filter(Boolean).length}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/forms/[category]",
-                      params: { category: item.nombre_categoria },
-                    })
-                  }
-                  referenceFrame={referenceFrame}
-                  style={{ width: cardWidth }}
-                />
-              ))}
+              {data.map((item) => {
+                const totalForms = item.formularios.length;
+
+                // ✔ “Completado” si el form tiene ≥1 envío (submittedCount > 0)
+                const completedForms = item.formularios.reduce((acc, f) => {
+                  const count = submittedMap[f.id_formulario] ?? 0;
+                  return acc + (count > 0 ? 1 : 0);
+                }, 0);
+
+                return (
+                  <CategoryCard
+                    key={item.nombre_categoria}
+                    name={item.nombre_categoria}
+                    totalForms={totalForms}
+                    completedForms={completedForms}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/forms/[category]",
+                        params: { category: item.nombre_categoria },
+                      })
+                    }
+                    referenceFrame={referenceFrame}
+                    style={{ width: cardWidth }}
+                  />
+                );
+              })}
             </View>
 
             <View style={{ alignItems: "flex-end", marginTop: gap }}>
-              <Button title="Cerrar sesión (TEMP)" size="sm" onPress={handleLogout} />
+              <Button title="Cerrar sesión" size="sm" onPress={handleLogout} />
             </View>
           </>
         );
