@@ -246,12 +246,12 @@ const Home: React.FC = () => {
                     name={item.nombre_categoria}
                     totalForms={totalForms}
                     completedForms={completedForms}
-                    onPress={() =>
+                    onPress={() => {
                       router.push({
                         pathname: "/forms/[category]",
                         params: { category: item.nombre_categoria },
-                      })
-                    }
+                      });
+                    }}
                     referenceFrame={referenceFrame}
                     style={{ width: cardWidth }}
                   />

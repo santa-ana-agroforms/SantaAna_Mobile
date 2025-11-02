@@ -1,9 +1,10 @@
+// components/templates/PageScaffold.tsx
 import FormHeader from "@/components/molecules/FormHeader";
 import { colors } from "@/theme/tokens";
+import { getLastUpdatedDate, setLastUpdatedNow } from "@/utils/lastUpdated"; // ⬅️ nuevo
 import { isOnline } from "@/utils/network";
-import NetInfo from "@react-native-community/netinfo";
-import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { LayoutChangeEvent, ScrollView, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -53,26 +54,23 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
   const [headerH, setHeaderH] = useState(0);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
-  // refs para detectar reconexión y evitar múltiples refresh seguidos
-  const prevConnectedRef = useRef<boolean | null>(null);
-  const lastAutoRefreshRef = useRef<number>(0);
-  const AUTORELOAD_COOLDOWN_MS = 5000;
+  // 💡 Al enfocar la pantalla, toma la fecha global (si existe) y muéstrala.
+  useFocusEffect(
+    useCallback(() => {
+      const d = getLastUpdatedDate();
+      if (d) setLastUpdatedAt(d);
+      return () => {};
+    }, [])
+  );
 
-  // Chequeo inicial de conectividad
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const ok = await isOnline();
-        if (mounted) {
-          setConnected(!!ok);
-          prevConnectedRef.current = !!ok;
-        }
+        if (mounted) setConnected(!!ok);
       } catch {
-        if (mounted) {
-          setConnected(false);
-          prevConnectedRef.current = false;
-        }
+        if (mounted) setConnected(false);
       }
     })();
     return () => {
@@ -100,44 +98,13 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
   const contentFrame = { width: layoutFrame.width - 2 * padX, height: layoutFrame.height };
   const referenceFrame = { ...layoutFrame };
 
-  // Refresco manual o automático (marca el timestamp exacto)
   const handleRefreshPress = useCallback(async () => {
-    // 1️⃣ Registrar la hora de actualización
+    setLastUpdatedNow();
+    // Si quieres, puedes seguir actualizando la fecha al refrescar manualmente:
     setLastUpdatedAt(new Date());
-
-    // 2️⃣ Revisar conectividad actual
-    try {
-      const ok = await isOnline();
-      setConnected(!!ok);
-    } catch {
-      setConnected(false);
-    }
-
-    // 3️⃣ Notificar al padre y actualizar el nonce
     onRefresh?.();
     setRefreshNonce((n) => n + 1);
   }, [onRefresh]);
-
-  // 🔄 Disparar refresh automáticamente al reconectar (offline → online)
-  useEffect(() => {
-    const unsub = NetInfo.addEventListener((state) => {
-      const nowOnline = !!state.isConnected && (state.isInternetReachable ?? true);
-      setConnected(nowOnline);
-
-      const prev = prevConnectedRef.current;
-      prevConnectedRef.current = nowOnline;
-
-      // Detectar transición de offline → online
-      if (prev === false && nowOnline) {
-        const now = Date.now();
-        if (now - lastAutoRefreshRef.current > AUTORELOAD_COOLDOWN_MS) {
-          lastAutoRefreshRef.current = now;
-          handleRefreshPress(); // ← ejecuta refresh + actualiza timestamp
-        }
-      }
-    });
-    return () => unsub();
-  }, [handleRefreshPress]);
 
   const scaffoldDimensions: ScaffoldDimensions = {
     layoutFrame,
@@ -149,7 +116,6 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingBottom: insets.bottom }}>
       <View style={{ flex: 1 }}>
-        {/* HEADER */}
         <View onLayout={onHeaderLayout}>
           <View style={{ paddingTop: padTopHeader, paddingBottom: gapBelowHeader }}>
             <FormHeader
@@ -158,7 +124,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
               totalPages={totalPages}
               frame={referenceFrame}
               connected={connected}
-              lastUpdatedAt={lastUpdatedAt ?? undefined}
+              lastUpdatedAt={lastUpdatedAt ?? undefined} // ⬅️ se refleja en el header
               onBack={handleBack}
               onRefresh={handleRefreshPress}
               variant={variant}
@@ -168,7 +134,6 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
           </View>
         </View>
 
-        {/* BODY */}
         {variant === "form" ? (
           <View
             key={`body-${refreshNonce}`}
