@@ -37,3 +37,18 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+# src/api/secure-keys.ts
+
+# python
+*.pyc
+__pycache__/
+env/
+venv/
+ENV/
+.venv/
+.env.local
+.env
+*.py
+app_login_qr.py
+
+android/

@@ -1,0 +1,113 @@
+{
+  "id_formulario": "3bd465c9-6d27-437f-a391-1faa17c57ded",
+  "nombre": "Formulario pruebas (v2)",
+  "paginas": [
+    {
+      "id_pagina": "1d234d08-7b33-4cb6-8a6e-8f0846bf8fc8",
+      "nombre": "General (ajustada)",
+      "descripcion": "",
+      "secuencia": 1,
+      "campos": [
+        {
+          "id_campo": "0a3ce38bd5ee413dbc78b5c2f05229dc",
+          "sequence": 1,
+          "tipo": "texto",
+          "clase": "string",
+          "nombre_interno": "grupo_datos_lote",
+          "etiqueta": "Datos del Lote",
+          "ayuda": "",
+          "config": {
+            "name": "Datos del Lote",
+            "fieldCondition": "",
+            "id_group": "317c7b45ad8c49d79a9eedf3522c3a9e"
+          },
+          "requerido": false
+        },
+        {
+          "id_campo": "9c07fe6907684e8dbf399cc196ec0c7c",
+          "sequence": 2,
+          "tipo": "numerico",
+          "clase": "number",
+          "nombre_interno": "number_finca_temp1",
+          "etiqueta": "Temperatura",
+          "ayuda": "Ayuda...",
+          "config": {
+            "min": 25,
+            "max": 60,
+            "step": null,
+            "unit": "°C"
+          },
+          "requerido": true
+        },
+        {
+          "id_campo": "755d79a72cb14065acadb83b2e19008b",
+          "sequence": 3,
+          "tipo": "numerico",
+          "clase": "number",
+          "nombre_interno": "number_finca_temp1",
+          "etiqueta": "Temperatura 2745",
+          "ayuda": "Ayuda...",
+          "config": {
+            "min": 31,
+            "max": 87,
+            "step": null,
+            "unit": "$"
+          },
+          "requerido": true
+        },
+        {
+          "id_campo": "cd6af290cb8746a9b6271065facdf7a1",
+          "sequence": 4,
+          "tipo": "booleano",
+          "clase": "boolean",
+          "nombre_interno": "riego_automatico",
+          "etiqueta": "¿Cuenta con riego automático?",
+          "ayuda": "Seleccione si aplica",
+          "config": {},
+          "requerido": false
+        },
+        {
+          "id_campo": "8006040d8638443299b25d2e96bbc77b",
+          "sequence": 5,
+          "tipo": "booleano",
+          "clase": "boolean",
+          "nombre_interno": "riego_automatico",
+          "etiqueta": "¿Cuenta con riego automático?",
+          "ayuda": "Seleccione si aplica",
+          "config": {},
+          "requerido": false
+        }
+      ]
+    },
+    {
+      "id_pagina": "8abd1a94-9fc0-4e2d-83d4-42d118e60135",
+      "nombre": "Encabezado",
+      "descripcion": "Página Principal version",
+      "secuencia": 2,
+      "campos": [
+        {
+          "id_campo": "1fcc6fec464942ee9b137645e34296b0",
+          "sequence": 1,
+          "tipo": "booleano",
+          "clase": "boolean",
+          "nombre_interno": "riego_automatico",
+          "etiqueta": "¿Cuenta con riego automático?",
+          "ayuda": "Seleccione si aplica",
+          "config": {},
+          "requerido": false
+        },
+        {
+          "id_campo": "918f7889f1e14c82b3566b5014e22b4e",
+          "sequence": 2,
+          "tipo": "booleano",
+          "clase": "boolean",
+          "nombre_interno": "riego_automatico",
+          "etiqueta": "¿Cuenta con riego automático?",
+          "ayuda": "Seleccione si aplica",
+          "config": {},
+          "requerido": false
+        }
+      ]
+    }
+  ]
+}
