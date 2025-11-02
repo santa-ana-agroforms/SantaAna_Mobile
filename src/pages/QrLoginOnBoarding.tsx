@@ -40,7 +40,87 @@ type Props = {
 type Frame = { width: number; height: number };
 type Mode = "qr" | "creds";
 
-type NoticeState = { kind: NoticeKind; text: string; autoHideMs?: number } | null;
+/** ========== Notice state extendido para messageKey/params ========== */
+type NoticeState = {
+  kind: NoticeKind;
+  /** Opción A (legacy): texto directo */
+  text?: string;
+  /** Opción B (recomendada): clave del diccionario NoticeBar */
+  messageKey?: string;
+  /** Parámetros para interpolar el mensaje (opcional) */
+  params?: Record<string, string | number>;
+  autoHideMs?: number;
+} | null;
+
+/** ========== Helpers de mapeo de errores → messageKey ========== */
+type ErrorCtx = "qr" | "creds" | "sync" | "generic";
+
+const includesAny = (s: string, arr: string[]) => {
+  const t = (s || "").toLowerCase();
+  return arr.some((x) => t.includes(x.toLowerCase()));
+};
+
+const toKeyFromStatus = (
+  status: number | null,
+  ctx: ErrorCtx
+): { kind: NoticeKind; messageKey: string } | null => {
+  if (status == null) return null;
+  if (status === 401)
+    return {
+      kind: "error",
+      messageKey: ctx === "creds" ? "auth.invalid_creds" : "auth.expired_session",
+    };
+  if (status === 403) return { kind: "error", messageKey: "api.forbidden" };
+  if (status === 404) return { kind: "error", messageKey: "api.not_found" };
+  if (status === 422 || status === 400) {
+    return { kind: "error", messageKey: ctx === "qr" ? "qr.invalid" : "api.validation" };
+  }
+  if (status === 429) return { kind: "warning", messageKey: "auth.rate_limited" };
+  if (status >= 500)
+    return { kind: "error", messageKey: ctx === "sync" ? "sync.server_error" : "api.server_error" };
+  return null;
+};
+
+const translateApiErrorToNotice = (
+  ctx: ErrorCtx,
+  err: any
+): { kind: NoticeKind; messageKey: string } => {
+  const status: number | null =
+    typeof err?.response?.status === "number" ? err.response.status : null;
+  const code = String(err?.code || "");
+  const msg = String(err?.message || "");
+  const serverMsg = String(err?.response?.data?.message || "");
+
+  // Red / timeout / SSL / DNS
+  if (code === "ERR_NETWORK" || includesAny(msg, ["network", "failed to fetch"])) {
+    return {
+      kind: "error",
+      messageKey:
+        ctx === "creds" || ctx === "qr" ? "auth.offline_first_login" : "net.no_connection",
+    };
+  }
+  if (code === "ECONNABORTED" || includesAny(msg, ["timeout"])) {
+    return { kind: "error", messageKey: "net.timeout" };
+  }
+  if (includesAny(msg + serverMsg, ["ssl", "certificate", "hostname"])) {
+    return { kind: "error", messageKey: "net.ssl" };
+  }
+  if (includesAny(msg + serverMsg, ["dns", "resolve"])) {
+    return { kind: "error", messageKey: "net.dns" };
+  }
+
+  // HTTP status
+  const byStatus = toKeyFromStatus(status, ctx);
+  if (byStatus) return byStatus;
+
+  // Casos específicos
+  if (ctx === "qr" && includesAny(serverMsg, ["nonce", "expired", "invalid", "signature"])) {
+    return { kind: "error", messageKey: "qr.invalid" };
+  }
+
+  // Fallback
+  return { kind: "error", messageKey: ctx === "qr" ? "qr.login_failed" : "generic.error" };
+};
 
 const QrLoginOnboarding: React.FC<Props> = ({
   endpoint = "/auth/qr/login",
@@ -144,9 +224,22 @@ const QrLoginOnboarding: React.FC<Props> = ({
     })();
   }, [baseUrl]);
 
-  const showNotice = useCallback((kind: NoticeKind, text: string, autoHideMs?: number) => {
+  /** ========== helpers para mostrar NoticeBar ========== */
+  const showNoticeText = useCallback((kind: NoticeKind, text: string, autoHideMs?: number) => {
     setNotice({ kind, text, autoHideMs });
   }, []);
+
+  const showNoticeKey = useCallback(
+    (
+      kind: NoticeKind,
+      messageKey: string,
+      params?: Record<string, string | number>,
+      autoHideMs?: number
+    ) => {
+      setNotice({ kind, messageKey, params, autoHideMs });
+    },
+    []
+  );
 
   const initialSyncWithStatus = useCallback(async () => {
     setStatusText("Sincronizando formularios…");
@@ -163,14 +256,13 @@ const QrLoginOnboarding: React.FC<Props> = ({
     } catch (syncErr: any) {
       if (!controller.signal.aborted) {
         console.warn("[SYNC] fallo en fetchAndSaveForms:", syncErr);
-        // Antes: Alert.alert(...)
-        showNotice(
-          "warning",
-          "Inicio de sesión correcto, pero la sincronización inicial falló. Puedes sincronizar luego desde el Home."
-        );
+        // Mensaje personalizado usando key
+        const mapped = translateApiErrorToNotice("sync", syncErr);
+        // Preferimos mantener warning consistente
+        showNoticeKey(mapped.kind === "error" ? "warning" : mapped.kind, "sync.failed");
       }
     }
-  }, [showNotice]);
+  }, [showNoticeKey]);
 
   const doLogin = useCallback(
     async (p: QrPayload) => {
@@ -179,7 +271,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
 
       const net = await NetInfo.fetch();
       if (!net.isConnected) {
-        showNotice("error", "Se requiere internet para el primer login.");
+        showNoticeKey("error", "auth.offline_first_login");
         setStatusText(null);
         loginInFlightRef.current = false;
         return;
@@ -192,7 +284,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
         const api = await makeClient();
         const resp = await api.post(endpoint, { sid: p.sid, nonce: p.nonce, sig: p.sig });
         const { access_token: accessToken, refreshToken, user } = resp.data ?? {};
-        if (!accessToken) throw new Error("No se recibió accessToken del servidor.");
+        if (!accessToken) throw new Error("no_access_token");
 
         await setTokens(accessToken, refreshToken);
 
@@ -211,16 +303,20 @@ const QrLoginOnboarding: React.FC<Props> = ({
         setStatusText("¡Listo!");
         requestAnimationFrame(() => router.replace("/"));
       } catch (e: any) {
-        const msg =
-          e?.response?.data?.message || e?.message || "No se pudo completar el login por QR.";
-        showNotice("error", msg);
-        console.error("[LOGIN] error:", e);
+        // Personalizado: nunca mostramos el mensaje crudo
+        if (e?.message === "no_access_token") {
+          showNoticeKey("error", "auth.unexpected_no_token");
+        } else {
+          const { kind, messageKey } = translateApiErrorToNotice("qr", e);
+          showNoticeKey(kind, messageKey);
+        }
+        console.error("[LOGIN][QR] error:", e);
       } finally {
         loginInFlightRef.current = false;
         setTimeout(() => setStatusText(null), 1200);
       }
     },
-    [apiUrlInput, baseUrl, endpoint, autoSync, initialSyncWithStatus, router, showNotice]
+    [apiUrlInput, baseUrl, endpoint, autoSync, initialSyncWithStatus, router, showNoticeKey]
   );
 
   // QR: parse + login
@@ -231,17 +327,23 @@ const QrLoginOnboarding: React.FC<Props> = ({
       setStatusText("Verificando QR…");
       try {
         const obj = JSON.parse(raw);
-        if (!isQrPayload(obj)) throw new Error("El QR no contiene {sid, nonce, sig}.");
+        if (!isQrPayload(obj)) throw new Error("qr_payload_invalid");
         await doLogin(obj);
       } catch (e: any) {
         setStatusText(null);
-        showNotice("error", e?.message ?? "El QR escaneado no es válido.");
+        // Mensaje de QR no válido controlado
+        if (e?.message === "qr_payload_invalid") {
+          showNoticeKey("error", "qr.invalid");
+        } else {
+          const { kind, messageKey } = translateApiErrorToNotice("qr", e);
+          showNoticeKey(kind, messageKey);
+        }
       } finally {
         setModalOpen(false);
         scanBusyRef.current = false;
       }
     },
-    [doLogin, showNotice]
+    [doLogin, showNoticeKey]
   );
 
   // Credenciales + sync
@@ -278,7 +380,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
     if (loginInFlightRef.current || isCredsLoading) return;
 
     if (!userField.trim() || !password) {
-      showNotice("warning", "Completa usuario y contraseña.");
+      showNoticeText("warning", "Completa usuario y contraseña.");
       return;
     }
 
@@ -289,7 +391,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
     try {
       const net = await NetInfo.fetch();
       if (!net.isConnected) {
-        showNotice("error", "Se requiere internet para el primer login.");
+        showNoticeKey("error", "auth.offline_first_login");
         setStatusText(null);
         return;
       }
@@ -306,7 +408,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
       });
 
       const { access_token: accessToken, refreshToken, user } = resp.data ?? {};
-      if (!accessToken) throw new Error("No se recibió accessToken del servidor.");
+      if (!accessToken) throw new Error("no_access_token");
 
       await setTokens(accessToken, refreshToken);
 
@@ -325,13 +427,12 @@ const QrLoginOnboarding: React.FC<Props> = ({
       setStatusText("¡Listo!");
       requestAnimationFrame(() => router.replace("/")); // también puedes usar replace aquí
     } catch (e: any) {
-      const status = e?.response?.status;
-      const apiMsg = e?.response?.data?.message;
-      const msg =
-        status === 401
-          ? "Credenciales inválidas."
-          : apiMsg || e?.message || "No se pudo completar el inicio de sesión.";
-      showNotice("error", msg);
+      if (e?.message === "no_access_token") {
+        showNoticeKey("error", "auth.unexpected_no_token");
+      } else {
+        const { kind, messageKey } = translateApiErrorToNotice("creds", e);
+        showNoticeKey(kind, messageKey);
+      }
       console.error("[LOGIN][CREDS] error:", e);
     } finally {
       loginInFlightRef.current = false;
@@ -348,7 +449,8 @@ const QrLoginOnboarding: React.FC<Props> = ({
     usernameFieldName,
     autoSync,
     initialSyncWithStatus,
-    showNotice,
+    showNoticeKey,
+    showNoticeText,
   ]);
 
   return (
@@ -582,6 +684,9 @@ const QrLoginOnboarding: React.FC<Props> = ({
       {notice ? (
         <NoticeBar
           kind={notice.kind}
+          // Preferimos usar messageKey/params; text queda como fallback/legacy
+          messageKey={notice.messageKey as any}
+          params={notice.params}
           text={notice.text}
           placement="top"
           topInsetPx={insets.top + minSide * 0.02}
