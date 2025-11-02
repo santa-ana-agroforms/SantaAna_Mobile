@@ -64,8 +64,57 @@ yarn install
 npm install
 ```
 
-### 3️⃣ Crear el archivo `.env`  
-Configura las variables de entorno necesarias (endpoints de la API, credenciales, etc.).
+## ⚙️ Configuración de Variables de Entorno
+
+Para ejecutar correctamente el proyecto, es necesario definir una serie de variables de entorno que controlan el acceso a los servicios de autenticación, sincronización y API.  
+Estas variables **no deben compartirse públicamente** y deben almacenarse de forma segura en los archivos `.env.local` (para el cliente móvil) y `.env` (para el backend o scripts administrativos).
+
+---
+
+### 📱 Archivo `.env.local` (Frontend – Expo / React Native)
+
+Ubicación: raíz del proyecto móvil (`/` o `/app` según tu estructura).
+
+```bash
+EXPO_PUBLIC_API_BASE_KEY=SANTAANA_API_BASE_KEY
+EXPO_PUBLIC_ACCESS_KEY=SANTAANA_ACCESS_KEY
+EXPO_PUBLIC_REFRESH_KEY=SANTAANA_REFRESH_KEY
+EXPO_PUBLIC_ACCESS_SECRET=7qN11exampleSecret
+EXPO_PUBLIC_REFRESH_SECRET=KD4TexampleSecret
+EXPO_PUBLIC_QR_MAGIC_CODE=3rb9MxexampleCode
+EXPO_PUBLIC_BASE_URL=https://santaana.example.com/api
+```
+
+#### Descripción:
+- **EXPO_PUBLIC_API_BASE_KEY** → Identificador del entorno de API configurado para el cliente móvil.  
+- **EXPO_PUBLIC_ACCESS_KEY / REFRESH_KEY** → Claves de sesión utilizadas para gestionar tokens temporales.  
+- **EXPO_PUBLIC_ACCESS_SECRET / REFRESH_SECRET** → Secretos asociados a las claves de sesión.  
+- **EXPO_PUBLIC_QR_MAGIC_CODE** → Código único usado para autenticación mediante QR.  
+- **EXPO_PUBLIC_BASE_URL** → URL base del backend o servicio principal de autenticación.
+
+---
+
+### 🖥️ Archivo `.env` (Backend o Entorno de Administración)
+
+Ubicación: raíz del backend (`/backend` o `/server`).
+
+```bash
+API_BASE_URL=https://santaana.example.com/api
+ADMIN_API_KEY=mF8arVnlkexampleKey
+```
+
+#### Descripción:
+- **API_BASE_URL** → Dirección base del API que consume el cliente móvil.  
+- **ADMIN_API_KEY** → Clave de acceso para operaciones administrativas o endpoints protegidos.
+
+---
+
+### 🚨 Importante
+
+- Reemplaza los valores de ejemplo con los **valores reales proporcionados por el equipo técnico o de infraestructura**.  
+- **No subas estos archivos a repositorios públicos** ni los incluyas en commits.  
+- Para obtener los valores oficiales, **contacta al administrador del proyecto o al equipo de infraestructura de Santa Ana**.  
+- Si usas Expo, asegúrate de que las variables comiencen con el prefijo `EXPO_PUBLIC_` para que sean accesibles desde el cliente.
 
 ### 4️⃣ Ejecutar en modo desarrollo
 ```bash
