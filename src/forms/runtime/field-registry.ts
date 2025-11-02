@@ -10,6 +10,7 @@ export type FieldKey =
   | "booleano:boolean"
   | "imagen:firm"
   | "grupo:group"
+  | "texto:hour"
   | "texto:dataset";
 
 export type FieldConfig = Record<string, unknown>; // libre según backend
@@ -91,6 +92,7 @@ export const emptyByField: Record<FieldKey, any> = {
   "texto:string": "",
   "texto:list": null, // o [] si multi; lo dejamos null hasta que UI defina
   "texto:date": "",
+  "texto:hour": "",
   "numerico:number": null,
   "numerico:calc": null, // calculado (lo llena el motor)
   "booleano:boolean": false,
@@ -113,6 +115,7 @@ export const normalizers: Record<FieldKey, Normalizer> = {
   "imagen:firm": normalizeFirm,
   "grupo:group": normalizeGroup,
   "texto:dataset": normalizeString,
+  "texto:hour": normalizeString,
 };
 
 export const validators: Record<FieldKey, Validator> = {
@@ -127,6 +130,7 @@ export const validators: Record<FieldKey, Validator> = {
   "imagen:firm": validateFirm,
   "grupo:group": validateGroup,
   "texto:dataset": validateString,
+  "texto:hour": validateString,
 };
 
 export const keyOf = (tipo?: string, clase?: string): FieldKey | null => {
@@ -143,6 +147,7 @@ export const keyOf = (tipo?: string, clase?: string): FieldKey | null => {
     "imagen:firm",
     "grupo:group",
     "texto:dataset",
+    "texto:hour",
   ];
   return (known as string[]).includes(k) ? (k as FieldKey) : null;
 };
