@@ -15,12 +15,12 @@ type Props = {
   page: number; // 1-based
   totalPages: number;
   connected?: boolean;
+  lastUpdatedAt?: Date; // ⬅️ NUEVO: viene de PageScaffold cuando presionas refresh
   onBack?: () => void;
   onRefresh?: () => void;
   variant: VariantH;
   onPrevPage?: () => void;
   onNextPage?: () => void;
-  /** si la provees, salta directamente a esa página (1-based) */
   onGoToPage?: (page1Based: number) => void;
   frame?: Frame;
 };
@@ -32,6 +32,7 @@ const FormHeader: React.FC<Props> = ({
   page,
   totalPages,
   connected = true,
+  lastUpdatedAt,
   onBack,
   onRefresh,
   variant,
@@ -69,13 +70,14 @@ const FormHeader: React.FC<Props> = ({
       titleSize: _titleSize,
       titleSizeCategories: _titleSizeCategories,
       dotsGap: _dotsGap,
-      titleCatSize: titleCatSize,
+      titleCatSize,
       dotsShiftUp: _dotsShiftUp,
     };
   }, [baseFrame.height, baseFrame.width, variant]);
 
   const activeIndex = Math.max(0, Math.min(totalPages - 1, page - 1));
   const showPagination = variant === "form" && totalPages > 1;
+
   return (
     <View style={{ paddingHorizontal: padX, paddingTop: padTop }}>
       <View style={{ gap: rowGap * 0.5 }}>
@@ -107,10 +109,7 @@ const FormHeader: React.FC<Props> = ({
               arrows={totalPages >= 2}
               pill
               onChange={(nextIndex) => {
-                if (onGoToPage) {
-                  onGoToPage(nextIndex + 1);
-                  return;
-                }
+                if (onGoToPage) return onGoToPage(nextIndex + 1);
                 if (nextIndex < activeIndex) onPrevPage?.();
                 else if (nextIndex > activeIndex) onNextPage?.();
               }}
@@ -133,10 +132,18 @@ const FormHeader: React.FC<Props> = ({
           />
         ) : null}
 
+        {/* estado conexión + sync (solo fuera de 'form') */}
         {variant !== "form" ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: dotsGap }}>
             <View style={{ flex: 1 }}>
-              <TimestampText date={new Date()} />
+              {/* Usa el último refresh recibido; si no hay, muestra un fallback */}
+              {lastUpdatedAt ? (
+                <TimestampText date={lastUpdatedAt} />
+              ) : (
+                <Body color="secondary" size="sm">
+                  Aún no has sincronizado ⚠️
+                </Body>
+              )}
               <View style={{ flexDirection: "row", alignItems: "center", gap: dotsGap * 0.75 }}>
                 <Body color="secondary" size="sm">
                   {connected ? "Conectado" : "Sin conexión"}
@@ -152,7 +159,6 @@ const FormHeader: React.FC<Props> = ({
             />
           </View>
         ) : null}
-        {/* estado conexión + sync */}
 
         {variant === "categories" ? (
           <>
@@ -168,7 +174,6 @@ const FormHeader: React.FC<Props> = ({
                 opacity: 1,
                 width: "90%",
                 alignSelf: "center",
-                // marginVertical: rowGap * 0,
               }}
             />
           </>

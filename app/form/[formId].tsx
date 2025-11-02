@@ -135,48 +135,112 @@ const FormRoute: React.FC = () => {
   /** Envío final directo (sin “enviar a revisión”) */
   const sendOne = useCallback(async () => {
     const ctrl = new AbortController();
+
+    // Duraciones por tipo
+    const DUR = { info: 2200, success: 1600, error: 3500 };
+
+    // Helper local: muestra y auto-oculta sin interferir con mensajes nuevos
+    const show = (
+      payload: {
+        type: "info" | "success" | "error";
+        text: string;
+        actionLabel?: string;
+        onAction?: () => void;
+      },
+      ms?: number
+    ) => {
+      const d = ms ?? DUR[payload.type] ?? 3000;
+      const key = `${payload.type}:${payload.text}`; // llave simple para evitar ocultar mensajes nuevos
+      setFooterInfo(payload);
+      setTimeout(
+        () => {
+          setFooterInfo((cur) => (cur && `${cur.type}:${cur.text}` === key ? null : cur));
+        },
+        Math.max(300, d)
+      );
+    };
+
     try {
       if (!sessionId) {
-        setFooterInfo({ type: "error", text: "No se pudo obtener la sesión." });
-        return;
-      }
-      // Para enviar directo, pedimos que el formulario esté completo
-      if (!canSendForReview) {
-        setFooterInfo({ type: "error", text: "Faltan campos requeridos para enviar." });
-        return;
-      }
-      if (!(await isOnline())) {
-        setFooterInfo({
-          type: "error",
-          text: "Sin conexión. Conéctate a Internet e inténtalo de nuevo.",
-        });
+        show({ type: "error", text: "No se pudo obtener la sesión." });
         return;
       }
 
-      setFooterLoading(true); // 🔄 loader ON
+      // Para enviar directo, el formulario debe estar listo
+      if (!canSendForReview) {
+        show({ type: "error", text: "Faltan campos requeridos para enviar." });
+        return;
+      }
+
+      // Conectividad
+      if (!(await isOnline())) {
+        show(
+          {
+            type: "error",
+            text: "Sin conexión a Internet. Revisa tu red e inténtalo nuevamente.",
+          },
+          4500
+        );
+        return;
+      }
+
+      setFooterLoading(true);
 
       // Persiste antes de construir JSON
       await saveNow();
 
       const json = await dispatch(getJSONForm({ sessionId: sessionId as string })).unwrap();
       if (!json) {
-        setFooterInfo({ type: "error", text: "No se pudo obtener el formulario." });
+        show({ type: "error", text: "No se pudo obtener el formulario." });
         return;
       }
-      console.log("Sending form entry JSON:", JSON.stringify(json, null, 2));
 
-      // 🚀 Envío real
+      // Envío real
       await sendFormEntry(json, { signal: ctrl.signal });
 
-      // Marca como enviado/sincronizado localmente
+      // Marca como sincronizado localmente
       await dispatch(setStatus({ sessionId, status: "synced" }));
 
-      // ✅ indicador de éxito y regreso a categoría
+      // Éxito + navegación (tu helper ya hace autocierre con delay)
       await showSuccessThenBack("¡Formulario enviado!");
     } catch (e: any) {
-      setFooterInfo({ type: "error", text: e?.message ?? "No se pudo enviar el formulario." });
+      // Clasificación de error
+      const rawStatus = e?.status ?? e?.response?.status ?? 0;
+      const status = Number(rawStatus) || 0;
+      const msg = String(e?.message ?? "");
+
+      const isNetError =
+        status === 0 ||
+        msg.includes("Network request failed") ||
+        msg.includes("TypeError: NetworkError") ||
+        msg.includes("Failed to fetch");
+
+      if (isNetError) {
+        show(
+          {
+            type: "error",
+            text: "Parece que no hay conexión. Verifica tu red e intenta de nuevo.",
+          },
+          4500
+        );
+      } else if (status >= 500) {
+        show({
+          type: "error",
+          text: `El servidor presentó un problema (código ${status}). Intenta más tarde.`,
+        });
+      } else if (status >= 400) {
+        show({
+          type: "error",
+          text: `Solicitud inválida (código ${status}). Revisa los datos e intenta nuevamente.`,
+        });
+      } else {
+        show({
+          type: "error",
+          text: "No se pudo enviar el formulario. Intenta nuevamente.",
+        });
+      }
     } finally {
-      setFooterLoading(false); // 🔄 loader OFF
+      setFooterLoading(false);
     }
   }, [canSendForReview, dispatch, saveNow, sessionId, showSuccessThenBack]);
 
