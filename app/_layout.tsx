@@ -80,7 +80,9 @@ const RootLayout = () => {
     if (!rootNavState?.key) return;
     if (redirectedRef.current) return;
 
-    const target = hasToken ? "/" : "/qr";
+    const isTest = process.env.EXPO_PUBLIC_TEST === "true";
+
+    const target = isTest ? "/test" : hasToken ? "/" : "/qr";
 
     // ✅ Marca como ya redirigido aunque estés en target,
     // para que al navegar luego NO te empuje de regreso.

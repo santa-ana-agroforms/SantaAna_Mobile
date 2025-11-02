@@ -1,50 +1,135 @@
-# Welcome to your Expo app 👋
+# 🌾 Santa Ana Mobile (React Native + Expo)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicación móvil del **trabajo de graduación grupal “Recopilación, visualización y análisis de formularios adaptables en campos de acción agrícola”**, desarrollada para el **Ingenio Santa Ana**.  
 
-## Get started
+Permite la **recolección de datos en campo** mediante formularios dinámicos, con soporte **offline**, validaciones locales y sincronización automática cuando se restablece la conexión.  
 
-1. Install dependencies
+Desarrollada con **React Native (Expo SDK 53)** bajo principios de **Design Thinking** y metodología **ágil Scrum**, priorizando accesibilidad, usabilidad y eficiencia operativa en entornos rurales.
 
-   ```bash
-   npm install
-   ```
+---
 
-2. Start the app
+## ✨ Características clave
 
-   ```bash
-   npx expo start
-   ```
+### 🧾 Formularios dinámicos
+- Renderizado automático a partir de esquemas JSON enviados por la plataforma web.
+- Soporte para campos de texto, numéricos, listas, selección múltiple, fechas, firmas, campos calculados y grupos repetibles.
 
-In the output, you'll find options to open the app in a
+### 📶 Operación offline
+- Almacenamiento local con **SQLite (Expo SQLite)** y sincronización diferida.
+- Persistencia de sesiones y formularios incompletos mediante **Redux Persist** y **AsyncStorage/MMKV**.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### 🔐 Autenticación y seguridad
+- Acceso mediante código QR o credenciales.
+- Tokens almacenados de forma segura con **Expo Secure Store**.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### 📤 Sincronización y exportación
+- Sincronización automática al reconectarse.
 
-## Get a fresh project
+### 🖥️ Interfaz centrada en el usuario
+- Diseño responsivo, legible y accesible (WCAG 2.1).
+- Interfaz animada con **Reanimated 3**, **NativeWind (TailwindCSS)** y **styled-components**.
+- Soporte táctil extendido, vibraciones hápticas y modo claro/oscuro automático.
 
-When you're ready, run:
+---
 
+## 🧩 Stack tecnológico
+
+| Categoría | Tecnologías |
+|------------|-------------|
+| **Framework** | React Native 0.79 + Expo SDK 53 |
+| **UI / UX** | NativeWind (TailwindCSS), styled-components, Expo Linear Gradient, Expo Image |
+| **Estado global** | Redux Toolkit + Redux Persist |
+| **Networking / API** | Axios + TanStack Query |
+| **Persistencia local** | Expo SQLite, AsyncStorage, MMKV |
+| **Navegación** | Expo Router + React Navigation (Stack / Tabs) |
+| **Validaciones** | Formik + Yup |
+| **Plugins Expo** | Camera, Secure Store, Notifications, Background Task, Splash Screen, Font |
+| **Linting / formato** | ESLint + Prettier + Tailwind plugin |
+| **Build / Deploy** | EAS Build + Runtime Updates |
+
+---
+
+## 🚀 Instalación y ejecución
+
+### 1️⃣ Clonar el repositorio
 ```bash
-npm run reset-project
+git clone https://github.com/santa-ana-agroforms/SantaAna_Mobile.git
+cd SantaAna_Mobile
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2️⃣ Instalar dependencias
+```bash
+yarn install
+# o
+npm install
+```
 
-## Learn more
+### 3️⃣ Crear el archivo `.env`  
+Configura las variables de entorno necesarias (endpoints de la API, credenciales, etc.).
 
-To learn more about developing your project with Expo, look at the following resources:
+### 4️⃣ Ejecutar en modo desarrollo
+```bash
+yarn start
+```
+Escanea el código QR con la app **Expo Go** o un **Dev Client** personalizado.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 5️⃣ Ejecutar en dispositivo o emulador
+```bash
+yarn android
+# o
+yarn ios
+```
 
-## Join the community
+---
 
-Join our community of developers creating universal apps.
+## 🧭 Estructura principal del proyecto
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```
+src/
+ ├─ api/              # Cliente Axios y endpoints REST
+ ├─ components/       # Átomos, moléculas y organismos (Atomic Design)
+ ├─ hooks/            # Hooks reutilizables
+ ├─ navigation/       # Rutas y navegación
+ ├─ screens/          # Pantallas principales (Inicio, Formularios, Perfil, etc.)
+ ├─ store/            # Redux Toolkit slices
+ ├─ utils/            # Utilidades y helpers
+ └─ assets/           # Iconos, imágenes y fuentes
+```
+
+---
+
+## 📱 Publicación
+
+La aplicación se distribuye mediante **EAS Build** y puede compilarse en formato:
+- **Android APK / AAB** para despliegue interno o Play Store.
+- **iOS IPA** (requiere cuenta de Apple Developer).
+
+---
+
+## 🧠 Enfoque metodológico
+
+Desarrollada bajo un enfoque de **Design Thinking** y metodología **ágil Scrum**, validada con usuarios reales en entornos agrícolas.  
+Incluye fases de análisis, prototipado (Figma), implementación (React Native + Expo) y pruebas de usabilidad (eye-tracking Tobii y validaciones de campo).
+
+---
+
+## 👨‍💻 Autor
+
+**Diego Alexander Hernández Silvestre**  
+Universidad del Valle de Guatemala – Facultad de Ingeniería  
+Trabajo de Graduación 2025 · Módulo móvil del trabajo de graduación grupal.
+
+GitHub: [santa-ana-agroforms](https://github.com/santa-ana-agroforms)
+
+---
+
+## 📄 Licencia
+
+Este proyecto se distribuye bajo la licencia **MIT**.  
+© 2025 Ingenio Santa Ana · Universidad del Valle de Guatemala
+
+---
+
+## 🌐 Enlaces
+
+- **Documentación backend (API)**: [https://santaana-api-latest.onrender.com/docs]

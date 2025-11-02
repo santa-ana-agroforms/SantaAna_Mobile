@@ -5,11 +5,11 @@ export type FieldKey =
   | "texto:date"
   | "numerico:number"
   | "numerico:calc"
+  | "texto:calc"
+  | "calc:calc"
   | "booleano:boolean"
   | "imagen:firm"
   | "grupo:group"
-  | "calc:calc"
-  | "texto:calc"
   | "texto:dataset";
 
 export type FieldConfig = Record<string, unknown>; // libre según backend
@@ -107,12 +107,12 @@ export const normalizers: Record<FieldKey, Normalizer> = {
   "texto:date": normalizeDate,
   "numerico:number": normalizeNumber,
   "numerico:calc": normalizeCalc,
+  "texto:calc": normalizeCalc,
+  "calc:calc": normalizeCalc,
   "booleano:boolean": normalizeBoolean,
   "imagen:firm": normalizeFirm,
   "grupo:group": normalizeGroup,
   "texto:dataset": normalizeString,
-  "calc:calc": normalizeCalc,
-  "texto:calc": normalizeCalc,
 };
 
 export const validators: Record<FieldKey, Validator> = {
@@ -121,12 +121,12 @@ export const validators: Record<FieldKey, Validator> = {
   "texto:date": validateDate,
   "numerico:number": validateNumber,
   "numerico:calc": validateCalc,
+  "texto:calc": validateCalc,
+  "calc:calc": validateCalc,
   "booleano:boolean": validateBoolean,
   "imagen:firm": validateFirm,
   "grupo:group": validateGroup,
   "texto:dataset": validateString,
-  "calc:calc": validateCalc,
-  "texto:calc": validateCalc,
 };
 
 export const keyOf = (tipo?: string, clase?: string): FieldKey | null => {
@@ -137,12 +137,12 @@ export const keyOf = (tipo?: string, clase?: string): FieldKey | null => {
     "texto:date",
     "numerico:number",
     "numerico:calc",
+    "texto:calc",
+    "calc:calc",
     "booleano:boolean",
     "imagen:firm",
     "grupo:group",
     "texto:dataset",
-    "calc:calc",
-    "texto:calc",
   ];
   return (known as string[]).includes(k) ? (k as FieldKey) : null;
 };

@@ -10,7 +10,12 @@
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
-      "infoPlist": { "UIBackgroundModes": ["processing"] }
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "processing",
+          "processing"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +24,12 @@
       },
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "pan",
-      "permissions": ["android.permission.CAMERA", "android.permission.POST_NOTIFICATIONS"],
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
       "package": "com.anonymous.SantaAna_Mobile"
     },
     "web": {
@@ -39,8 +49,12 @@
         }
       ],
       "expo-font",
-      ["expo-secure-store"],
-      ["expo-sqlite"],
+      [
+        "expo-secure-store"
+      ],
+      [
+        "expo-sqlite"
+      ],
       [
         "expo-build-properties",
         {
@@ -64,6 +78,12 @@
       "eas": {
         "projectId": "9baf2afc-64d5-4bd7-95ff-67560099c705"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9baf2afc-64d5-4bd7-95ff-67560099c705"
     }
   }
 }

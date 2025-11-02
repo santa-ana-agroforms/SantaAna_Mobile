@@ -3,6 +3,7 @@ import { getApiBase, makeClient, setApiBase, setTokens } from "@/api/client";
 import { fetchAndSaveForms } from "@/api/forms";
 import Input from "@/components/atoms/Input";
 import Label from "@/components/atoms/Label";
+import NoticeBar, { NoticeKind } from "@/components/atoms/NoticeBar";
 import { Body } from "@/components/atoms/Typography";
 import QrIntroSection from "@/components/molecules/QrIntroSection";
 import { colors } from "@/theme/tokens";
@@ -13,7 +14,6 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   Image,
@@ -30,15 +30,17 @@ import type { QrPayload } from "../auth/qrTypes";
 import { isQrPayload } from "../auth/qrTypes";
 
 type Props = {
-  endpoint?: string; // QR endpoint
+  endpoint?: string;
   baseUrl?: string;
   autoSync?: boolean;
-  credsEndpoint?: string; // endpoint credenciales
+  credsEndpoint?: string;
   usernameFieldName?: "username" | "email" | "nombre_usuario";
 };
 
 type Frame = { width: number; height: number };
 type Mode = "qr" | "creds";
+
+type NoticeState = { kind: NoticeKind; text: string; autoHideMs?: number } | null;
 
 const QrLoginOnboarding: React.FC<Props> = ({
   endpoint = "/auth/qr/login",
@@ -47,14 +49,14 @@ const QrLoginOnboarding: React.FC<Props> = ({
   credsEndpoint = "/auth/login",
   usernameFieldName = "nombre_usuario",
 }) => {
-  // Frames base
+  // Frames
   const { width, height } = useWindowDimensions();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const referenceFrame: Frame = { width, height: height - insets.top - insets.bottom };
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
 
-  // Escalas (todas desde minSide, sin clamp)
+  // Escalas
   const baseRem = minSide * 0.042;
   const pad = minSide * 0.04;
   const titleSize = baseRem * 3.0;
@@ -66,18 +68,16 @@ const QrLoginOnboarding: React.FC<Props> = ({
   const pillRadius = minSide * 0.03;
   const footerHeight = minSide * 0.08;
 
-  // Estado
+  // Estado UI
   const [, setModalOpen] = useState(false);
   const [apiUrlInput, setApiUrlInput] = useState<string>("");
   const [statusText, setStatusText] = useState<string | null>(null);
   const [me, setMe] = useState<AuthUser | null>(null);
   const [mode, setMode] = useState<Mode>("qr");
   const [isCredsLoading, setIsCredsLoading] = useState(false);
+  const [notice, setNotice] = useState<NoticeState>(null);
 
-  // Altura del área de contenido (depende del modo, sin clamp)
   const contentAreaHeight = mode === "qr" ? minSide * 0.72 : minSide * 0.6;
-
-  // Tamaño del botón QR (no excede el alto disponible)
   const innerPad = pad;
   const scannerMax = Math.max(0, contentAreaHeight - innerPad * 2);
   const qrSize = Math.min(scannerMax, minSide * (mode === "qr" ? 0.38 : 0.3));
@@ -92,7 +92,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
   const syncAbortRef = useRef<AbortController | null>(null);
 
   // Animations
-  const segAnim = useRef(new Animated.Value(0)).current; // 1 = qr (default), 0 = creds
+  const segAnim = useRef(new Animated.Value(0)).current; // 0 = qr izq, 1 = creds der
   const qrOpacity = useRef(new Animated.Value(1)).current;
   const credsOpacity = useRef(new Animated.Value(0)).current;
 
@@ -110,8 +110,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
 
   const animateMode = useCallback(
     (next: Mode) => {
-      // Antes: const to = next === "qr" ? 1 : 0;
-      const to = next === "qr" ? 0 : 1; // qr -> izquierda, creds -> derecha
+      const to = next === "qr" ? 0 : 1;
       setMode(next);
 
       Animated.timing(segAnim, {
@@ -145,6 +144,10 @@ const QrLoginOnboarding: React.FC<Props> = ({
     })();
   }, [baseUrl]);
 
+  const showNotice = useCallback((kind: NoticeKind, text: string, autoHideMs?: number) => {
+    setNotice({ kind, text, autoHideMs });
+  }, []);
+
   const initialSyncWithStatus = useCallback(async () => {
     setStatusText("Sincronizando formularios…");
 
@@ -160,13 +163,14 @@ const QrLoginOnboarding: React.FC<Props> = ({
     } catch (syncErr: any) {
       if (!controller.signal.aborted) {
         console.warn("[SYNC] fallo en fetchAndSaveForms:", syncErr);
-        Alert.alert(
-          "Advertencia",
-          "El inicio de sesión fue correcto, pero falló la sincronización inicial. Podrás sincronizar más tarde desde el Home."
+        // Antes: Alert.alert(...)
+        showNotice(
+          "warning",
+          "Inicio de sesión correcto, pero la sincronización inicial falló. Puedes sincronizar luego desde el Home."
         );
       }
     }
-  }, []);
+  }, [showNotice]);
 
   const doLogin = useCallback(
     async (p: QrPayload) => {
@@ -175,7 +179,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
 
       const net = await NetInfo.fetch();
       if (!net.isConnected) {
-        Alert.alert("Sin conexión", "Se requiere internet para el primer login.");
+        showNotice("error", "Se requiere internet para el primer login.");
         setStatusText(null);
         loginInFlightRef.current = false;
         return;
@@ -205,23 +209,21 @@ const QrLoginOnboarding: React.FC<Props> = ({
         }
 
         setStatusText("¡Listo!");
-        requestAnimationFrame(() => router.push("/")); // asegura que la UI haya pintado
+        requestAnimationFrame(() => router.replace("/"));
       } catch (e: any) {
         const msg =
           e?.response?.data?.message || e?.message || "No se pudo completar el login por QR.";
-        Alert.alert("Error de login", msg);
+        showNotice("error", msg);
         console.error("[LOGIN] error:", e);
       } finally {
         loginInFlightRef.current = false;
         setTimeout(() => setStatusText(null), 1200);
       }
     },
-    [apiUrlInput, baseUrl, endpoint, autoSync, initialSyncWithStatus, router]
+    [apiUrlInput, baseUrl, endpoint, autoSync, initialSyncWithStatus, router, showNotice]
   );
 
-  // ───────────────────────────────
-  // QR: parse + login (tu flujo)
-  // ───────────────────────────────
+  // QR: parse + login
   const parseAndLogin = useCallback(
     async (raw: string) => {
       if (scanBusyRef.current) return;
@@ -233,22 +235,18 @@ const QrLoginOnboarding: React.FC<Props> = ({
         await doLogin(obj);
       } catch (e: any) {
         setStatusText(null);
-        Alert.alert("QR inválido", e?.message ?? "El QR escaneado no es JSON.");
+        showNotice("error", e?.message ?? "El QR escaneado no es válido.");
       } finally {
         setModalOpen(false);
         scanBusyRef.current = false;
       }
     },
-    [doLogin]
+    [doLogin, showNotice]
   );
 
-  // ───────────────────────────────
   // Credenciales + sync
-  // ───────────────────────────────
-
   useEffect(() => () => syncAbortRef.current?.abort(), []);
 
-  // Helpers UI
   const PrimaryButton: React.FC<{
     title: string;
     onPress: () => void;
@@ -280,7 +278,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
     if (loginInFlightRef.current || isCredsLoading) return;
 
     if (!userField.trim() || !password) {
-      Alert.alert("Campos incompletos", "Ingresa tus credenciales.");
+      showNotice("warning", "Completa usuario y contraseña.");
       return;
     }
 
@@ -291,7 +289,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
     try {
       const net = await NetInfo.fetch();
       if (!net.isConnected) {
-        Alert.alert("Sin conexión", "Se requiere internet para el primer login.");
+        showNotice("error", "Se requiere internet para el primer login.");
         setStatusText(null);
         return;
       }
@@ -325,7 +323,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
       }
 
       setStatusText("¡Listo!");
-      requestAnimationFrame(() => router.push("/")); // asegura que la UI haya pintado
+      requestAnimationFrame(() => router.replace("/")); // también puedes usar replace aquí
     } catch (e: any) {
       const status = e?.response?.status;
       const apiMsg = e?.response?.data?.message;
@@ -333,7 +331,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
         status === 401
           ? "Credenciales inválidas."
           : apiMsg || e?.message || "No se pudo completar el inicio de sesión.";
-      Alert.alert("Error de login", msg);
+      showNotice("error", msg);
       console.error("[LOGIN][CREDS] error:", e);
     } finally {
       loginInFlightRef.current = false;
@@ -350,12 +348,12 @@ const QrLoginOnboarding: React.FC<Props> = ({
     usernameFieldName,
     autoSync,
     initialSyncWithStatus,
-    router,
+    showNotice,
   ]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
-      {/* Overlay superior “brand wash” */}
+      {/* Overlay superior */}
       <View
         style={{
           position: "absolute",
@@ -367,7 +365,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
         }}
       />
 
-      {/* Footer fijo (fuera del KAV) */}
+      {/* Footer fijo */}
       <View
         style={{
           position: "absolute",
@@ -392,7 +390,6 @@ const QrLoginOnboarding: React.FC<Props> = ({
         style={{ flex: 1 }}
         behavior={Platform.select({ ios: "padding", android: undefined })}
       >
-        {/* Contenedor principal con padding inferior para no tapar por footer */}
         <View style={{ flex: 1, paddingHorizontal: pad, paddingBottom: footerHeight + pad }}>
           {/* Título */}
           <Body
@@ -416,7 +413,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
             }}
           />
 
-          {/* Card principal */}
+          {/* Card */}
           <View
             style={{
               width: "100%",
@@ -449,7 +446,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
                   <Animated.View
                     style={{
                       position: "absolute",
-                      left: pillLeft, // sigue igual
+                      left: pillLeft,
                       width: pillWidth,
                       height: segHeight * 1.1,
                       backgroundColor: colors.primary600,
@@ -459,7 +456,6 @@ const QrLoginOnboarding: React.FC<Props> = ({
                 )}
 
                 <View style={{ flexDirection: "row", height: segHeight, width: "100%" }}>
-                  {/* ⬅️ QR ahora a la IZQUIERDA */}
                   <Pressable
                     onPress={() => animateMode("qr")}
                     style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
@@ -474,8 +470,6 @@ const QrLoginOnboarding: React.FC<Props> = ({
                       QR
                     </Text>
                   </Pressable>
-
-                  {/* ➡️ Credenciales a la DERECHA */}
                   <Pressable
                     onPress={() => animateMode("creds")}
                     style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
@@ -494,7 +488,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
               </View>
             </View>
 
-            {/* Área estable para contenido (QR / Creds superpuestos) */}
+            {/* Área estable para QR/Creds */}
             <View
               style={{
                 width: "100%",
@@ -515,7 +509,6 @@ const QrLoginOnboarding: React.FC<Props> = ({
                   opacity: credsOpacity,
                 }}
               >
-                {/* Usuario / Correo */}
                 <Label
                   text={
                     usernameFieldName === "email"
@@ -531,7 +524,6 @@ const QrLoginOnboarding: React.FC<Props> = ({
                   placeholder={usernameFieldName === "email" ? "tu@correo.com" : "Usuario"}
                   autoCapitalize="none"
                 />
-                {/* Contraseña con toggle dentro del input */}
                 <View style={{ marginTop: minSide * 0.03 }}>
                   <Label text="Contraseña" />
                   <View style={{ position: "relative" }}>
@@ -555,7 +547,6 @@ const QrLoginOnboarding: React.FC<Props> = ({
                   loading={isCredsLoading}
                   disabled={!userField.trim() || !password}
                 />
-                {/* <FieldHint text={statusText} /> */}
               </Animated.View>
 
               {/* QR */}
@@ -572,7 +563,6 @@ const QrLoginOnboarding: React.FC<Props> = ({
               >
                 <QrIntroSection
                   referenceFrame={referenceFrame}
-                  // variant="embedded"
                   title="Ingreso con QR"
                   subtitle="Toca para escanear"
                   scannerSize={qrSize}
@@ -587,6 +577,18 @@ const QrLoginOnboarding: React.FC<Props> = ({
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Banner inferior */}
+      {notice ? (
+        <NoticeBar
+          kind={notice.kind}
+          text={notice.text}
+          placement="top"
+          topInsetPx={insets.top + minSide * 0.02}
+          autoHideMs={notice.autoHideMs ?? (notice.kind === "success" ? 2200 : undefined)}
+          onClose={() => setNotice(null)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };
