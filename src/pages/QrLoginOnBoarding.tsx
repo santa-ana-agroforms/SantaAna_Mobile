@@ -451,6 +451,7 @@ const QrLoginOnboarding: React.FC<Props> = ({
     initialSyncWithStatus,
     showNoticeKey,
     showNoticeText,
+    router,
   ]);
 
   return (
