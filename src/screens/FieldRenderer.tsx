@@ -26,6 +26,7 @@ import {
 } from "@/forms/state/formSessionSlice";
 import { AppDispatch } from "@/store";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import NumericInput from "@/components/molecules/NumberInput";
 
 type Frame = { width: number; height: number };
 
@@ -246,22 +247,13 @@ const FieldRenderer: React.FC<Props> = ({
   );
 
   const renderNumber = () => (
-    <Input
+    <NumericInput
       frame={referenceFrame}
       label={label}
       required={campo.requerido}
-      value={value?.toString?.() ?? ""}
-      keyboardType="numeric"
-      onChangeText={(t) => {
-        const sanitized = t.replace(/[^0-9.,-]/g, "");
-        onCommit(sanitized);
-      }}
-      onCommitValue={(finalVal) => {
-        // Si quedó vacío, manda null; si no, mantiene el string sanitizado
-        const v = (finalVal ?? "").toString().trim();
-        onCommit(v.length ? v : null);
-      }}
       placeholder={campo.ayuda ? campo.ayuda : "0"}
+      value={value} // Pasas el valor tal cual viene de Redux
+      onChange={(v) => onCommit(v)} // Pasas la función de guardado
     />
   );
 
