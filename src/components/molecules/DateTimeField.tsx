@@ -55,7 +55,7 @@ const DateTimeField: React.FC<Props> = ({
       panelGap: minSide * 0.012,
       btnH: minSide * 0.06,
       maxPanelH: minSide * 0.7,
-      minHeight: baseFrame.height * 0.06,
+      minHeight: baseFrame.height * 0.072,
     };
   }, [frame, ww, hh]);
 

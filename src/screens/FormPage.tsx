@@ -1,7 +1,7 @@
 import { Body } from "@/components/atoms/Typography";
 import React, { useMemo } from "react";
 import { View } from "react-native";
-import FieldRenderer from "./FieldRenderer";
+import FieldRenderer, { getFieldKind } from "./FieldRenderer";
 
 // ⬇️ Redux
 import { selectCurrentSessionId, setFieldValue } from "@/forms/state/formSessionSlice";
@@ -49,11 +49,11 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
   const dispatch = useAppDispatch();
   const sessionId = useAppSelector(selectCurrentSessionId);
 
-  // Ordena campos una sola vez por 'sequence'
   const fields = useMemo(
     () => [...(page?.campos || [])].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)),
     [page?.campos]
   );
+
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
   const padBottom = clamp(minSide * 0.02, 12, 24);
   const headerGap = clamp(minSide * 0.012, 8, 16);
@@ -73,22 +73,39 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
 
       <View style={{ height: headerGap }} />
 
-      {fields.map((f) => (
-        <View key={f.id_campo} style={{ marginBottom: fieldGap }}>
-          <FieldRenderer
-            // key={f.id_campo}
-            campo={f}
-            formName={formName}
-            referenceFrame={referenceFrame}
-            contentFrame={contentFrame}
-            // Interceptar (opcional) además de persistir en slice:
-            onChangeValue={(name, value) =>
-              sessionId && dispatch(setFieldValue({ sessionId, nombreInterno: name, value }))
-            }
-            mode={mode}
-          />
-        </View>
-      ))}
+      {/* 👇 CONTENEDOR FLEX WRAP */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
+        {fields.map((f) => {
+          const kind = getFieldKind(f);
+
+          // 2. Decidimos qué campos fuerzan ancho completo (100%)
+          // Por lo general: Grupos, Firmas, y Datasets complejos se ven mejor grandes.
+          const isFullWidth = kind === "group" || kind === "firm" || kind === "dataset";
+          // 3. Calculamos el ancho: 100% o ~48% (para dejar hueco al medio)
+          const width = isFullWidth ? "100%" : "48%";
+
+          return (
+            <View
+              key={f.id_campo}
+              style={{
+                width,
+                marginBottom: fieldGap,
+              }}
+            >
+              <FieldRenderer
+                campo={f}
+                formName={formName}
+                referenceFrame={referenceFrame}
+                contentFrame={contentFrame}
+                onChangeValue={(name, value) =>
+                  sessionId && dispatch(setFieldValue({ sessionId, nombreInterno: name, value }))
+                }
+                mode={mode}
+              />
+            </View>
+          );
+        })}
+      </View>
 
       <View style={{ height: padBottom * 0 }} />
     </View>

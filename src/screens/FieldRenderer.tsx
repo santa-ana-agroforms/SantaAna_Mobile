@@ -40,7 +40,7 @@ type Props = {
   mode?: "edit" | "review" | "view";
 };
 
-const getFieldKind = (c: { tipo?: string; clase?: string }) => {
+export const getFieldKind = (c: { tipo?: string; clase?: string }) => {
   const t = String(c?.tipo || "").toLowerCase();
   const k = String(c?.clase || "").toLowerCase();
   if (k === "group" || t === "grupo" || t === "group") return "group";
