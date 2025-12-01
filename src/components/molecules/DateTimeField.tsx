@@ -1,8 +1,8 @@
 import { Body } from "@/components/atoms/Typography";
 import { colors } from "@/theme/tokens";
-import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Platform, Pressable, Text, useWindowDimensions, View } from "react-native";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import React, { useMemo, useState } from "react";
+import { Modal, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import Label from "../atoms/Label";
 
 type Frame = { width: number; height: number };
@@ -10,19 +10,14 @@ type Frame = { width: number; height: number };
 type Props = {
   mode: "date" | "time";
   value?: Date | null;
-  onChange?: (d: Date | null) => void;
+  onChange: (d: Date | null) => void;
   label?: string;
   required?: boolean;
   placeholder?: string;
-  minDate?: Date;
-  maxDate?: Date;
+  frame?: Frame; // Frame para calcular escalas
   disabled?: boolean;
-  error?: string;
-  frame?: Frame;
   clearable?: boolean;
 };
-
-const isValidDate = (d: unknown): d is Date => d instanceof Date && !isNaN(d.getTime());
 
 const DateTimeField: React.FC<Props> = ({
   mode,
@@ -31,244 +26,174 @@ const DateTimeField: React.FC<Props> = ({
   label,
   required,
   placeholder,
-  minDate,
-  maxDate,
-  disabled = false,
-  error,
   frame,
+  disabled = false,
   clearable = true,
 }) => {
+  // 1. Lógica Responsive (dims) restaurada y optimizada
   const { width: ww, height: hh } = useWindowDimensions();
-  const isIOS = Platform.OS === "ios";
 
   const dims = useMemo(() => {
-    const baseFrame = frame ?? { width: ww, height: hh };
-    const minSide = Math.min(baseFrame.width, baseFrame.height);
+    // Si viene frame usamos ese, si no, dimensiones de ventana
+    const baseW = frame?.width ?? ww;
+    const baseH = frame?.height ?? hh;
+    const minSide = Math.min(baseW, baseH);
+
+    // Factores de escala (ajustados ligeramente para consistencia)
     return {
       radius: minSide * 0.018,
       padH: minSide * 0.03,
-      padV: minSide * 0.01,
-      font: minSide * 0.042,
-      errorMt: minSide * 0.006,
-      panelPad: minSide * 0.02,
-      panelRadius: minSide * 0.02,
-      panelGap: minSide * 0.012,
-      btnH: minSide * 0.06,
-      maxPanelH: minSide * 0.7,
-      minHeight: baseFrame.height * 0.072,
+      padV: minSide * 0.03, // Unificado vertical
+      font: minSide * 0.05,
+      btnH: minSide * 0.09, // Botones iOS un poco más altos para tacto
+      gap: minSide * 0.02,
     };
   }, [frame, ww, hh]);
 
-  const [open, setOpen] = useState(false);
-  const safeValue = isValidDate(value) ? value : null;
-  const [temp, setTemp] = useState<Date>(safeValue ?? new Date());
-  const [optimistic, setOptimistic] = useState<Date | null>(null);
+  // 2. Estado simplificado (Solo lo necesario para controlar UI)
+  const [show, setShow] = useState(false);
+  const [iosTemp, setIosTemp] = useState<Date>(new Date());
 
-  const justClosedAtRef = useRef(0);
+  const isIOS = Platform.OS === "ios";
+  const displayValue = value instanceof Date && !isNaN(value.getTime()) ? value : null;
 
-  useEffect(() => {
-    if (isValidDate(safeValue)) {
-      setTemp(safeValue);
-      setOptimistic(null); // llegó valor oficial → limpia optimista
-    }
-  }, [safeValue, value, mode]);
-
-  const borderColor = disabled ? colors.neutral200 : error ? colors.danger600 : colors.border;
-
-  const dateFmt = useMemo(
-    () => new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "2-digit", year: "numeric" }),
-    []
-  );
-  const timeFmt = useMemo(
-    () => new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }),
-    []
-  );
-
-  // Mostrar: SIEMPRE usa safeValue u optimista (no mostrar 'temp')
-  const display = safeValue ?? optimistic;
-  const text = display
+  // Formateador visual
+  const displayText = displayValue
     ? mode === "date"
-      ? dateFmt.format(display)
-      : timeFmt.format(display)
-    : (placeholder ?? (mode === "date" ? "Seleccionar fecha" : "Seleccionar hora"));
+      ? displayValue.toLocaleDateString("es-ES", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : displayValue.toLocaleTimeString("es-ES", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+    : placeholder || "Seleccionar";
 
   const handleOpen = () => {
     if (disabled) return;
-    const now = Date.now();
-    if (now - justClosedAtRef.current < 250) return;
-    const next = safeValue ?? optimistic ?? new Date();
-    setTemp(next);
-    setOpen(true);
+    setIosTemp(displayValue || new Date());
+    setShow(true);
   };
 
-  const handleClose = () => {
-    setOpen(false);
-    justClosedAtRef.current = Date.now();
-  };
-
-  // Commit optimista (no mostramos temp; solo sirve para el picker)
-  const notify = (d: Date | null) => {
-    setOptimistic(d);
-    if (onChange) onChange(d);
-    handleClose();
-  };
-
-  // Android: selecciona / cancela
-  const handleAndroidChange = (e: DateTimePickerEvent, d?: Date) => {
-    if (e.type === "set" && d) {
-      notify(d);
-    } else {
-      handleClose();
+  const onAndroidChange = (e: DateTimePickerEvent, selectedDate?: Date) => {
+    setShow(false);
+    if (e.type === "set" && selectedDate) {
+      onChange(selectedDate);
     }
-  };
-
-  // iOS: mueve spinner (preview)
-  const handleIOSChange = (_e: DateTimePickerEvent, d?: Date) => {
-    if (d) setTemp(d);
   };
 
   return (
     <View style={{ width: "100%" }}>
       <Label frame={frame} text={label} required={required} />
+
       <Pressable
         onPress={handleOpen}
-        disabled={disabled}
         style={{
-          borderColor,
           borderWidth: 1,
+          borderColor: disabled ? colors.neutral200 : colors.border,
           borderRadius: dims.radius,
           backgroundColor: disabled ? "#F2F2F2" : colors.neutral0,
           paddingHorizontal: dims.padH,
           paddingVertical: dims.padV,
-          minHeight: dims.minHeight,
           justifyContent: "center",
         }}
-        accessibilityRole="button"
-        accessibilityLabel={label ?? (mode === "date" ? "Seleccionar fecha" : "Seleccionar hora")}
       >
         <Text
-          testID="DateTimeFieldText"
-          allowFontScaling={false}
           style={{
             fontSize: dims.font,
-            color: display ? colors.textPrimary : colors.textSecondary,
-            includeFontPadding: false,
+            color: displayValue ? colors.textPrimary : colors.textSecondary,
           }}
         >
-          {text}
+          {displayText}
         </Text>
       </Pressable>
 
-      {clearable && !!display && !disabled && (
+      {/* Botón limpiar responsive */}
+      {clearable && displayValue && !disabled && (
         <Pressable
-          onPress={() => {
-            setOptimistic(null);
-            notify(null);
-          }}
-          style={{
-            alignSelf: "flex-end",
-            marginTop: dims.errorMt,
-            paddingHorizontal: 6,
-            paddingVertical: 2,
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Limpiar fecha/hora"
+          onPress={() => onChange(null)}
+          style={{ alignSelf: "flex-end", marginTop: dims.gap / 2, padding: 4 }}
         >
-          <Body color="secondary" size="xs" style={{ color: colors.danger600 }}>
+          <Body size="xs" style={{ color: colors.danger600 }}>
             Limpiar
           </Body>
         </Pressable>
       )}
 
-      {error && (
-        <Body size="xs" style={{ color: colors.danger600, marginTop: dims.errorMt }}>
-          {error}
-        </Body>
-      )}
-
-      {/* Android: diálogo nativo simple */}
-      {open && !isIOS && (
+      {/* Selector Nativo Android */}
+      {!isIOS && show && (
         <DateTimePicker
-          value={temp}
+          value={displayValue || new Date()}
           mode={mode}
-          display={mode === "date" ? "calendar" : "clock"}
-          onChange={handleAndroidChange}
-          minimumDate={minDate}
-          maximumDate={maxDate}
+          display="default"
+          onChange={onAndroidChange}
         />
       )}
 
-      {/* iOS: modal con confirmación */}
+      {/* Modal iOS Responsive */}
       {isIOS && (
-        <Modal visible={open} transparent animationType="fade" onRequestClose={handleClose}>
+        <Modal
+          visible={show}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShow(false)}
+        >
           <View
             style={{
               flex: 1,
-              backgroundColor: "rgba(0,0,0,0.25)",
-              alignItems: "center",
+              backgroundColor: "rgba(0,0,0,0.3)",
               justifyContent: "center",
-              padding: dims.panelPad,
+              padding: dims.padH,
             }}
           >
             <View
-              style={{
-                width: "100%",
-                borderRadius: dims.panelRadius,
-                backgroundColor: colors.neutral0,
-                padding: dims.panelPad,
-                gap: dims.panelGap,
-              }}
+              style={{ backgroundColor: "white", borderRadius: dims.radius, padding: dims.padH }}
             >
-              <Body weight="semibold">
-                {mode === "date" ? "Selecciona una fecha" : "Selecciona una hora"}
+              <Body weight="semibold" style={{ marginBottom: dims.gap, textAlign: "center" }}>
+                {mode === "date" ? "Selecciona fecha" : "Selecciona hora"}
               </Body>
 
-              <View
-                style={{
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: dims.radius,
-                  padding: 6,
-                  alignItems: "center",
-                }}
-              >
+              <View style={{ height: 150, width: "100%", justifyContent: "center" }}>
                 <DateTimePicker
-                  value={temp}
+                  value={iosTemp}
                   mode={mode}
                   display="spinner"
-                  onChange={handleIOSChange}
-                  minimumDate={minDate}
-                  maximumDate={maxDate}
-                  style={{ width: "100%", maxHeight: dims.maxPanelH }}
+                  onChange={(_, d) => d && setIosTemp(d)}
+                  style={{ flex: 1 }}
                 />
               </View>
 
-              <View style={{ flexDirection: "row", gap: dims.panelGap }}>
+              <View style={{ flexDirection: "row", gap: dims.gap, marginTop: dims.gap }}>
                 <Pressable
-                  onPress={handleClose}
+                  onPress={() => setShow(false)}
                   style={{
                     flex: 1,
                     height: dims.btnH,
                     borderRadius: dims.radius,
                     borderWidth: 1,
                     borderColor: colors.border,
-                    alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: colors.neutral0,
+                    alignItems: "center",
                   }}
                 >
                   <Body>Cancelar</Body>
                 </Pressable>
 
                 <Pressable
-                  onPress={() => notify(temp)}
+                  onPress={() => {
+                    onChange(iosTemp);
+                    setShow(false);
+                  }}
                   style={{
                     flex: 1,
                     height: dims.btnH,
                     borderRadius: dims.radius,
-                    alignItems: "center",
-                    justifyContent: "center",
                     backgroundColor: colors.primary600,
+                    justifyContent: "center",
+                    alignItems: "center",
                   }}
                 >
                   <Body color="inverse" weight="semibold">

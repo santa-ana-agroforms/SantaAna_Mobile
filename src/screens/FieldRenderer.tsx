@@ -289,7 +289,7 @@ const FieldRenderer: React.FC<Props> = ({
         items={listItems}
         value={value}
         onChange={(v) => onCommit(v)}
-        placeholder="Selecciona una opción…"
+        placeholder="Seleccionar…"
         allowDeselect
         showNoneOption
       />
@@ -304,115 +304,46 @@ const FieldRenderer: React.FC<Props> = ({
         value={value}
         onChange={(v) => onCommit(v)}
         frame={referenceFrame}
-        placeholder="Selecciona un valor…"
+        placeholder="Seleccionar…"
       />
     </>
   );
   // ────────────────────────── Date / Hour ──────────────────────────
   const renderDate = (kind: "date" | "hour") => {
-    const toUiDate = (raw?: unknown): Date | null => {
-      if (raw == null) return null;
+    const toUiDate = (raw: any): Date | null => {
+      if (!raw) return null;
+      if (raw instanceof Date) return raw;
+      const s = String(raw).trim();
 
-      if (DEBUG_FR) {
-        console.log("[FR] toUiDate.in", {
-          kind,
-          type: typeof raw,
-          isDate: raw instanceof Date,
-          val: raw,
-        });
+      if (kind === "hour" && s.includes(":")) {
+        const [h, m] = s.split(":").map(Number);
+        return new Date(2000, 0, 1, h, m);
       }
 
-      // 1) Date válido
-      if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
-
-      // 2) epoch number
-      if (typeof raw === "number") {
-        const d = new Date(raw);
-        return isNaN(d.getTime()) ? null : d;
+      if (kind === "date" && s.includes("-")) {
+        const [y, m, d] = s.split("-").map(Number);
+        return new Date(y, m - 1, d);
       }
 
-      // 3) strings
-      if (typeof raw === "string") {
-        const s = raw.trim();
-
-        if (kind === "date") {
-          // YYYY-MM-DD
-          const m1 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-          if (m1) {
-            const y = Number(m1[1]),
-              m = Number(m1[2]),
-              d = Number(m1[3]);
-            const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
-            if (!isNaN(dt.getTime())) return dt;
-          }
-          // ISO
-          const iso = new Date(s);
-          if (!isNaN(iso.getTime())) return iso;
-        } else {
-          // kind === "hour"
-          // HH:mm o HH:mm:ss
-          const m2 = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(s);
-          if (m2) {
-            const H = Number(m2[1]),
-              M = Number(m2[2]),
-              S = Number(m2[3] ?? 0);
-            const dt = new Date(2000, 0, 1, H, M, S, 0);
-            if (!isNaN(dt.getTime())) return dt;
-          }
-          // ISO con hora
-          const iso = new Date(s);
-          if (!isNaN(iso.getTime())) return iso;
-        }
-      }
-
-      return null;
+      const d = new Date(raw);
+      return isNaN(d.getTime()) ? null : d;
     };
 
-    const toStoreStr = (d: Date | null): string | null => {
-      if (!d) return null;
-      if (kind === "date") {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        return `${y}-${m}-${day}`;
-      } else {
-        const H = String(d.getHours()).padStart(2, "0");
-        const M = String(d.getMinutes()).padStart(2, "0");
-        return `${H}:${M}`; // estandariza a HH:mm
+    const toStoreStr = (d: Date): string => {
+      if (kind === "hour") {
+        return d.toLocaleTimeString("es-GT", { hour: "2-digit", minute: "2-digit", hour12: false });
       }
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
     };
-
-    const uiValue: Date | null = toUiDate(value);
-
-    if (DEBUG_FR) {
-      console.log("[FR] renderDate()", {
-        field: campo.nombre_interno,
-        kind,
-        rawType: value instanceof Date ? "Date" : value === null ? "null" : typeof value,
-        rawVal: value,
-        uiValueType: uiValue ? "Date" : "null",
-        uiISO: uiValue?.toISOString?.(),
-        uiLocal: uiValue?.toString?.(),
-      });
-    }
 
     return (
       <DateTimeField
         mode={kind === "date" ? "date" : "time"}
-        value={uiValue}
-        onChange={(d) => {
-          const out = toStoreStr(d);
-          if (DEBUG_FR) {
-            console.log("[FR] onChange from DateTimeField", {
-              field: campo.nombre_interno,
-              kind,
-              pickedISO: d?.toISOString?.(),
-              pickedLocal: d?.toString?.(),
-              willStore: out,
-            });
-          }
-          onCommit(out);
-        }}
+        value={toUiDate(value)}
+        onChange={(d) => onCommit(d ? toStoreStr(d) : null)}
         label={label}
         required={campo.requerido}
         placeholder={kind === "date" ? "Seleccionar fecha" : "Seleccionar hora"}

@@ -80,7 +80,7 @@ const Label: React.FC<Props> = ({
       {help && !isGroup ? (
         <Body
           color="secondary"
-          size="sm"
+          size="xs"
           style={[{ marginTop: dims.helpTop }, textAlign ?? undefined]}
           frame={frame}
         >

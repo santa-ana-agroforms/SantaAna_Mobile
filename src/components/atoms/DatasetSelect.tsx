@@ -229,7 +229,7 @@ const DatasetSelect: React.FC<Props> = ({
           >
             <Body
               frame={baseFrame}
-              size="md"
+              size="sm"
               style={[{ color: selected ? colors.textPrimary : colors.textSecondary }, textStyle]}
             >
               {headerLabel}
