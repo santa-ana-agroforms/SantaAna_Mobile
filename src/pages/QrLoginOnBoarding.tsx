@@ -10,6 +10,7 @@ import { colors } from "@/theme/tokens";
 import type { AuthUser } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import NetInfo from "@react-native-community/netinfo";
+import * as Device from "expo-device";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -282,7 +283,22 @@ const QrLoginOnboarding: React.FC<Props> = ({
         else if (baseUrl) await setApiBase(baseUrl);
 
         const api = await makeClient();
-        const resp = await api.post(endpoint, { sid: p.sid, nonce: p.nonce, sig: p.sig });
+        const device_info = {
+          brand: Device.brand,
+          modelName: Device.modelName,
+          osName: Device.osName,
+          osVersion: Device.osVersion,
+          type: Device.deviceType,
+          name: Device.deviceName || "",
+          modelId: Device.modelId || "",
+          productName: Device.productName || "",
+        };
+        const resp = await api.post(endpoint, {
+          sid: p.sid,
+          nonce: p.nonce,
+          sig: p.sig,
+          device_info,
+        });
         const { access_token: accessToken, refreshToken, user } = resp.data ?? {};
         if (!accessToken) throw new Error("no_access_token");
 
@@ -400,7 +416,20 @@ const QrLoginOnboarding: React.FC<Props> = ({
       else if (baseUrl) await setApiBase(baseUrl);
 
       const api = await makeClient();
-      const payload: Record<string, string> = { password };
+      const device_info = {
+        brand: Device.brand,
+        modelName: Device.modelName,
+        osName: Device.osName,
+        osVersion: Device.osVersion,
+        type: Device.deviceType,
+        name: Device.deviceName || "",
+        modelId: Device.modelId || "",
+        productName: Device.productName || "",
+      };
+      const payload: Record<string, string> = {
+        password,
+        device_info: JSON.stringify(device_info),
+      };
       payload[usernameFieldName] = userField.trim();
 
       const resp = await api.post(credsEndpoint, payload, {

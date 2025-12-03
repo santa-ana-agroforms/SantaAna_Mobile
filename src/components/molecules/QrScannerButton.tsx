@@ -21,6 +21,7 @@ import { getApiBase, makeClient, setApiBase, setTokens } from "@/api/client";
 import { DB } from "@/db/sqlite";
 import { pullUserAndForms } from "@/sync/pull";
 import type { AuthUser } from "@/types";
+import * as Device from "expo-device";
 
 type QrPayload = { sid: string; nonce: string; sig: string };
 const isQrPayload = (x: unknown): x is QrPayload =>
@@ -112,11 +113,22 @@ const QrLoginScanner: React.FC<Props> = ({
         if (baseUrl) await setApiBase(baseUrl);
         const api = await makeClient();
 
+        const device_info = {
+          brand: Device.brand,
+          modelName: Device.modelName,
+          osName: Device.osName,
+          osVersion: Device.osVersion,
+          type: Device.deviceType,
+          name: Device.deviceName || "",
+          modelId: Device.modelId || "",
+          productName: Device.productName || "",
+        };
         // Esperamos: { access_token, refreshToken?, user? }
         const resp = await api.post(endpoint, {
           sid: p.sid,
           nonce: p.nonce,
           sig: p.sig,
+          device_info,
         });
         const { access_token: accessToken, refreshToken, user } = resp.data ?? {};
         if (!accessToken) throw new Error("No se recibió accessToken del servidor.");

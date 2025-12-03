@@ -1,6 +1,7 @@
 // =============================================================
 // src/auth/useAuth.ts – Hook de autenticación (QR o credenciales)
 // =============================================================
+import * as Device from "expo-device";
 import { useCallback, useState } from "react";
 import { clearTokens, makeClient, setApiBase, setTokens } from "../api/client";
 import type { AuthUser, JwtTokens } from "../types";
@@ -15,7 +16,17 @@ export function useAuth() {
       try {
         await setApiBase(baseUrl);
         const api = await makeClient();
-        const resp = await api.post("/auth/login", { username, password });
+        const device_info = {
+          brand: Device.brand,
+          modelName: Device.modelName,
+          osName: Device.osName,
+          osVersion: Device.osVersion,
+          type: Device.deviceType,
+          name: Device.deviceName || "",
+          modelId: Device.modelId || "",
+          productName: Device.productName || "",
+        };
+        const resp = await api.post("/auth/login", { username, password, device_info });
         const { accessToken, refreshToken, user } = resp.data as JwtTokens & {
           user: AuthUser;
         };
