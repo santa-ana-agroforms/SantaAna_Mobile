@@ -1,4 +1,3 @@
-// app/index.tsx
 import { clearTokens } from "@/api/client";
 import { syncAllDatasets } from "@/api/datasets";
 import { fetchAndSaveForms } from "@/api/forms";
@@ -17,29 +16,32 @@ import { findReadyToSubmitReminder } from "@/db/form-entries";
 import { DB, planAvailabilityNotifications, tryMarkNotificationSent } from "@/db/sqlite";
 import { cancelAllNotifications, notifyNow, scheduleTodayAt } from "@/notifications";
 import { onActiveWithInternet } from "@/utils/appstate";
-import { isOnline, onReconnectOnce } from "@/utils/network";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 
-// ✅ Reusar decorators
+// Imports de Red y Utils
+import { getLastUpdatedDate, setLastUpdatedNow } from "@/utils/lastUpdated"; // ⬅️ Importante
+import NetInfo from "@react-native-community/netinfo";
+
 import { useInstanceSelectorState } from "@/forms/state/useInstanceSelectorState";
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const Home: React.FC = () => {
   const [data, setData] = useState<FormCategoryGroup[]>([]);
-  const [initialized, setInitialized] = useState(false); // ya hice 1ra lectura local
-  const [loadingRemote, setLoadingRemote] = useState(false); // estoy trayendo del server
+  const [initialized, setInitialized] = useState(false);
+  const [loadingRemote, setLoadingRemote] = useState(false);
+
+  // Estado visual de conexión y Fecha de Sincronización
+  const [isOffline, setIsOffline] = useState(false);
+  const [lastSyncDate, setLastSyncDate] = useState<Date | null>(null);
+
   const isRefreshingRef = useRef(false);
-
-  // ← usaremos computeDecorators para obtener submittedCount por formId
   const { computeDecorators } = useInstanceSelectorState();
-
-  // Mapa global de enviados por formulario (formId → submittedCount)
   const [submittedMap, setSubmittedMap] = useState<Record<string, number>>({});
 
-  // Lee lo que haya en SQLite y calcula submittedMap con decorators
+  // Carga Local
   const loadLocal = useCallback(async () => {
     try {
       await DB.logDbCounts?.();
@@ -48,7 +50,6 @@ const Home: React.FC = () => {
     const safeGroups = Array.isArray(groups) ? groups : [];
     setData(safeGroups);
 
-    // Construir lista de formIds y calcular submittedCount usando decorators
     const allFormIds = safeGroups.flatMap((g) => g.formularios?.map((f) => f.id_formulario) ?? []);
     if (allFormIds.length > 0) {
       const acc: Record<string, number> = {};
@@ -66,52 +67,57 @@ const Home: React.FC = () => {
     } else {
       setSubmittedMap({});
     }
-
     return safeGroups;
   }, [computeDecorators]);
 
-  // Revalidación remota segura
+  // Sincronización con el Servidor
   const revalidateFromServer = useCallback(async () => {
-    console.log("[home/revalidate] iniciando revalidación desde server...");
     if (isRefreshingRef.current) return;
 
-    const online = await isOnline();
+    const state = await NetInfo.fetch();
+    const online = state.isConnected && (state.isInternetReachable ?? true);
+
+    setIsOffline(!online);
+
     if (!online) {
-      onReconnectOnce(() => revalidateFromServer());
+      console.log("[home] Sin conexión. Abortando sync.");
       setLoadingRemote(false);
       return;
     }
 
     isRefreshingRef.current = true;
-    setLoadingRemote(true); // 🔥 enciende skeleton
-
-    console.log("\n\n[home/revalidate] online, revalidando...");
+    setLoadingRemote(true);
+    console.log("[home] Online detectado. Sincronizando...");
 
     try {
-      await fetchAndSaveForms(); // /forms/tree -> SQLite
-      console.log("\n\n[home/revalidate] forms revalidados");
-      await pullAndCacheGroups(); // /groups -> SQLite
-      await syncAllDatasets(); // otros datasets
+      await fetchAndSaveForms();
+      await pullAndCacheGroups();
+      await syncAllDatasets();
+
+      // ✅ ÉXITO: Actualizamos la fecha global Y el estado local
+      setLastUpdatedNow();
+      setLastSyncDate(new Date());
     } catch (e: any) {
       console.log("[home/revalidate] fallo:", e?.message ?? e);
     } finally {
       try {
-        await loadLocal(); // repinta desde DB y recalcula submittedMap
+        await loadLocal();
       } finally {
         setLoadingRemote(false);
         isRefreshingRef.current = false;
       }
     }
 
-    // Notificaciones
+    // Tareas de fondo
     await cancelAllNotifications();
     const reminder = await findReadyToSubmitReminder(1);
     const today = new Date();
     const dayOfWeek = today.getDay();
-    if (reminder && dayOfWeek >= 1 && dayOfWeek <= 5) {
-      await scheduleTodayAt(16, 0, reminder.title, reminder.body);
-    } else if (reminder && dayOfWeek === 6) {
-      await scheduleTodayAt(14, 0, reminder.title, reminder.body);
+    if (reminder) {
+      const hour = dayOfWeek === 6 ? 14 : 16;
+      if ((dayOfWeek >= 1 && dayOfWeek <= 5) || dayOfWeek === 6) {
+        await scheduleTodayAt(hour, 0, reminder.title, reminder.body);
+      }
     }
 
     try {
@@ -121,40 +127,65 @@ const Home: React.FC = () => {
         if (ok) await notifyNow(p.title, p.body);
       }
     } catch (e) {
-      console.log("[home/revalidate] error notificando disponibilidad:", e);
+      console.log(e);
     }
 
     ensureDailyMaintenanceRegistered();
     runMidnightCatchUpIfNeeded();
   }, [loadLocal]);
 
-  // 1) Montaje: asegúrate de marcar initialized SIEMPRE
+  // Listener de Red
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      const online = !!state.isConnected && (state.isInternetReachable ?? true);
+      setIsOffline(!online);
+
+      if (online && !isRefreshingRef.current) {
+        console.log("[Listener] Internet volvió. Ejecutando sync...");
+        revalidateFromServer();
+      }
+    });
+    return () => unsubscribe();
+  }, [revalidateFromServer]);
+
+  // Inicialización: Cargar local y fecha guardada
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // 1. Cargar fecha guardada previamente
+      const savedDate = getLastUpdatedDate();
+      if (savedDate) setLastSyncDate(savedDate);
+
+      // 2. Cargar datos locales y Sync inmediato
       try {
         await loadLocal();
+        if (cancelled) return;
+        setInitialized(true);
+        await revalidateFromServer();
       } catch (e) {
-        console.log("[home/mount] loadLocal error:", (e as any)?.message ?? e);
-      } finally {
-        if (!cancelled) setInitialized(true);
+        console.log(e);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [loadLocal]);
+  }, [loadLocal, revalidateFromServer]);
 
-  // 2) Enfoque pantalla: recarga local
+  // Focus effect
   useFocusEffect(
     useCallback(() => {
-      loadLocal();
-      // revalidateFromServer(); // si quisieras revalidar al enfocar
+      if (initialized) {
+        // Al volver a la pantalla, refrescamos la fecha desde storage por si acaso
+        const savedDate = getLastUpdatedDate();
+        if (savedDate) setLastSyncDate(savedDate);
+
+        loadLocal();
+        revalidateFromServer();
+      }
       return () => {};
-    }, [loadLocal])
+    }, [loadLocal, revalidateFromServer, initialized])
   );
 
-  // 3) App vuelve activa con internet → revalidar
   useEffect(() => {
     return onActiveWithInternet(() => revalidateFromServer());
   }, [revalidateFromServer]);
@@ -172,92 +203,92 @@ const Home: React.FC = () => {
   }, [revalidateFromServer]);
 
   return (
-    <PageScaffold title="Mis formularios" variant="categories" onRefresh={handleRefresh}>
+    <PageScaffold
+      title="Mis formularios"
+      variant="categories"
+      onRefresh={handleRefresh}
+      // 👇 Pasamos la fecha actualizada al Scaffold
+      lastSyncProp={lastSyncDate}
+    >
       {({ contentFrame, referenceFrame }) => {
         const gap = clamp(contentFrame.width * 0.045, 12, 24);
         const columns = 2;
         const cardWidth = Math.floor((contentFrame.width - gap * (columns - 1)) / columns);
 
-        // 1) Skeleton inicial (antes de 1ra lectura local)
-        if (!initialized) {
-          const skeletonRows = 3;
-          const skeletonItems = Array.from({ length: skeletonRows * columns });
-          return (
-            <>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
-                {skeletonItems.map((_, i) => (
-                  <View key={i} style={{ width: cardWidth }}>
-                    <SkeletonLoader preset="card" frame={referenceFrame} />
-                    <View style={{ height: referenceFrame.height * 0.012 }} />
-                    <SkeletonLoader preset="title" frame={referenceFrame} />
-                  </View>
-                ))}
-              </View>
-              <View style={{ alignItems: "flex-end", marginTop: gap }}>
-                <SkeletonLoader preset="button" frame={referenceFrame} width="40%" />
-              </View>
-              <View style={{ alignItems: "flex-end", marginTop: gap }}>
-                <SkeletonLoader preset="button" frame={referenceFrame} width="40%" />
-              </View>
-            </>
-          );
-        }
-
-        // 2) Skeleton mientras refresca remoto
-        if (loadingRemote) {
-          const minRows = 3;
-          const skeletonCount = Math.max(data.length, minRows * columns);
-          const skeletonItems = Array.from({ length: skeletonCount });
-
-          return (
-            <>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
-                {skeletonItems.map((_, i) => (
-                  <View key={i} style={{ width: cardWidth }}>
-                    <SkeletonLoader preset="card" frame={referenceFrame} />
-                    <View style={{ height: referenceFrame.height * 0.012 }} />
-                    <SkeletonLoader preset="title" frame={referenceFrame} />
-                  </View>
-                ))}
-              </View>
-              <View style={{ alignItems: "flex-end", marginTop: gap }}>
-                <SkeletonLoader preset="button" frame={referenceFrame} width="40%" />
-              </View>
-            </>
-          );
-        }
-
-        // 3) Contenido normal
         return (
           <>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
-              {data.map((item) => {
-                const totalForms = item.formularios.length;
+            {isOffline && (
+              <View
+                style={{
+                  width: "100%",
+                  backgroundColor: "#333",
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  marginBottom: gap,
+                  borderRadius: 8,
+                  alignItems: "center",
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                <View
+                  style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#ff4444" }}
+                />
+                <Text style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>
+                  Sin conexión • Datos locales
+                </Text>
+              </View>
+            )}
 
-                // ✔ “Completado” si el form tiene ≥1 envío (submittedCount > 0)
-                const completedForms = item.formularios.reduce((acc, f) => {
-                  const count = submittedMap[f.id_formulario] ?? 0;
-                  return acc + (count > 0 ? 1 : 0);
-                }, 0);
+            {!initialized ? (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <View key={i} style={{ width: cardWidth }}>
+                    <SkeletonLoader preset="card" frame={referenceFrame} />
+                    <View style={{ height: 8 }} />
+                    <SkeletonLoader preset="title" frame={referenceFrame} />
+                  </View>
+                ))}
+              </View>
+            ) : loadingRemote ? (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
+                {Array.from({ length: Math.max(data.length, 6) }).map((_, i) => (
+                  <View key={i} style={{ width: cardWidth }}>
+                    <SkeletonLoader preset="card" frame={referenceFrame} />
+                    <View style={{ height: 8 }} />
+                    <SkeletonLoader preset="title" frame={referenceFrame} />
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
+                {data.map((item) => {
+                  const totalForms = item.formularios.length;
+                  const completedForms = item.formularios.reduce((acc, f) => {
+                    const count = submittedMap[f.id_formulario] ?? 0;
+                    return acc + (count > 0 ? 1 : 0);
+                  }, 0);
 
-                return (
-                  <CategoryCard
-                    key={item.nombre_categoria}
-                    name={item.nombre_categoria}
-                    totalForms={totalForms}
-                    completedForms={completedForms}
-                    onPress={() => {
-                      router.push({
-                        pathname: "/forms/[category]",
-                        params: { category: item.nombre_categoria },
-                      });
-                    }}
-                    referenceFrame={referenceFrame}
-                    style={{ width: cardWidth }}
-                  />
-                );
-              })}
-            </View>
+                  return (
+                    <CategoryCard
+                      key={item.nombre_categoria}
+                      name={item.nombre_categoria}
+                      totalForms={totalForms}
+                      completedForms={completedForms}
+                      onPress={() => {
+                        router.push({
+                          pathname: "/forms/[category]",
+                          params: { category: item.nombre_categoria },
+                        });
+                      }}
+                      referenceFrame={referenceFrame}
+                      style={{ width: cardWidth }}
+                    />
+                  );
+                })}
+              </View>
+            )}
 
             <View style={{ alignItems: "flex-end", marginTop: gap }}>
               <Button title="Cerrar sesión" size="sm" onPress={handleLogout} />
