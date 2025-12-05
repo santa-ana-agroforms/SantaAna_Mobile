@@ -122,6 +122,10 @@ const QrLoginScanner: React.FC<Props> = ({
           name: Device.deviceName || "",
           modelId: Device.modelId || "",
           productName: Device.productName || "",
+          // Poner la hora de Guatemala (UTC-6)
+          dateTime: new Date(
+            new Date().toLocaleString("en-US", { timeZone: "America/Guatemala" })
+          ).toISOString(),
         };
         // Esperamos: { access_token, refreshToken?, user? }
         const resp = await api.post(endpoint, {

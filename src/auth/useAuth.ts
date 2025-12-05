@@ -6,7 +6,35 @@ import { useCallback, useState } from "react";
 import { clearTokens, makeClient, setApiBase, setTokens } from "../api/client";
 import type { AuthUser, JwtTokens } from "../types";
 
-export function useAuth() {
+const getGuatemalaDateTimeIsoString = () => {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Guatemala",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    const parts = formatter
+      .formatToParts(new Date())
+      .reduce<Record<string, string>>((acc, part) => {
+        if (part.type !== "literal") acc[part.type] = part.value;
+        return acc;
+      }, {});
+    const { year, month, day, hour, minute, second } = parts;
+    if (year && month && day && hour && minute && second) {
+      return `${year}-${month}-${day}T${hour}:${minute}:${second}-06:00`;
+    }
+  } catch (err) {
+    console.warn("[DATE] Guatemala timezone formatting failed:", err);
+  }
+  return new Date().toISOString();
+};
+
+export const useAuth = () => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -25,6 +53,8 @@ export function useAuth() {
           name: Device.deviceName || "",
           modelId: Device.modelId || "",
           productName: Device.productName || "",
+          // Poner la hora de Guatemala (UTC-6)
+          dateTime: getGuatemalaDateTimeIsoString(),
         };
         const resp = await api.post("/auth/login", { username, password, device_info });
         const { accessToken, refreshToken, user } = resp.data as JwtTokens & {
@@ -81,4 +111,4 @@ export function useAuth() {
   }, []);
 
   return { user, loading, loginWithCredentials, loginWithQr, logout };
-}
+};

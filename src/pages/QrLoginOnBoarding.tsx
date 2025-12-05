@@ -123,6 +123,34 @@ const translateApiErrorToNotice = (
   return { kind: "error", messageKey: ctx === "qr" ? "qr.login_failed" : "generic.error" };
 };
 
+const getGuatemalaDateTimeIsoString = () => {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Guatemala",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    const parts = formatter
+      .formatToParts(new Date())
+      .reduce<Record<string, string>>((acc, part) => {
+        if (part.type !== "literal") acc[part.type] = part.value;
+        return acc;
+      }, {});
+    const { year, month, day, hour, minute, second } = parts;
+    if (year && month && day && hour && minute && second) {
+      return `${year}-${month}-${day}T${hour}:${minute}:${second}-06:00`;
+    }
+  } catch (err) {
+    console.warn("[DATE] Guatemala timezone formatting failed:", err);
+  }
+  return new Date().toISOString();
+};
+
 const QrLoginOnboarding: React.FC<Props> = ({
   endpoint = "/auth/qr/login",
   baseUrl,
@@ -292,7 +320,10 @@ const QrLoginOnboarding: React.FC<Props> = ({
           name: Device.deviceName || "",
           modelId: Device.modelId || "",
           productName: Device.productName || "",
+          // Poner la hora de Guatemala (UTC-6)
+          dateTime: getGuatemalaDateTimeIsoString(),
         };
+        console.log("[LOGIN][QR] payload:", getGuatemalaDateTimeIsoString(), p);
         const resp = await api.post(endpoint, {
           sid: p.sid,
           nonce: p.nonce,
@@ -425,13 +456,16 @@ const QrLoginOnboarding: React.FC<Props> = ({
         name: Device.deviceName || "",
         modelId: Device.modelId || "",
         productName: Device.productName || "",
+        // Poner la hora de Guatemala (UTC-6)
+        dateTime: getGuatemalaDateTimeIsoString(),
       };
-      const payload: Record<string, string> = {
+      const payload: Record<string, string | object> = {
         password,
-        device_info: JSON.stringify(device_info),
+        device_info,
       };
       payload[usernameFieldName] = userField.trim();
 
+      console.log("[LOGIN][CREDS] payload:", getGuatemalaDateTimeIsoString(), payload);
       const resp = await api.post(credsEndpoint, payload, {
         headers: { "Content-Type": "application/json", Accept: "application/json" },
       });
