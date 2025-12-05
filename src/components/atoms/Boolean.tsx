@@ -39,6 +39,7 @@ const Boolean: React.FC<Props> = ({
   showAccentBars = true,
 }) => {
   // Fallback si no pasan frame
+  console.log("value 🌥️🌥️🌥️🌥️", value);
   const { width: ww, height: hh } = useWindowDimensions();
   const baseFrame = frame ?? { width: ww, height: hh };
 

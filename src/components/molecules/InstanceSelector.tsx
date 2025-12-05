@@ -271,7 +271,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
   banner = null,
   busy = false,
   busyText,
-  deleteButton = false,
+  // deleteButton = false,
 }) => {
   const minSide = Math.min(referenceFrame.width, referenceFrame.height);
   const whenOf = (e: EntryPreview) => e.updatedAt ?? e.createdAt ?? 0;
@@ -746,6 +746,22 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                           </Text>
                         </TouchableOpacity>
 
+                        {/* ELIMINAR ANTES DE ENVIAR PARA EVITAR CLICKS ERRONEOS */}
+                        <TouchableOpacity
+                          onPress={() => handleDelete(item)}
+                          disabled={!!submittingId || busy}
+                          style={[
+                            btnBase,
+                            {
+                              backgroundColor: "#FDECEA",
+                              borderColor: colors.border,
+                              opacity: !!submittingId || busy ? 0.7 : 1,
+                            },
+                          ]}
+                        >
+                          <Text style={{ fontWeight: "800", color: "#C0392B" }}>Eliminar</Text>
+                        </TouchableOpacity>
+
                         <TouchableOpacity
                           onPress={handleStandardSubmit}
                           disabled={!!submittingId || busy}
@@ -757,6 +773,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                               flexDirection: "row",
                               alignItems: "center",
                               gap: 8,
+                              marginLeft: "auto", // <--- ESTO LO MUEVE A LA DERECHA
                             },
                           ]}
                         >
@@ -768,24 +785,6 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                             </Text>
                           )}
                         </TouchableOpacity>
-
-                        {/* 👇 nuevo: eliminar */}
-                        {deleteButton && (
-                          <TouchableOpacity
-                            onPress={() => handleDelete(item)}
-                            disabled={!!submittingId || busy}
-                            style={[
-                              btnBase,
-                              {
-                                backgroundColor: "#FDECEA",
-                                borderColor: colors.border,
-                                opacity: !!submittingId || busy ? 0.7 : 1,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontWeight: "800", color: "#C0392B" }}>Eliminar</Text>
-                          </TouchableOpacity>
-                        )}
                       </>
                     );
                   }

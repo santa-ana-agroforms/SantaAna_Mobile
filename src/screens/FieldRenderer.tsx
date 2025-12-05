@@ -262,7 +262,7 @@ const FieldRenderer: React.FC<Props> = ({
       {LabelBlock}
       <Boolean
         frame={referenceFrame}
-        value={!!value}
+        value={value}
         onChange={(v) => onCommit(v)}
         yesLabel="Sí"
         noLabel="No"
