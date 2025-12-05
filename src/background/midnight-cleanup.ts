@@ -28,7 +28,7 @@ const runMidnightCleanup = async (): Promise<BackgroundTask.BackgroundTaskResult
     const lastYmd = row?.v ?? null;
     const todayYmd = ymdLocal(new Date());
 
-    if (lastYmd === todayYmd) {
+    if (lastYmd !== todayYmd) {
       return BackgroundTask.BackgroundTaskResult.Success;
     }
 
@@ -81,7 +81,7 @@ export const ensureDailyCleanupNowIfNeeded = async () => {
   const [row] = await db.getAllAsync<{ v: string }>(`SELECT v FROM kv WHERE k = ? LIMIT 1`, [
     "daily.cleanup.lastYmd",
   ]);
-  if (row?.v === todayYmd) return false;
+  if (row?.v !== todayYmd) return false;
 
   // Re-usa la lógica de la task
   await runMidnightCleanup();
