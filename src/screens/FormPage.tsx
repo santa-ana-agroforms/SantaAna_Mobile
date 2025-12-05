@@ -1,17 +1,28 @@
+import { Ionicons } from "@expo/vector-icons"; // Asegúrate de tener esto instalado: npx expo install @expo/vector-icons
+import React, { useMemo, useState } from "react";
+import {
+  LayoutAnimation,
+  Platform,
+  StyleSheet,
+  TouchableOpacity,
+  UIManager,
+  View,
+} from "react-native";
+
+// ⬇️ Componentes e Imports Locales
 import { Body } from "@/components/atoms/Typography";
-import React, { useMemo } from "react";
-import { View } from "react-native";
 import FieldRenderer, { getFieldKind } from "./FieldRenderer";
 
 // ⬇️ Redux
 import { selectCurrentSessionId, setFieldValue } from "@/forms/state/formSessionSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
+// ⬇️ Tipos (Mantenemos los que definiste)
 export type Campo = {
   id_campo: string;
   sequence: number;
   tipo: "texto" | "booleano" | "numerico" | "imagen" | "group";
-  clase: string; // string | text | list | dataset | hour | date | boolean | number | calc | firm
+  clase: string;
   nombre_interno: string;
   etiqueta: string;
   ayuda?: string;
@@ -38,16 +49,24 @@ type Frame = { width: number; height: number };
 type Props = {
   page: Pagina;
   formName?: string;
-  referenceFrame: Frame; // escala tipográfica/geométrica
-  contentFrame: Frame; // ancho/alto útil del body
+  referenceFrame: Frame;
+  contentFrame: Frame;
   mode?: "edit" | "review" | "view";
 };
+
+// ⬇️ Habilitar LayoutAnimation para Android
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, contentFrame, mode }) => {
   const dispatch = useAppDispatch();
   const sessionId = useAppSelector(selectCurrentSessionId);
+
+  // Estado para controlar columnas (true = Grid/2 columnas, false = Lista/1 columna)
+  const [isGridMode, setIsGridMode] = useState(true);
 
   const fields = useMemo(
     () => [...(page?.campos || [])].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)),
@@ -59,30 +78,54 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
   const headerGap = clamp(minSide * 0.012, 8, 16);
   const fieldGap = clamp(minSide * 0.016, 10, 22);
 
+  // Función para alternar el layout con animación
+  const toggleLayout = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsGridMode(!isGridMode);
+  };
+
   return (
     <View style={{ paddingRight: 0, paddingBottom: padBottom * 1.1 }}>
-      <Body weight="bold" size="xl">
-        {page?.nombre}
-      </Body>
+      {/* ⬇️ HEADER + BOTÓN DE VISTA */}
+      <View style={styles.headerContainer}>
+        <View style={{ flex: 1, paddingRight: 10 }}>
+          <Body weight="bold" size="xl">
+            {page?.nombre}
+          </Body>
+          {page?.descripcion ? (
+            <Body frame={referenceFrame} color="secondary" size="sm" style={{ marginTop: 4 }}>
+              {page.descripcion}
+            </Body>
+          ) : null}
+        </View>
 
-      {page?.descripcion ? (
-        <Body frame={referenceFrame} color="secondary" size="sm">
-          {page.descripcion}
-        </Body>
-      ) : null}
+        {/* Botón estético para cambiar vista */}
+        <TouchableOpacity onPress={toggleLayout} activeOpacity={0.7} style={styles.toggleButton}>
+          <Ionicons name={isGridMode ? "grid-outline" : "list-outline"} size={20} color="#555" />
+        </TouchableOpacity>
+      </View>
 
       <View style={{ height: headerGap }} />
 
-      {/* 👇 CONTENEDOR FLEX WRAP */}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
+      {/* ⬇️ CONTENEDOR DE CAMPOS */}
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+        }}
+      >
         {fields.map((f) => {
           const kind = getFieldKind(f);
 
-          // 2. Decidimos qué campos fuerzan ancho completo (100%)
-          // Por lo general: Grupos, Firmas, y Datasets complejos se ven mejor grandes.
-          const isFullWidth = kind === "group" || kind === "firm" || kind === "dataset";
-          // 3. Calculamos el ancho: 100% o ~48% (para dejar hueco al medio)
-          const width = isFullWidth ? "100%" : "48%";
+          // Campos que SIEMPRE deben ocupar todo el ancho por su naturaleza
+          const isNaturallyFullWidth = kind === "group" || kind === "firm";
+
+          // Lógica de ancho:
+          // 1. Si el modo Grid está apagado -> 100%
+          // 2. Si el campo es grande por naturaleza -> 100%
+          // 3. Si no, respetamos el grid de 2 columnas -> 48%
+          const width = !isGridMode || isNaturallyFullWidth ? "100%" : "48%";
 
           return (
             <View
@@ -111,5 +154,27 @@ const FormPageView: React.FC<Props> = ({ page, formName, referenceFrame, content
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  headerContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  toggleButton: {
+    backgroundColor: "#F2F4F7", // Gris suave y limpio
+    padding: 8,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    // Sombra muy sutil para darle profundidad
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+});
 
 export default FormPageView;
