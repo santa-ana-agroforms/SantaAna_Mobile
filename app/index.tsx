@@ -218,18 +218,24 @@ const Home: React.FC = () => {
       const already = await TaskManager.isTaskRegisteredAsync(MIDNIGHT_CLEAN_TASK);
       console.log("##################### Midnight cleanup task already registered?", already);
       if (!already) {
-        await registerMidnightCleanup();
-      } else {
-        await unregisterMidnightCleanup();
+        // await registerMidnightCleanup(); agregar en un timeout
+        console.log("##################### Registering midnight cleanup task...");
+        const timeout = setTimeout(async () => {
+          await registerMidnightCleanup();
+        }, 3000);
+        return () => clearTimeout(timeout);
       }
 
       // Fallback por si el SO nunca disparó la tarea
-      const logout = await ensureDailyCleanupNowIfNeeded();
-      if (logout) {
-        router.replace("/qr");
-      }
-    };
+      const timeout2 = setTimeout(async () => {
+        const logout = await ensureDailyCleanupNowIfNeeded();
+        if (logout) {
+          router.replace("/qr");
+        }
+      }, 3000);
 
+      return () => clearTimeout(timeout2);
+    };
     void init();
 
     return () => {
