@@ -87,6 +87,11 @@ export const pullAndCacheGroups = async (opts?: { signal?: AbortSignal }) => {
 };
 
 export const pullAndCacheGroupById = async (id_grupo: string, opts?: { signal?: AbortSignal }) => {
+  // Verificación simple y mensaje corto
+  if (!(await isOnline())) {
+    throw new Error("Sin conexión: Grupo no descargado.");
+  }
+
   const remote = await getGroupByIdRemote(id_grupo, opts);
   if (remote) await saveGroupLocal(remote);
   return remote;

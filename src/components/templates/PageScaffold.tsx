@@ -1,12 +1,13 @@
-// components/templates/PageScaffold.tsx
 import FormHeader from "@/components/molecules/FormHeader";
 import { colors } from "@/theme/tokens";
-import { getLastUpdatedDate, setLastUpdatedNow } from "@/utils/lastUpdated"; // ⬅️ nuevo
-import { isOnline } from "@/utils/network";
+import { getLastUpdatedDate, setLastUpdatedNow } from "@/utils/lastUpdated";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { LayoutChangeEvent, ScrollView, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+// 👇 NetInfo para estado de conexión en tiempo real
+import NetInfo from "@react-native-community/netinfo";
 
 type Variant = "categories" | "groups" | "form";
 
@@ -29,6 +30,8 @@ type PageScaffoldProps = {
   canNext?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
+  // 👇 NUEVA PROP: Permite que el padre actualice la fecha externamente
+  lastSyncProp?: Date | null;
 };
 
 export const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -44,6 +47,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
   onNextPage,
   canNext,
   onRefresh,
+  lastSyncProp, // ⬅️ Recibimos la prop
 }) => {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -54,7 +58,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
   const [headerH, setHeaderH] = useState(0);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
-  // 💡 Al enfocar la pantalla, toma la fecha global (si existe) y muéstrala.
+  // 1. Al enfocar, leer fecha guardada (comportamiento original)
   useFocusEffect(
     useCallback(() => {
       const d = getLastUpdatedDate();
@@ -63,19 +67,27 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
     }, [])
   );
 
+  // 2. NUEVO: Si el padre manda una nueva fecha (porque terminó de sync), actualizar estado
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const ok = await isOnline();
-        if (mounted) setConnected(!!ok);
-      } catch {
-        if (mounted) setConnected(false);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
+    if (lastSyncProp) {
+      setLastUpdatedAt(lastSyncProp);
+    }
+  }, [lastSyncProp]);
+
+  // 3. Listener de Conexión en Tiempo Real
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      // Lógica optimista: si internetReachable es null, asumimos true si hay conexión física
+      const isOnline = !!state.isConnected && (state.isInternetReachable ?? true);
+      setConnected(isOnline);
+    });
+
+    NetInfo.fetch().then((state) => {
+      const isOnline = !!state.isConnected && (state.isInternetReachable ?? true);
+      setConnected(isOnline);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const padX = useMemo(() => clamp(width * 0.04, 12, 24), [width]);
@@ -100,8 +112,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
 
   const handleRefreshPress = useCallback(async () => {
     setLastUpdatedNow();
-    // Si quieres, puedes seguir actualizando la fecha al refrescar manualmente:
-    setLastUpdatedAt(new Date());
+    setLastUpdatedAt(new Date()); // Actualización visual inmediata
     onRefresh?.();
     setRefreshNonce((n) => n + 1);
   }, [onRefresh]);
@@ -124,7 +135,7 @@ const PageScaffold: React.FC<PageScaffoldProps> = ({
               totalPages={totalPages}
               frame={referenceFrame}
               connected={connected}
-              lastUpdatedAt={lastUpdatedAt ?? undefined} // ⬅️ se refleja en el header
+              lastUpdatedAt={lastUpdatedAt ?? undefined}
               onBack={handleBack}
               onRefresh={handleRefreshPress}
               variant={variant}

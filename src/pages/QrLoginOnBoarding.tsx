@@ -10,6 +10,7 @@ import { colors } from "@/theme/tokens";
 import type { AuthUser } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import NetInfo from "@react-native-community/netinfo";
+import * as Device from "expo-device";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -120,6 +121,34 @@ const translateApiErrorToNotice = (
 
   // Fallback
   return { kind: "error", messageKey: ctx === "qr" ? "qr.login_failed" : "generic.error" };
+};
+
+const getGuatemalaDateTimeIsoString = () => {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Guatemala",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    const parts = formatter
+      .formatToParts(new Date())
+      .reduce<Record<string, string>>((acc, part) => {
+        if (part.type !== "literal") acc[part.type] = part.value;
+        return acc;
+      }, {});
+    const { year, month, day, hour, minute, second } = parts;
+    if (year && month && day && hour && minute && second) {
+      return `${year}-${month}-${day}T${hour}:${minute}:${second}-06:00`;
+    }
+  } catch (err) {
+    console.warn("[DATE] Guatemala timezone formatting failed:", err);
+  }
+  return new Date().toISOString();
 };
 
 const QrLoginOnboarding: React.FC<Props> = ({
@@ -282,7 +311,25 @@ const QrLoginOnboarding: React.FC<Props> = ({
         else if (baseUrl) await setApiBase(baseUrl);
 
         const api = await makeClient();
-        const resp = await api.post(endpoint, { sid: p.sid, nonce: p.nonce, sig: p.sig });
+        const device_info = {
+          brand: Device.brand,
+          modelName: Device.modelName,
+          osName: Device.osName,
+          osVersion: Device.osVersion,
+          type: Device.deviceType,
+          name: Device.deviceName || "",
+          modelId: Device.modelId || "",
+          productName: Device.productName || "",
+          // Poner la hora de Guatemala (UTC-6)
+          dateTime: getGuatemalaDateTimeIsoString(),
+        };
+        console.log("[LOGIN][QR] payload:", getGuatemalaDateTimeIsoString(), p);
+        const resp = await api.post(endpoint, {
+          sid: p.sid,
+          nonce: p.nonce,
+          sig: p.sig,
+          device_info,
+        });
         const { access_token: accessToken, refreshToken, user } = resp.data ?? {};
         if (!accessToken) throw new Error("no_access_token");
 
@@ -400,9 +447,25 @@ const QrLoginOnboarding: React.FC<Props> = ({
       else if (baseUrl) await setApiBase(baseUrl);
 
       const api = await makeClient();
-      const payload: Record<string, string> = { password };
+      const device_info = {
+        brand: Device.brand,
+        modelName: Device.modelName,
+        osName: Device.osName,
+        osVersion: Device.osVersion,
+        type: Device.deviceType,
+        name: Device.deviceName || "",
+        modelId: Device.modelId || "",
+        productName: Device.productName || "",
+        // Poner la hora de Guatemala (UTC-6)
+        dateTime: getGuatemalaDateTimeIsoString(),
+      };
+      const payload: Record<string, string | object> = {
+        password,
+        device_info,
+      };
       payload[usernameFieldName] = userField.trim();
 
+      console.log("[LOGIN][CREDS] payload:", getGuatemalaDateTimeIsoString(), payload);
       const resp = await api.post(credsEndpoint, payload, {
         headers: { "Content-Type": "application/json", Accept: "application/json" },
       });
