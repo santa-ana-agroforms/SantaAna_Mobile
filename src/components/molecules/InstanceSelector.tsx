@@ -64,7 +64,7 @@ type UIStatus = "reviewable" | "submitted";
 const toUIStatus = (s: EntryStatus): UIStatus => (s === "submitted" ? "submitted" : "reviewable");
 
 const StatusPill: React.FC<{ ui: UIStatus; size?: number }> = ({ ui, size = 12 }) => {
-  const label = ui === "reviewable" ? "En revisión" : "Enviado";
+  const label = ui === "reviewable" ? "En progreso" : "Enviado";
   const bg = ui === "reviewable" ? colors.warningBg : "#EAF7EA";
   const fg = ui === "reviewable" ? colors.textTertiary : colors.primary600;
   return (
@@ -625,7 +625,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                 valueKey={filter}
                 onChange={(key) => setFilter(key as FilterKey)}
                 segments={[
-                  { key: "reviewable", label: "En revisión", count: counts.reviewable },
+                  { key: "reviewable", label: "En progreso", count: counts.reviewable },
                   { key: "submitted", label: "Enviados", count: counts.submitted },
                 ]}
               />
