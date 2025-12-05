@@ -710,12 +710,8 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                   borderColor: colors.border,
                 } as const;
 
-                const handleOptimisticSubmit = () => {
-                  setLocalEntries((prev) =>
-                    prev.map((e) =>
-                      e.id === item.id ? { ...e, status: "submitted", updatedAt: Date.now() } : e
-                    )
-                  );
+                // CAMBIO REALIZADO AQUÍ: Se eliminó el "setLocalEntries" optimista.
+                const handleStandardSubmit = () => {
                   onSubmit(item);
                 };
 
@@ -751,7 +747,7 @@ const InstanceSelector: React.FC<InstanceSelectorProps> = ({
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          onPress={handleOptimisticSubmit}
+                          onPress={handleStandardSubmit}
                           disabled={!!submittingId || busy}
                           style={[
                             btnBase,
