@@ -1,6 +1,7 @@
 // app/_layout.tsx
 /* eslint-disable react-hooks/rules-of-hooks */
 import { getAccessToken, setApiBase } from "@/api/client";
+
 import { registerFormSessionListeners } from "@/forms/state/registerFormSessionListeners";
 import { persistor, startAppListening, store } from "@/store";
 import {

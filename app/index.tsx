@@ -23,7 +23,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 
 // ✅ Reusar decorators
+import {
+  ensureDailyCleanupNowIfNeeded,
+  MIDNIGHT_CLEAN_TASK,
+  registerMidnightCleanup,
+  unregisterMidnightCleanup,
+} from "@/background/midnight-cleanup";
 import { useInstanceSelectorState } from "@/forms/state/useInstanceSelectorState";
+import * as TaskManager from "expo-task-manager";
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -170,6 +177,33 @@ const Home: React.FC = () => {
   const handleRefresh = useCallback(async () => {
     await revalidateFromServer();
   }, [revalidateFromServer]);
+
+  useEffect(() => {
+    const init = async () => {
+      console.log("##################### Initializing midnight cleanup task...");
+      // Asegurar que la task esté registrada solo una vez
+      const already = await TaskManager.isTaskRegisteredAsync(MIDNIGHT_CLEAN_TASK);
+      console.log("##################### Midnight cleanup task already registered?", already);
+      if (!already) {
+        await registerMidnightCleanup();
+      } else {
+        await unregisterMidnightCleanup();
+      }
+
+      // Fallback por si el SO nunca disparó la tarea
+      const logout = await ensureDailyCleanupNowIfNeeded();
+      if (logout) {
+        router.replace("/qr");
+      }
+    };
+
+    void init();
+
+    return () => {
+      // Desregistrar la tarea al desmontar (ej. logout)
+      void unregisterMidnightCleanup();
+    };
+  }, []);
 
   return (
     <PageScaffold title="Mis formularios" variant="categories" onRefresh={handleRefresh}>

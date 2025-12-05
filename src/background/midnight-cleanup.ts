@@ -17,43 +17,38 @@ export const MIDNIGHT_CLEAN_TASK = "midnight-clean-task";
 // La tarea corre cuando el SO la dispare (cada X minutos). Si cambió la fecha local → limpia.
 const runMidnightCleanup = async (): Promise<BackgroundTask.BackgroundTaskResult> => {
   try {
+    console.log("##################### Starting midnight cleanup task...");
     const db = await getDb();
 
-    // Lee última fecha de limpieza
     const [row] = await db.getAllAsync<{ v: string }>(`SELECT v FROM kv WHERE k = ? LIMIT 1`, [
       "daily.cleanup.lastYmd",
     ]);
+    console.log("##################### Last midnight cleanup date:", row?.v ?? "none");
+
     const lastYmd = row?.v ?? null;
     const todayYmd = ymdLocal(new Date());
 
     if (lastYmd === todayYmd) {
-      // Ya limpiamos hoy → no hacer nada
       return BackgroundTask.BackgroundTaskResult.Success;
     }
 
-    // *** Ejecutar la limpieza ***
-    await db.withTransactionAsync(async () => {
-      // Borra tus datos locales (usa tus helpers existentes)
-      await clearDatasets();
-      await clearGroups();
-      await clearFormsAndCategories();
+    console.log("Running midnight cleanup...");
 
-      // Borra entradas offline llenadas (si aplica)
-      await db.execAsync(`DELETE FROM form_entries;`);
-      await db.execAsync(`DELETE FROM form_usage;`);
+    // ❌ SIN withTransactionAsync para no mezclar con migraciones/PRAGMA
+    await clearDatasets();
+    await clearGroups();
+    await clearFormsAndCategories();
 
-      // (Opcional) limpiar claves de dedupe de notificaciones del día anterior
-      // await db.execAsync(`DELETE FROM kv WHERE k LIKE 'noti.%';`);
-    });
+    await db.execAsync(`DELETE FROM form_entries;`);
+    await db.execAsync(`DELETE FROM form_usage;`);
 
-    // Cerrar sesión / limpiar tokens seguros
     await clearTokens();
 
-    // Marca del día
-    await db.runAsync(`INSERT OR REPLACE INTO kv (k, v) VALUES (?, ?)`, [
+    await db.runAsync(
+      `INSERT OR REPLACE INTO kv (k, v) VALUES (?, ?)`,
       "daily.cleanup.lastYmd",
-      todayYmd,
-    ]);
+      todayYmd
+    );
 
     return BackgroundTask.BackgroundTaskResult.Success;
   } catch (e) {
@@ -86,8 +81,9 @@ export const ensureDailyCleanupNowIfNeeded = async () => {
   const [row] = await db.getAllAsync<{ v: string }>(`SELECT v FROM kv WHERE k = ? LIMIT 1`, [
     "daily.cleanup.lastYmd",
   ]);
-  if (row?.v === todayYmd) return;
+  if (row?.v === todayYmd) return false;
 
   // Re-usa la lógica de la task
   await runMidnightCleanup();
+  return true;
 };
