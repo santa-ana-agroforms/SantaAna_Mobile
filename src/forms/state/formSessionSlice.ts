@@ -338,6 +338,34 @@ const slice = createSlice({
   name: "formSession",
   initialState,
   reducers: {
+    injectGroupDefinition: (
+      state,
+      action: PayloadAction<{
+        sessionId: string;
+        pageIndex: number;
+        fieldName: string;
+        groupFields: any[];
+      }>
+    ) => {
+      const { sessionId, pageIndex, fieldName, groupFields } = action.payload;
+      const session = state.sessions[sessionId];
+      if (!session?.form) return;
+
+      // 1. Buscamos la página
+      const page = session.form.paginas[pageIndex];
+      if (!page) return;
+
+      // 2. Buscamos el campo tipo grupo
+      const field = page.campos.find((c) => c.nombre_interno === fieldName);
+
+      // 3. Le "pegamos" la definición de campos para que el validador la vea
+      if (field) {
+        // Aseguramos que config exista
+        field.config = field.config || {};
+        // Guardamos la definición aquí
+        (field.config as any)._validationFields = groupFields;
+      }
+    },
     setCurrentSession(state, action: PayloadAction<string | null>) {
       state.currentSessionId = action.payload;
     },
@@ -609,6 +637,7 @@ export const {
   groupAddRow,
   groupRemoveRow,
   groupSetRowField,
+  injectGroupDefinition,
 } = slice.actions;
 
 export default slice.reducer;
@@ -701,42 +730,73 @@ export const selectCanSendForReview = (sessionId: string) =>
   createSelector(selectSessionById(sessionId), (sess) => {
     if (!sess?.form?.paginas?.length) return false;
 
+    // Helper interno para validar vacíos
+    const isEmpty = (v: unknown) =>
+      v === null ||
+      v === undefined ||
+      (typeof v === "string" && v.trim() === "") ||
+      (Array.isArray(v) && v.length === 0);
+
     for (let idx = 0; idx < sess.form.paginas.length; idx++) {
       const p = sess.form.paginas[idx];
       const pk = p.id_pagina || `pagina_${p.secuencia ?? p.sequence ?? idx + 1}`;
       const pageVals = (sess.state as any)[pk] ?? {};
 
       for (const c of p.campos ?? []) {
-        const isGroup = !!(c as any)?.config?.id_grupo;
+        const val = pageVals[c.nombre_interno];
 
-        // Grupos requeridos: al menos 1 fila no vacía
-        if (isGroup && c.requerido) {
-          const rows = pageVals[c.nombre_interno];
-          const nFilled = Array.isArray(rows)
-            ? rows.filter((r: any) => !rowIsEmptyGeneric(r)).length
-            : 0;
-          if (nFilled < 1) return false;
+        // Detectar si es grupo (tu lógica original + check de clase)
+        const isGroup = !!(c as any)?.config?.id_grupo || c.tipo === "group" || c.clase === "group";
+
+        // =========================================================
+        // 1. LÓGICA DE GRUPOS
+        // =========================================================
+        if (isGroup) {
+          const rows = Array.isArray(val) ? val : [];
+
+          // A) Si es requerido, debe tener al menos 1 fila
+          if (c.requerido && rows.length === 0) return false;
+
+          // B) Validar contenido interno de las filas
+          // Leemos la definición que aseguramos en FormRoute
+          const validationFields = (c.config as any)?._validationFields || [];
+
+          if (validationFields.length > 0 && rows.length > 0) {
+            for (const row of rows) {
+              // Si tienes una función para ignorar filas vacías visuales, úsala aquí:
+              // if (rowIsEmptyGeneric(row)) continue;
+
+              for (const fieldDef of validationFields) {
+                // Solo validamos si la columna interna es requerida
+                if (fieldDef.requerido) {
+                  const cellValue = row[fieldDef.nombre_interno];
+                  if (isEmpty(cellValue)) {
+                    // ⛔️ DETIENE TODO: Hay una celda obligatoria vacía dentro del grupo
+                    return false;
+                  }
+                }
+              }
+            }
+          }
+
+          // Si pasó las validaciones del grupo, seguimos al siguiente campo
           continue;
         }
 
+        // =========================================================
+        // 2. LÓGICA DE CAMPOS NORMALES (Tu lógica original)
+        // =========================================================
         if (!c?.requerido) continue;
 
         const k = keyOf(c.tipo, c.clase);
-        const val = pageVals[c.nombre_interno];
 
         if (!k) {
-          // Sin mapeo: usar fallback simple (el antiguo hasValue)
-          const fallbackHasValue = (v: unknown): boolean => {
-            if (v === null || v === undefined) return false;
-            if (typeof v === "string") return v.trim().length > 0;
-            if (Array.isArray(v)) return v.length > 0;
-            return true;
-          };
-          if (!fallbackHasValue(val)) return false;
+          // Fallback simple
+          if (isEmpty(val)) return false;
           continue;
         }
 
-        // Usa el validador real del tipo
+        // Validador específico
         const errs = validators[k](val, true, c.config);
         if (errs.length) return false;
       }

@@ -19,6 +19,8 @@ import FieldRenderer from "@/screens/FieldRenderer";
 import type { Campo } from "@/screens/FormPage";
 import { colors } from "@/theme/tokens";
 import Label from "../atoms/Label";
+import { useAppDispatch } from "@/store/hooks";
+import { injectGroupDefinition } from "@/forms/state/formSessionSlice";
 
 /* ───────────────────────────────────────────────────────── */
 type Frame = { width: number; height: number };
@@ -123,6 +125,7 @@ const GroupEditor: React.FC<Props> = ({
   readOnly = false,
   density = "compact",
 }) => {
+  const dispatch = useAppDispatch();
   const minSide = Math.min(referenceFrame?.width ?? 360, referenceFrame?.height ?? 640);
 
   // Dims coherentes y compactas
@@ -163,6 +166,19 @@ const GroupEditor: React.FC<Props> = ({
 
   const fieldsTemplate: GroupField[] = useMemo(() => group?.campos ?? [], [group]);
 
+  useEffect(() => {
+    // Si tenemos conexión con Redux, y ya descargamos los campos...
+    if (reduxProps && fieldsTemplate.length > 0) {
+      dispatch(
+        injectGroupDefinition({
+          sessionId: reduxProps.sessionId,
+          pageIndex: reduxProps.pageIndex,
+          fieldName: reduxProps.nombreInternoGrupo,
+          groupFields: fieldsTemplate, // Enviamos las reglas
+        })
+      );
+    }
+  }, [dispatch, reduxProps, fieldsTemplate]);
   // Redux handlers
   const [h, setH] = useState<{
     addRow?: () => void;

@@ -9,6 +9,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 
+// 👇 IMPORTANTE: Necesitamos la API para traer la definición del grupo
+import { getGroupOrFetch } from "@/api/groups";
+
 // Redux
 import { sendFormEntry } from "@/api/client";
 import FormStickyActions from "@/components/molecules/FormStickyActions";
@@ -29,6 +32,43 @@ import {
 import { useFormPersistence } from "@/forms/state/useFormPersistence";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { isOnline } from "@/utils/network";
+
+// --- HELPER: Pre-carga las reglas de validación de los grupos ---
+// Esto asegura que el validador sepa qué campos son obligatorios desde el inicio
+const enrichFormWithGroups = async (paginas: any[]) => {
+  const newPaginas = JSON.parse(JSON.stringify(paginas)); // Deep copy simple
+
+  for (const p of newPaginas) {
+    for (const c of p.campos) {
+      const type = String(c.tipo || "").toLowerCase();
+      const cls = String(c.clase || "").toLowerCase();
+      const isGroup = type === "group" || type === "grupo" || cls === "group";
+
+      if (isGroup) {
+        // Obtenemos el ID del grupo desde la config
+        const conf = c.config || {};
+        const gid = conf.id_grupo || conf.id_group || conf.groupId || conf.group?.id;
+
+        if (gid) {
+          try {
+            // Buscamos la definición (cache o fetch)
+            const groupDef = await getGroupOrFetch(gid);
+            if (groupDef && groupDef.campos) {
+              // 🔥 AQUÍ ESTÁ LA CLAVE: Inyectamos las reglas antes de iniciar sesión
+              c.config = {
+                ...conf,
+                _validationFields: groupDef.campos,
+              };
+            }
+          } catch (e) {
+            console.warn(`[FormRoute] Error cargando definiciones del grupo ${gid}`, e);
+          }
+        }
+      }
+    }
+  }
+  return newPaginas;
+};
 
 const FormRoute: React.FC = () => {
   const { formId, versionId, restored, entryId, mode } = useLocalSearchParams<{
@@ -284,12 +324,18 @@ const FormRoute: React.FC = () => {
       setLoading(true);
       try {
         if (entryId) {
+          // --- Carga desde guardado local ---
           await dispatch(initSessionFromSaved({ local_id: entryId })).unwrap();
           const saved = await getEntryById(entryId);
           if (saved) {
             const savedForm = saved.form_json as FormJSON;
+
+            // 🔥 ENRICH: Intentamos enriquecer también el form guardado por si acaso
+            savedForm.paginas = await enrichFormWithGroups(savedForm.paginas);
+
             serverFormRef.current = savedForm;
 
+            // ... (resto del mapeo de estado local para UI)
             setForm({
               id_formulario: savedForm.id_formulario,
               nombre: savedForm.nombre,
@@ -298,17 +344,28 @@ const FormRoute: React.FC = () => {
                 nombre: p.nombre,
                 descripcion: p.descripcion ?? undefined,
                 secuencia: p.secuencia === null ? 0 : (p.secuencia ?? 0),
-                campos: p.campos.map((c) => ({
-                  id_campo: c.id_campo,
-                  sequence: c.sequence,
-                  tipo: mapTipo(c.tipo),
-                  clase: mapClase(c.clase),
-                  nombre_interno: c.nombre_interno,
-                  etiqueta: c.etiqueta ?? "",
-                  ayuda: c.ayuda ?? undefined,
-                  config: toFieldConfig(c.config),
-                  requerido: !!c.requerido,
-                })),
+                campos: p.campos.map((c: any) => {
+                  // 1. Obtenemos la config base
+                  const baseConfig = toFieldConfig(c.config);
+
+                  // 2. 🔥 RECUPERAMOS la definición inyectada por enrichFormWithGroups
+                  // (enrichFormWithGroups guardó esto en c.config._validationFields)
+                  if (c.config && c.config._validationFields) {
+                    baseConfig!._validationFields = c.config._validationFields;
+                  }
+
+                  return {
+                    id_campo: c.id_campo,
+                    sequence: c.sequence,
+                    tipo: mapTipo(c.tipo),
+                    clase: mapClase(c.clase),
+                    nombre_interno: c.nombre_interno,
+                    etiqueta: c.etiqueta ?? "",
+                    ayuda: c.ayuda ?? undefined,
+                    config: baseConfig, // Ahora lleva _validationFields seguro
+                    requerido: !!c.requerido,
+                  };
+                }),
               })),
             });
             setLoading(false);
@@ -316,9 +373,14 @@ const FormRoute: React.FC = () => {
           }
         }
 
+        // --- Carga desde servidor ---
         const serverForm = await DB.selectFormFromGroupedById(formId as string);
         if (serverForm) {
           console.log("Fetched server form:", JSON.stringify(serverForm, null, 2));
+
+          // 🔥 ENRICH: Buscamos las definiciones de grupos
+          const paginasEnriched = await enrichFormWithGroups(serverForm.paginas);
+
           const fixedSessionForm: FormJSON = {
             id_formulario: serverForm.id_formulario,
             nombre: serverForm.nombre,
@@ -326,7 +388,7 @@ const FormRoute: React.FC = () => {
               id_index_version: serverForm.version_vigente.id_index_version,
               fecha_creacion: serverForm.version_vigente.fecha_creacion,
             },
-            paginas: serverForm.paginas.map((p) => ({
+            paginas: paginasEnriched.map((p: any) => ({
               id_pagina: p.id_pagina,
               nombre: p.nombre,
               descripcion: p.descripcion ?? undefined,
@@ -335,7 +397,7 @@ const FormRoute: React.FC = () => {
                 id: p.pagina_version.id,
                 fecha_creacion: p.pagina_version.fecha_creacion,
               },
-              campos: p.campos.map((c) => ({
+              campos: p.campos.map((c: any) => ({
                 id_campo: c.id_campo,
                 sequence: c.sequence,
                 tipo: mapTipo(c.tipo),
@@ -343,7 +405,7 @@ const FormRoute: React.FC = () => {
                 nombre_interno: c.nombre_interno,
                 etiqueta: c.etiqueta ?? "",
                 ayuda: c.ayuda ?? undefined,
-                config: toFieldConfig(c.config),
+                config: toFieldConfig(c.config), // Ya trae _validationFields
                 requerido: !!c.requerido,
               })),
             })),
