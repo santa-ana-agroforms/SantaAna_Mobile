@@ -222,7 +222,7 @@ const Home: React.FC = () => {
         console.log("##################### Registering midnight cleanup task...");
         const timeout = setTimeout(async () => {
           await registerMidnightCleanup();
-        }, 5000);
+        }, 3000);
         return () => clearTimeout(timeout);
       }
 
